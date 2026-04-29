@@ -1,0 +1,25 @@
+# Build output
+bin/
+obj/
+out/
+
+# Visual Studio / VS Code
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Logs
+*.log
+logs/
+
+# Publish artifacts
+publish/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local config overrides
+config.local.json

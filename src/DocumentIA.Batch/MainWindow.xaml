@@ -1,0 +1,147 @@
+﻿<Window x:Class="DocumentIA.Batch.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="DocumentIA Batch - Notas Simples"
+        Height="820"
+        Width="1360"
+        MinHeight="700"
+        MinWidth="1100"
+        WindowStartupLocation="CenterScreen"
+        AllowDrop="True"
+        DragOver="Window_DragOver"
+        Drop="Window_Drop">
+    <Grid Margin="14">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Style="{StaticResource CardBorder}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <TextBlock Text="Configuración" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,12" />
+
+                    <TextBlock Text="Versión de Nota Simple" Foreground="{StaticResource BrushMuted}" />
+                    <ComboBox ItemsSource="{Binding AvailableTipologias}"
+                              SelectedItem="{Binding SelectedTipologia, Mode=TwoWay}"
+                              Height="32" />
+
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Prompting" VerticalAlignment="Center" />
+                        <CheckBox Grid.Column="1"
+                                  IsChecked="{Binding PromptingEnabled, Mode=TwoWay}"
+                                  Margin="8,0,0,0"
+                                  VerticalAlignment="Center" />
+                    </Grid>
+                    <Button Content="Editar prompts"
+                            Command="{Binding EditPromptCommand}"
+                            Margin="0,0,0,10" />
+
+                    <TextBlock Text="Umbral de confianza (0-100)" Foreground="{StaticResource BrushMuted}" />
+                    <TextBox Text="{Binding UmbralConfianza, Mode=TwoWay}" />
+
+                    <TextBlock Text="Número de colas (1-10)" Foreground="{StaticResource BrushMuted}" />
+                    <TextBox Text="{Binding NumeroColas, Mode=TwoWay}" />
+
+                    <CheckBox Content="Ejecutar con AssetResolver" IsChecked="{Binding EjecutarConAssetResolver, Mode=TwoWay}" />
+                    <CheckBox Content="Subir a GDC" IsChecked="{Binding SubirAGdc, Mode=TwoWay}" />
+
+                    <Separator Margin="0,8,0,8" />
+
+                    <TextBlock Text="Backend URL" Foreground="{StaticResource BrushMuted}" />
+                    <TextBox Text="{Binding BackendUrl, Mode=TwoWay}" />
+
+                    <TextBlock Text="Function Key" Foreground="{StaticResource BrushMuted}" />
+                    <TextBox Text="{Binding FunctionKey, Mode=TwoWay}" />
+
+                    <Button Content="Guardar configuración" Command="{Binding SaveConfigCommand}" Margin="0,8,0,0" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Border Grid.Column="2" Style="{StaticResource CardBorder}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="140" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Carga y Gestión" FontSize="24" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="Sprint 1" Foreground="{StaticResource BrushMuted}" VerticalAlignment="Bottom" />
+                </Grid>
+
+                <Border Grid.Row="1"
+                        Margin="0,12,0,12"
+                        Background="#101826"
+                        BorderBrush="{StaticResource BrushBorder}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        AllowDrop="True"
+                        DragOver="Window_DragOver"
+                        Drop="Window_Drop">
+                    <Grid>
+                        <TextBlock Text="Arrastra y suelta PDFs aquí o usa 'Agregar PDFs'"
+                                   Foreground="{StaticResource BrushMuted}"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="15" />
+                    </Grid>
+                </Border>
+
+                <DataGrid Grid.Row="2"
+                          ItemsSource="{Binding Files}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          Background="#101826"
+                          BorderBrush="{StaticResource BrushBorder}"
+                          BorderThickness="1"
+                          HeadersVisibility="Column"
+                          IsReadOnly="True"
+                          RowHeaderWidth="0"
+                          GridLinesVisibility="Horizontal"
+                          Foreground="{StaticResource BrushText}">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Nombre del archivo" Binding="{Binding FileName}" Width="3*" />
+                        <DataGridTextColumn Header="Tamaño" Binding="{Binding DisplaySize}" Width="1.1*" />
+                        <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="1.2*" />
+                        <DataGridTemplateColumn Header="Acción" Width="1*">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="Eliminar"
+                                            Command="{Binding DataContext.RemoveFileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"
+                                            Padding="6,3"
+                                            Margin="4,2,4,2"
+                                            Background="#B91C1C" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+                    </DataGrid.Columns>
+                </DataGrid>
+
+                <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
+                    <Button Content="Agregar PDFs" Command="{Binding PickFilesCommand}" />
+                    <TextBlock Text="Listo para Sprint 2: ejecución por colas y monitorización en tiempo real."
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource BrushMuted}"
+                               Margin="8,0,0,0" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
