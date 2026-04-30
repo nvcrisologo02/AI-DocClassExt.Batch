@@ -448,6 +448,8 @@ public class MainViewModel : ObservableObject
 
             SelectedTipologia = AvailableTipologias.FirstOrDefault(x =>
                 string.Equals(x.Code, selectedCode, StringComparison.OrdinalIgnoreCase))
+                ?? AvailableTipologias.FirstOrDefault(x =>
+                    string.Equals(x.Code, "nota.simple.1_4", StringComparison.OrdinalIgnoreCase))
                 ?? AvailableTipologias.First();
 
             ProcessStatus = $"Tipologías cargadas: {AvailableTipologias.Count}";

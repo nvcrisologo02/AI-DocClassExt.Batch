@@ -90,6 +90,8 @@ public class DocumentIaBackendClient
                 throw new InvalidOperationException("La respuesta de ingest no contiene statusQueryUri.");
             }
 
+            ingestResponse.StatusQueryUri = NormalizeStatusQueryUri(backendUrl, ingestResponse.StatusQueryUri);
+
             return ingestResponse;
         }
 
@@ -126,12 +128,37 @@ public class DocumentIaBackendClient
         }
 
         var parts = identificador.Split('@', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length != 2)
+        return parts.Length > 0 ? parts[0].Trim() : identificador.Trim();
+    }
+
+    private static string NormalizeStatusQueryUri(string backendUrl, string statusQueryUri)
+    {
+        if (!Uri.TryCreate(statusQueryUri, UriKind.Absolute, out var statusUri)
+            || !Uri.TryCreate(backendUrl.Trim().TrimEnd('/'), UriKind.Absolute, out var backendUri))
         {
-            return identificador.Trim();
+            return statusQueryUri;
         }
 
-        return $"{parts[0]}.{parts[1]}";
+        if (!IsLocalHost(statusUri.Host) || !IsLocalHost(backendUri.Host) || backendUri.IsDefaultPort)
+        {
+            return statusQueryUri;
+        }
+
+        var builder = new UriBuilder(statusUri)
+        {
+            Scheme = backendUri.Scheme,
+            Host = backendUri.Host,
+            Port = backendUri.Port
+        };
+
+        return builder.Uri.ToString();
+    }
+
+    private static bool IsLocalHost(string host)
+    {
+        return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
     }
 }
 
