@@ -19,6 +19,7 @@ public class MainViewModel : ObservableObject
     private readonly DocumentIaBackendClient _backendClient;
     private readonly BatchRunStorageService _runStorageService;
     private readonly BatchCsvExportService _csvExportService;
+    private readonly BatchExcelExportService _excelExportService;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -34,7 +35,7 @@ public class MainViewModel : ObservableObject
     private CancellationTokenSource? _processingCts;
     private Dictionary<string, PromptOverride> _promptOverrides = new(StringComparer.OrdinalIgnoreCase);
 
-    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new BatchCsvExportService())
+    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new BatchCsvExportService(), new BatchExcelExportService())
     {
     }
 
@@ -42,12 +43,14 @@ public class MainViewModel : ObservableObject
         SettingsService settingsService,
         DocumentIaBackendClient backendClient,
         BatchRunStorageService runStorageService,
-        BatchCsvExportService csvExportService)
+        BatchCsvExportService csvExportService,
+        BatchExcelExportService excelExportService)
     {
         _settingsService = settingsService;
         _backendClient = backendClient;
         _runStorageService = runStorageService;
         _csvExportService = csvExportService;
+        _excelExportService = excelExportService;
 
         Files = new ObservableCollection<BatchFileItem>();
         AvailableTipologias = new ObservableCollection<TipologiaOption>(
@@ -70,6 +73,7 @@ public class MainViewModel : ObservableObject
         RetryFileCommand = new RelayCommand(_ => _ = RetryFileAsync(_ as BatchFileItem), file => !IsProcessing && file is BatchFileItem item && RetryPolicy.IsRetryable(item));
         ShowBatchSummaryCommand = new RelayCommand(_ => ShowBatchSummary(), _ => !IsProcessing && Files.Count > 0);
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => !IsProcessing && Files.Count > 0);
+        ExportExcelCommand = new RelayCommand(_ => ExportExcel(), _ => !IsProcessing && Files.Count > 0);
         Files.CollectionChanged += (_, _) =>
         {
             RaiseFileCommandStates();
@@ -109,6 +113,8 @@ public class MainViewModel : ObservableObject
     public RelayCommand ShowBatchSummaryCommand { get; }
 
     public RelayCommand ExportCsvCommand { get; }
+
+    public RelayCommand ExportExcelCommand { get; }
 
     public string BackendUrl
     {
@@ -185,6 +191,7 @@ public class MainViewModel : ObservableObject
                 RetryFileCommand.RaiseCanExecuteChanged();
                 ShowBatchSummaryCommand.RaiseCanExecuteChanged();
                 ExportCsvCommand.RaiseCanExecuteChanged();
+                ExportExcelCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -867,6 +874,7 @@ public class MainViewModel : ObservableObject
         RetryFileCommand.RaiseCanExecuteChanged();
         ShowBatchSummaryCommand.RaiseCanExecuteChanged();
         ExportCsvCommand.RaiseCanExecuteChanged();
+        ExportExcelCommand.RaiseCanExecuteChanged();
     }
 
     private void ShowBatchSummary()
@@ -922,6 +930,46 @@ public class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             MessageBox.Show($"No se pudo exportar el CSV: {ex.Message}", "Exportar CSV", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void ExportExcel()
+    {
+        if (IsProcessing || Files.Count == 0)
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Exportar resumen Excel",
+            Filter = "Excel (*.xlsx)|*.xlsx",
+            FileName = $"DocumentIA_Batch_{DateTime.Now:yyyyMMdd-HHmmss}.xlsx",
+            AddExtension = true,
+            DefaultExt = ".xlsx"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _excelExportService.Export(
+                dialog.FileName,
+                Files.ToList(),
+                SelectedTipologia?.Code ?? string.Empty,
+                NumeroColas,
+                UmbralConfianza,
+                SubirAGdc,
+                EjecutarConAssetResolver);
+
+            ProcessStatus = $"Excel exportado: {dialog.FileName}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"No se pudo exportar el Excel: {ex.Message}", "Exportar Excel", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

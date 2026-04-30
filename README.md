@@ -24,6 +24,7 @@ Completado:
 - KPIs agregados en pantalla: totales por estado, tasa de exito, confianza media, duracion media, duracion de lote y outputs JSON generados.
 - Modal de resumen post-proceso con KPIs e incidencias, apertura automatica al cierre y boton manual.
 - Exportacion CSV MVP con separador `;`, UTF-8 BOM y columnas de trazabilidad por fichero.
+- Exportacion Excel MVP en `.xlsx` con estructura equivalente al CSV.
 - `.gitignore` para excluir `bin/`, `obj/`, `.vs/`, artefactos de publicacion y configuracion local.
 
 Validacion realizada:
@@ -71,11 +72,10 @@ src/DocumentIA.Batch/
 - `AB#99246`: completado. Calculo de KPIs agregados del lote.
 - `AB#99245`: completado. Modal de resumen post-proceso y binding.
 - `AB#99247`: completado. Exportador CSV con esquema de columnas MVP.
+- `AB#99248`: completado. Exportador Excel con estructura equivalente al CSV.
 
 ## Siguiente bloque sugerido
 
-Continuar con la explotacion de resultados del lote:
-
-- Exportacion Excel con estructura equivalente a CSV.
+Continuar con el siguiente bloque funcional pendiente del backlog.
 
 Antes de empezar el siguiente bloque, revisar el siguiente work item pendiente y moverlo a `In Progress`.
