@@ -62,7 +62,9 @@ public class MainViewModel : ObservableObject
         RefreshTipologiasCommand = new RelayCommand(_ => _ = RefreshTipologiasAsync(), _ => !IsProcessing && !string.IsNullOrWhiteSpace(BackendUrl));
         StartProcessingCommand = new RelayCommand(_ => _ = StartProcessingAsync(), _ => CanProcess());
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
-        Files.CollectionChanged += (_, _) => StartProcessingCommand.RaiseCanExecuteChanged();
+        RetryFailedCommand = new RelayCommand(_ => _ = RetryFailedAsync(), _ => CanRetryFailed());
+        RetryFileCommand = new RelayCommand(_ => _ = RetryFileAsync(_ as BatchFileItem), file => !IsProcessing && file is BatchFileItem item && RetryPolicy.IsRetryable(item));
+        Files.CollectionChanged += (_, _) => RaiseFileCommandStates();
 
         FilesView = CollectionViewSource.GetDefaultView(Files);
 
@@ -89,6 +91,10 @@ public class MainViewModel : ObservableObject
     public RelayCommand StartProcessingCommand { get; }
 
     public RelayCommand CancelProcessingCommand { get; }
+
+    public RelayCommand RetryFailedCommand { get; }
+
+    public RelayCommand RetryFileCommand { get; }
 
     public string BackendUrl
     {
@@ -161,6 +167,8 @@ public class MainViewModel : ObservableObject
                 RefreshTipologiasCommand.RaiseCanExecuteChanged();
                 PickFilesCommand.RaiseCanExecuteChanged();
                 RemoveFileCommand.RaiseCanExecuteChanged();
+                RetryFailedCommand.RaiseCanExecuteChanged();
+                RetryFileCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -201,6 +209,7 @@ public class MainViewModel : ObservableObject
         }
 
         StartProcessingCommand.RaiseCanExecuteChanged();
+        RetryFailedCommand.RaiseCanExecuteChanged();
     }
 
     private void PickFiles()
@@ -222,7 +231,7 @@ public class MainViewModel : ObservableObject
         if (parameter is BatchFileItem item)
         {
             Files.Remove(item);
-            StartProcessingCommand.RaiseCanExecuteChanged();
+            RaiseFileCommandStates();
         }
     }
 
@@ -244,6 +253,7 @@ public class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(HasPromptOverride));
         RefreshTipologiasCommand.RaiseCanExecuteChanged();
         StartProcessingCommand.RaiseCanExecuteChanged();
+        RetryFailedCommand.RaiseCanExecuteChanged();
     }
 
     private void SaveConfig()
@@ -317,6 +327,14 @@ public class MainViewModel : ObservableObject
             && !string.IsNullOrWhiteSpace(BackendUrl);
     }
 
+    private bool CanRetryFailed()
+    {
+        return !IsProcessing
+            && SelectedTipologia is not null
+            && !string.IsNullOrWhiteSpace(BackendUrl)
+            && Files.Any(RetryPolicy.IsRetryable);
+    }
+
     private async Task RefreshTipologiasAsync()
     {
         if (IsProcessing || string.IsNullOrWhiteSpace(BackendUrl))
@@ -354,7 +372,34 @@ public class MainViewModel : ObservableObject
 
     private async Task StartProcessingAsync()
     {
-        if (!CanProcess())
+        await ProcessFilesAsync(Files.ToList(), "procesamiento");
+    }
+
+    private async Task RetryFailedAsync()
+    {
+        var retryFiles = Files.Where(RetryPolicy.IsRetryable).ToList();
+        if (retryFiles.Count == 0)
+        {
+            ProcessStatus = "No hay ficheros reintentables.";
+            return;
+        }
+
+        await ProcessFilesAsync(retryFiles, "reintento");
+    }
+
+    private async Task RetryFileAsync(BatchFileItem? file)
+    {
+        if (file is null || !RetryPolicy.IsRetryable(file))
+        {
+            return;
+        }
+
+        await ProcessFilesAsync(new[] { file }, "reintento");
+    }
+
+    private async Task ProcessFilesAsync(IReadOnlyCollection<BatchFileItem> filesToProcess, string operationName)
+    {
+        if (filesToProcess.Count == 0 || !CanProcessFiles(filesToProcess))
         {
             return;
         }
@@ -363,7 +408,7 @@ public class MainViewModel : ObservableObject
         _processingCts = new CancellationTokenSource();
         var cancellationToken = _processingCts.Token;
         var stopwatch = Stopwatch.StartNew();
-        var total = Files.Count;
+        var total = filesToProcess.Count;
         var tipologiaCode = SelectedTipologia?.Code ?? "nota.simple.1_4";
         var promptOverridesSnapshot = new Dictionary<string, PromptOverride>(_promptOverrides, StringComparer.OrdinalIgnoreCase);
         var maxParallelism = Math.Clamp(NumeroColas, 1, 10);
@@ -376,9 +421,9 @@ public class MainViewModel : ObservableObject
 
         try
         {
-            await SetProcessStatusAsync($"Iniciando procesamiento de {total} fichero(s) con {maxParallelism} cola(s).");
+            await SetProcessStatusAsync($"Iniciando {operationName} de {total} fichero(s) con {maxParallelism} cola(s).");
 
-            var tasks = Files.Select(file => ProcessFileWithSemaphoreAsync(
+            var tasks = filesToProcess.Select(file => ProcessFileWithSemaphoreAsync(
                 file,
                 tipologiaCode,
                 promptOverridesSnapshot,
@@ -414,7 +459,16 @@ public class MainViewModel : ObservableObject
             IsProcessing = false;
             _processingCts?.Dispose();
             _processingCts = null;
+            RaiseFileCommandStates();
         }
+    }
+
+    private bool CanProcessFiles(IReadOnlyCollection<BatchFileItem> filesToProcess)
+    {
+        return !IsProcessing
+            && filesToProcess.Count > 0
+            && SelectedTipologia is not null
+            && !string.IsNullOrWhiteSpace(BackendUrl);
     }
 
     private async Task ProcessFileWithSemaphoreAsync(
@@ -676,6 +730,8 @@ public class MainViewModel : ObservableObject
         {
             file.Estado = status;
             FilesView.Refresh();
+            RetryFailedCommand.RaiseCanExecuteChanged();
+            RetryFileCommand.RaiseCanExecuteChanged();
         });
     }
 
@@ -683,15 +739,7 @@ public class MainViewModel : ObservableObject
     {
         await SetFileTraceAsync(file, item =>
         {
-            item.InstanceId = string.Empty;
-            item.CorrelationId = string.Empty;
-            item.RuntimeStatus = string.Empty;
-            item.EstadoCalidad = string.Empty;
-            item.ConfianzaGlobal = null;
-            item.MensajeError = string.Empty;
-            item.FechaInicio = null;
-            item.FechaFin = null;
-            item.OutputJsonPath = string.Empty;
+            RetryPolicy.ResetForRetry(item);
         });
     }
 
@@ -719,6 +767,13 @@ public class MainViewModel : ObservableObject
         }
 
         return dispatcher.InvokeAsync(action).Task;
+    }
+
+    private void RaiseFileCommandStates()
+    {
+        StartProcessingCommand.RaiseCanExecuteChanged();
+        RetryFailedCommand.RaiseCanExecuteChanged();
+        RetryFileCommand.RaiseCanExecuteChanged();
     }
 
     private static string TrimError(string message)

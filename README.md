@@ -20,6 +20,7 @@ Completado:
 - Cancelacion de ejecucion en curso y resumen final del lote.
 - Trazabilidad por fichero con `CorrelationId`, `InstanceId`, estado Durable, calidad, confianza, duracion y error.
 - Persistencia del JSON bruto de salida por fichero en `runs/<yyyyMMdd-HHmmss>/`.
+- Reintento controlado por fila o de todos los ficheros fallidos/cancelados/en revision.
 - `.gitignore` para excluir `bin/`, `obj/`, `.vs/`, artefactos de publicacion y configuracion local.
 
 Validacion realizada:
@@ -62,7 +63,8 @@ src/DocumentIA.Batch/
 - `AB#99237`: completado. Base Sprint 1 y editor funcional de prompts por tipologia.
 - `AB#99240`: completado. Integracion backend, seguimiento por fichero, paralelismo y cancelacion.
 - `AB#99241`: completado. Scheduler concurrente por numero de colas.
-- `AB#99244`: en curso. Trazabilidad por fichero con correlacion de ejecucion.
+- `AB#99244`: completado. Trazabilidad por fichero con correlacion de ejecucion.
+- `AB#99243`: en curso. Reintento controlado de ficheros fallidos.
 
 ## Siguiente bloque sugerido
 
@@ -70,6 +72,6 @@ Continuar con la explotacion de resultados del lote:
 
 - Exportacion CSV con esquema MVP.
 - Modal de resumen post-proceso con KPIs agregados.
-- Reintento controlado de ficheros fallidos.
+- Formalizar KPIs y resumen post-proceso.
 
 Antes de empezar el siguiente bloque, revisar el siguiente work item pendiente y moverlo a `In Progress`.
