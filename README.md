@@ -6,7 +6,7 @@ Aplicacion Windows WPF (.NET 8) para procesado masivo de Notas Simples contra el
 
 Fecha de corte: 2026-04-30.
 
-El Sprint 1 queda iniciado y con la base funcional creada en este repositorio dedicado. El codigo de la aplicacion vive solo aqui, no en el monorepo `documento-ia-clasificacion-mvp`.
+El MVP queda implementado en este repositorio dedicado. El codigo de la aplicacion vive solo aqui, no en el monorepo `documento-ia-clasificacion-mvp`.
 
 Completado:
 
@@ -36,6 +36,8 @@ dotnet build DocumentIA.Batch.sln
 ```
 
 Resultado: compilacion correcta.
+
+Nota: la ultima validacion de compilacion se ejecuto con `OutDir` temporal porque una sesion PowerShell usada para una prueba de humo mantenia bloqueada la DLL de `bin/Debug`.
 
 ## Como compilar
 
@@ -67,6 +69,8 @@ src/DocumentIA.Batch/
 ## Work items relacionados
 
 - `AB#99237`: completado. Base Sprint 1 y editor funcional de prompts por tipologia.
+- `AB#99231`: completado. Carga multiple, drag and drop, lista y gestion de PDFs.
+- `AB#99232`: completado. Configuracion de tipologia, prompting, umbrales, colas, AssetResolver y GDC.
 - `AB#99240`: completado. Integracion backend, seguimiento por fichero, paralelismo y cancelacion.
 - `AB#99241`: completado. Scheduler concurrente por numero de colas.
 - `AB#99244`: completado. Trazabilidad por fichero con correlacion de ejecucion.
@@ -76,9 +80,12 @@ src/DocumentIA.Batch/
 - `AB#99247`: completado. Exportador CSV con esquema de columnas MVP.
 - `AB#99248`: completado. Exportador Excel con estructura equivalente al CSV.
 - `AB#99233`: completado. Exportaciones CSV/Excel enriquecidas para analisis y auditoria.
+- `AB#99234`: completado. PBI de procesamiento concurrente y seguimiento en tiempo real.
+- `AB#99235`: completado. PBI de resumen post-proceso y KPIs.
+- `AB#99236`: completado. PBI de trazabilidad, robustez, reintentos y revision.
+- `AB#99230`: completado. Feature MVP end-to-end.
+- `AB#99229`: completado. Epic MVP DocumentIA.Batch.
 
-## Siguiente bloque sugerido
+## Siguiente paso sugerido
 
-Continuar con el siguiente bloque funcional pendiente del backlog.
-
-Antes de empezar el siguiente bloque, revisar el siguiente work item pendiente y moverlo a `In Progress`.
+Publicar la rama local en remoto cuando se decida compartir el avance (`git push`).
