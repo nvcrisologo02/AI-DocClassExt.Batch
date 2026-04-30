@@ -21,6 +21,7 @@ Completado:
 - Trazabilidad por fichero con `CorrelationId`, `InstanceId`, estado Durable, calidad, confianza, duracion y error.
 - Persistencia del JSON bruto de salida por fichero en `runs/<yyyyMMdd-HHmmss>/`.
 - Reintento controlado por fila o de todos los ficheros fallidos/cancelados/en revision.
+- KPIs agregados en pantalla: totales por estado, tasa de exito, confianza media, duracion media, duracion de lote y outputs JSON generados.
 - `.gitignore` para excluir `bin/`, `obj/`, `.vs/`, artefactos de publicacion y configuracion local.
 
 Validacion realizada:
@@ -64,7 +65,8 @@ src/DocumentIA.Batch/
 - `AB#99240`: completado. Integracion backend, seguimiento por fichero, paralelismo y cancelacion.
 - `AB#99241`: completado. Scheduler concurrente por numero de colas.
 - `AB#99244`: completado. Trazabilidad por fichero con correlacion de ejecucion.
-- `AB#99243`: en curso. Reintento controlado de ficheros fallidos.
+- `AB#99243`: completado. Reintento controlado de ficheros fallidos.
+- `AB#99246`: completado. Calculo de KPIs agregados del lote.
 
 ## Siguiente bloque sugerido
 
@@ -72,6 +74,6 @@ Continuar con la explotacion de resultados del lote:
 
 - Exportacion CSV con esquema MVP.
 - Modal de resumen post-proceso con KPIs agregados.
-- Formalizar KPIs y resumen post-proceso.
+- Exportacion Excel con estructura equivalente a CSV.
 
 Antes de empezar el siguiente bloque, revisar el siguiente work item pendiente y moverlo a `In Progress`.

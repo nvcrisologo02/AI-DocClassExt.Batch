@@ -64,7 +64,11 @@ public class MainViewModel : ObservableObject
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
         RetryFailedCommand = new RelayCommand(_ => _ = RetryFailedAsync(), _ => CanRetryFailed());
         RetryFileCommand = new RelayCommand(_ => _ = RetryFileAsync(_ as BatchFileItem), file => !IsProcessing && file is BatchFileItem item && RetryPolicy.IsRetryable(item));
-        Files.CollectionChanged += (_, _) => RaiseFileCommandStates();
+        Files.CollectionChanged += (_, _) =>
+        {
+            RaiseFileCommandStates();
+            RefreshBatchKpis();
+        };
 
         FilesView = CollectionViewSource.GetDefaultView(Files);
 
@@ -179,6 +183,69 @@ public class MainViewModel : ObservableObject
         private set => SetProperty(ref _processStatus, value);
     }
 
+    public int TotalFiles => Files.Count;
+
+    public int PendingFiles => Files.Count(IsPendingFile);
+
+    public int RunningFiles => Files.Count(IsRunningFile);
+
+    public int CompletedFiles => Files.Count(IsCompletedFile);
+
+    public int RevisionFiles => Files.Count(IsRevisionFile);
+
+    public int ErrorFiles => Files.Count(IsErrorFile);
+
+    public int CanceledFiles => Files.Count(IsCanceledFile);
+
+    public int FinishedFiles => Files.Count(IsFinishedFile);
+
+    public int OutputJsonFiles => Files.Count(file => !string.IsNullOrWhiteSpace(file.OutputJsonPath));
+
+    public string SuccessRateDisplay => FinishedFiles > 0
+        ? $"{CompletedFiles / (double)FinishedFiles:P1}"
+        : "-";
+
+    public string AverageConfidenceDisplay
+    {
+        get
+        {
+            var confidences = Files
+                .Where(file => file.ConfianzaGlobal.HasValue)
+                .Select(file => file.ConfianzaGlobal!.Value)
+                .ToList();
+
+            return confidences.Count > 0 ? $"{confidences.Average():P1}" : "-";
+        }
+    }
+
+    public string AverageDurationDisplay
+    {
+        get
+        {
+            var durations = Files
+                .Where(file => file.FechaInicio.HasValue && file.FechaFin.HasValue)
+                .Select(file => file.FechaFin!.Value - file.FechaInicio!.Value)
+                .ToList();
+
+            return durations.Count > 0
+                ? TimeSpan.FromMilliseconds(durations.Average(duration => duration.TotalMilliseconds)).ToString(@"mm\:ss")
+                : "-";
+        }
+    }
+
+    public string TotalDurationDisplay
+    {
+        get
+        {
+            var starts = Files.Where(file => file.FechaInicio.HasValue).Select(file => file.FechaInicio!.Value).ToList();
+            var ends = Files.Where(file => file.FechaFin.HasValue).Select(file => file.FechaFin!.Value).ToList();
+
+            return starts.Count > 0 && ends.Count > 0
+                ? (ends.Max() - starts.Min()).ToString(@"mm\:ss")
+                : "-";
+        }
+    }
+
     public void AddFiles(IEnumerable<string> paths)
     {
         foreach (var path in paths)
@@ -210,6 +277,7 @@ public class MainViewModel : ObservableObject
 
         StartProcessingCommand.RaiseCanExecuteChanged();
         RetryFailedCommand.RaiseCanExecuteChanged();
+        RefreshBatchKpis();
     }
 
     private void PickFiles()
@@ -254,6 +322,7 @@ public class MainViewModel : ObservableObject
         RefreshTipologiasCommand.RaiseCanExecuteChanged();
         StartProcessingCommand.RaiseCanExecuteChanged();
         RetryFailedCommand.RaiseCanExecuteChanged();
+        RefreshBatchKpis();
     }
 
     private void SaveConfig()
@@ -732,6 +801,7 @@ public class MainViewModel : ObservableObject
             FilesView.Refresh();
             RetryFailedCommand.RaiseCanExecuteChanged();
             RetryFileCommand.RaiseCanExecuteChanged();
+            RefreshBatchKpis();
         });
     }
 
@@ -749,6 +819,7 @@ public class MainViewModel : ObservableObject
         {
             update(file);
             FilesView.Refresh();
+            RefreshBatchKpis();
         });
     }
 
@@ -774,6 +845,63 @@ public class MainViewModel : ObservableObject
         StartProcessingCommand.RaiseCanExecuteChanged();
         RetryFailedCommand.RaiseCanExecuteChanged();
         RetryFileCommand.RaiseCanExecuteChanged();
+    }
+
+    private void RefreshBatchKpis()
+    {
+        OnPropertyChanged(nameof(TotalFiles));
+        OnPropertyChanged(nameof(PendingFiles));
+        OnPropertyChanged(nameof(RunningFiles));
+        OnPropertyChanged(nameof(CompletedFiles));
+        OnPropertyChanged(nameof(RevisionFiles));
+        OnPropertyChanged(nameof(ErrorFiles));
+        OnPropertyChanged(nameof(CanceledFiles));
+        OnPropertyChanged(nameof(FinishedFiles));
+        OnPropertyChanged(nameof(OutputJsonFiles));
+        OnPropertyChanged(nameof(SuccessRateDisplay));
+        OnPropertyChanged(nameof(AverageConfidenceDisplay));
+        OnPropertyChanged(nameof(AverageDurationDisplay));
+        OnPropertyChanged(nameof(TotalDurationDisplay));
+    }
+
+    private static bool IsPendingFile(BatchFileItem file)
+    {
+        return string.Equals(file.Estado, "Pendiente", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRunningFile(BatchFileItem file)
+    {
+        return string.Equals(file.Estado, "En cola", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.Estado, "Enviando a backend", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.Estado, "En ejecución", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCompletedFile(BatchFileItem file)
+    {
+        return string.Equals(file.Estado, "Completado", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRevisionFile(BatchFileItem file)
+    {
+        return string.Equals(file.Estado, "Revision", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.EstadoCalidad, "REVISION", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsErrorFile(BatchFileItem file)
+    {
+        return file.Estado.StartsWith("Error", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.RuntimeStatus, "Failed", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.RuntimeStatus, "Terminated", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCanceledFile(BatchFileItem file)
+    {
+        return string.Equals(file.Estado, "Cancelado", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsFinishedFile(BatchFileItem file)
+    {
+        return IsCompletedFile(file) || IsRevisionFile(file) || IsErrorFile(file) || IsCanceledFile(file);
     }
 
     private static string TrimError(string message)
