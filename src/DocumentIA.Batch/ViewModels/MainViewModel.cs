@@ -71,6 +71,8 @@ public class MainViewModel : ObservableObject
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
         RetryFailedCommand = new RelayCommand(_ => _ = RetryFailedAsync(), _ => CanRetryFailed());
         RetryFileCommand = new RelayCommand(_ => _ = RetryFileAsync(_ as BatchFileItem), file => !IsProcessing && file is BatchFileItem item && RetryPolicy.IsRetryable(item));
+        ClearFileDataCommand = new RelayCommand(ClearFileData, file => !IsProcessing && file is BatchFileItem);
+        ShowFileOutputCommand = new RelayCommand(_ => ShowFileOutput(_ as BatchFileItem), file => file is BatchFileItem);
         ShowBatchSummaryCommand = new RelayCommand(_ => ShowBatchSummary(), _ => !IsProcessing && Files.Count > 0);
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => !IsProcessing && Files.Count > 0);
         ExportExcelCommand = new RelayCommand(_ => ExportExcel(), _ => !IsProcessing && Files.Count > 0);
@@ -109,6 +111,10 @@ public class MainViewModel : ObservableObject
     public RelayCommand RetryFailedCommand { get; }
 
     public RelayCommand RetryFileCommand { get; }
+
+    public RelayCommand ClearFileDataCommand { get; }
+
+    public RelayCommand ShowFileOutputCommand { get; }
 
     public RelayCommand ShowBatchSummaryCommand { get; }
 
@@ -189,6 +195,7 @@ public class MainViewModel : ObservableObject
                 RemoveFileCommand.RaiseCanExecuteChanged();
                 RetryFailedCommand.RaiseCanExecuteChanged();
                 RetryFileCommand.RaiseCanExecuteChanged();
+                ClearFileDataCommand.RaiseCanExecuteChanged();
                 ShowBatchSummaryCommand.RaiseCanExecuteChanged();
                 ExportCsvCommand.RaiseCanExecuteChanged();
                 ExportExcelCommand.RaiseCanExecuteChanged();
@@ -410,7 +417,7 @@ public class MainViewModel : ObservableObject
     private bool CanProcess()
     {
         return !IsProcessing
-            && Files.Count > 0
+            && Files.Any(IsPendingFile)
             && SelectedTipologia is not null
             && !string.IsNullOrWhiteSpace(BackendUrl);
     }
@@ -462,7 +469,14 @@ public class MainViewModel : ObservableObject
 
     private async Task StartProcessingAsync()
     {
-        await ProcessFilesAsync(Files.ToList(), "procesamiento");
+        var pendingFiles = Files.Where(IsPendingFile).ToList();
+        if (pendingFiles.Count == 0)
+        {
+            ProcessStatus = "No hay registros pendientes para procesar.";
+            return;
+        }
+
+        await ProcessFilesAsync(pendingFiles, "procesamiento");
     }
 
     private async Task RetryFailedAsync()
@@ -891,6 +905,8 @@ public class MainViewModel : ObservableObject
         StartProcessingCommand.RaiseCanExecuteChanged();
         RetryFailedCommand.RaiseCanExecuteChanged();
         RetryFileCommand.RaiseCanExecuteChanged();
+        ClearFileDataCommand.RaiseCanExecuteChanged();
+        ShowFileOutputCommand.RaiseCanExecuteChanged();
         ShowBatchSummaryCommand.RaiseCanExecuteChanged();
         ExportCsvCommand.RaiseCanExecuteChanged();
         ExportExcelCommand.RaiseCanExecuteChanged();
@@ -990,6 +1006,65 @@ public class MainViewModel : ObservableObject
         {
             MessageBox.Show($"No se pudo exportar el Excel: {ex.Message}", "Exportar Excel", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    private void ClearFileData(object? parameter)
+    {
+        if (parameter is not BatchFileItem file || IsProcessing)
+        {
+            return;
+        }
+
+        RetryPolicy.ResetForRetry(file);
+        FilesView.Refresh();
+        RaiseFileCommandStates();
+        RefreshBatchKpis();
+        ProcessStatus = $"Registro limpiado: {file.FileName}. Listo para un nuevo lote.";
+    }
+
+    private void ShowFileOutput(BatchFileItem? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        var outputText = BuildOutputText(file);
+        var dialog = new BatchOutputDialog(file.FileName, outputText)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        dialog.ShowDialog();
+    }
+
+    private static string BuildOutputText(BatchFileItem file)
+    {
+        if (!string.IsNullOrWhiteSpace(file.OutputJsonPath) && File.Exists(file.OutputJsonPath))
+        {
+            return File.ReadAllText(file.OutputJsonPath);
+        }
+
+        var fallback = new
+        {
+            FileName = file.FileName,
+            Estado = file.Estado,
+            RuntimeStatus = file.RuntimeStatus,
+            EstadoCalidad = file.EstadoCalidad,
+            ConfianzaGlobal = file.ConfianzaGlobal,
+            CorrelationId = file.CorrelationId,
+            InstanceId = file.InstanceId,
+            ActividadActual = file.ActividadActual,
+            ProgresoActividades = file.ProgresoActividades,
+            DetalleActividad = file.DetalleActividad,
+            MensajeError = file.MensajeError,
+            OutputJsonPath = file.OutputJsonPath
+        };
+
+        return JsonSerializer.Serialize(fallback, new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
     }
 
     private BatchRunSummary BuildRunSummary(string operationName)

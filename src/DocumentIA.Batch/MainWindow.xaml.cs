@@ -1,4 +1,7 @@
 ﻿using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using DocumentIA.Batch.Models;
 using DocumentIA.Batch.ViewModels;
 
 namespace DocumentIA.Batch;
@@ -35,5 +38,18 @@ public partial class MainWindow : Window
 
         var files = (string[])e.Data.GetData(DataFormats.FileDrop);
         _viewModel.AddFiles(files);
+    }
+
+    private void FilesGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not DataGrid grid || grid.SelectedItem is not BatchFileItem item)
+        {
+            return;
+        }
+
+        if (_viewModel.ShowFileOutputCommand.CanExecute(item))
+        {
+            _viewModel.ShowFileOutputCommand.Execute(item);
+        }
     }
 }
