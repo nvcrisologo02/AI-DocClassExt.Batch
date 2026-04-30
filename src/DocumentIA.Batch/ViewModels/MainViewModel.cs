@@ -883,9 +883,9 @@ public class MainViewModel : ObservableObject
         ShowBatchSummary(summary);
     }
 
-    private static void ShowBatchSummary(BatchRunSummary summary)
+    private void ShowBatchSummary(BatchRunSummary summary)
     {
-        var dialog = new BatchSummaryDialog(summary)
+        var dialog = new BatchSummaryDialog(summary, ExportCsv, ExportExcel)
         {
             Owner = Application.Current.MainWindow
         };

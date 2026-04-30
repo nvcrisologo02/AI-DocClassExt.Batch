@@ -25,6 +25,8 @@ Completado:
 - Modal de resumen post-proceso con KPIs e incidencias, apertura automatica al cierre y boton manual.
 - Exportacion CSV MVP con separador `;`, UTF-8 BOM y columnas de trazabilidad por fichero.
 - Exportacion Excel MVP en `.xlsx` con estructura equivalente al CSV.
+- Columnas de exportacion para analisis y auditoria derivadas del JSON bruto: identificacion, integridad, resultado, campos extraidos, confianza por campo, validaciones, revision e IDs AAII/AACC.
+- Acceso a exportacion CSV/Excel desde el modal de resumen post-proceso.
 - `.gitignore` para excluir `bin/`, `obj/`, `.vs/`, artefactos de publicacion y configuracion local.
 
 Validacion realizada:
@@ -73,6 +75,7 @@ src/DocumentIA.Batch/
 - `AB#99245`: completado. Modal de resumen post-proceso y binding.
 - `AB#99247`: completado. Exportador CSV con esquema de columnas MVP.
 - `AB#99248`: completado. Exportador Excel con estructura equivalente al CSV.
+- `AB#99233`: completado. Exportaciones CSV/Excel enriquecidas para analisis y auditoria.
 
 ## Siguiente bloque sugerido
 

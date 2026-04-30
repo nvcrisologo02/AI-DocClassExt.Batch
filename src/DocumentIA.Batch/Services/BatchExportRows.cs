@@ -5,7 +5,9 @@ namespace DocumentIA.Batch.Services;
 
 public static class BatchExportRows
 {
-    public static readonly IReadOnlyList<string> Headers = new[]
+    private static readonly BatchOutputAuditExtractor AuditExtractor = new();
+
+    private static readonly string[] BaseHeaders =
     {
         "NombreArchivo",
         "RutaCompleta",
@@ -29,6 +31,10 @@ public static class BatchExportRows
         "SubirAGdc",
         "EjecutarConAssetResolver"
     };
+
+    public static readonly IReadOnlyList<string> Headers = BaseHeaders
+        .Concat(BatchOutputAuditExtractor.Headers)
+        .ToArray();
 
     public static IEnumerable<IReadOnlyList<string>> BuildRows(
         IEnumerable<BatchFileItem> files,
@@ -58,6 +64,7 @@ public static class BatchExportRows
         bool subirAGdc,
         bool ejecutarConAssetResolver)
     {
+        var audit = AuditExtractor.Extract(file.OutputJsonPath);
         var duration = file.FechaInicio.HasValue && file.FechaFin.HasValue
             ? file.FechaFin.Value - file.FechaInicio.Value
             : (TimeSpan?)null;
@@ -83,6 +90,11 @@ public static class BatchExportRows
         yield return umbralConfianza.ToString(CultureInfo.InvariantCulture);
         yield return subirAGdc ? "true" : "false";
         yield return ejecutarConAssetResolver ? "true" : "false";
+
+        foreach (var value in audit.Values)
+        {
+            yield return value;
+        }
     }
 
     private static string FormatDate(DateTime? value)

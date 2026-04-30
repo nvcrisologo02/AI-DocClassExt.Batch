@@ -111,6 +111,8 @@
         </Grid>
 
         <DockPanel Grid.Row="3" LastChildFill="False" Margin="0,12,0,0">
+            <Button Content="Exportar CSV" Click="ExportCsv_Click" DockPanel.Dock="Right" Margin="8,0,0,0" Background="#4F46E5" />
+            <Button Content="Exportar Excel" Click="ExportExcel_Click" DockPanel.Dock="Right" Margin="8,0,0,0" Background="#4F46E5" />
             <Button Content="Cerrar" Click="Close_Click" DockPanel.Dock="Right" />
         </DockPanel>
     </Grid>
