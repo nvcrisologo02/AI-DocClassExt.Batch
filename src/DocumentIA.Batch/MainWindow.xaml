@@ -233,6 +233,10 @@
                                 Command="{Binding ShowBatchSummaryCommand}"
                                 Margin="8,0,0,0"
                                 Background="#374151" />
+                    <Button Content="Exportar CSV"
+                            Command="{Binding ExportCsvCommand}"
+                            Margin="8,0,0,0"
+                            Background="#4F46E5" />
                     <Button Content="Cancelar"
                         Command="{Binding CancelProcessingCommand}"
                         Margin="8,0,0,0"

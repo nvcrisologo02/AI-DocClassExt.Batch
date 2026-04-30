@@ -23,6 +23,7 @@ Completado:
 - Reintento controlado por fila o de todos los ficheros fallidos/cancelados/en revision.
 - KPIs agregados en pantalla: totales por estado, tasa de exito, confianza media, duracion media, duracion de lote y outputs JSON generados.
 - Modal de resumen post-proceso con KPIs e incidencias, apertura automatica al cierre y boton manual.
+- Exportacion CSV MVP con separador `;`, UTF-8 BOM y columnas de trazabilidad por fichero.
 - `.gitignore` para excluir `bin/`, `obj/`, `.vs/`, artefactos de publicacion y configuracion local.
 
 Validacion realizada:
@@ -69,12 +70,12 @@ src/DocumentIA.Batch/
 - `AB#99243`: completado. Reintento controlado de ficheros fallidos.
 - `AB#99246`: completado. Calculo de KPIs agregados del lote.
 - `AB#99245`: completado. Modal de resumen post-proceso y binding.
+- `AB#99247`: completado. Exportador CSV con esquema de columnas MVP.
 
 ## Siguiente bloque sugerido
 
 Continuar con la explotacion de resultados del lote:
 
-- Exportacion CSV con esquema MVP.
 - Exportacion Excel con estructura equivalente a CSV.
 
 Antes de empezar el siguiente bloque, revisar el siguiente work item pendiente y moverlo a `In Progress`.

@@ -18,6 +18,7 @@ public class MainViewModel : ObservableObject
     private readonly SettingsService _settingsService;
     private readonly DocumentIaBackendClient _backendClient;
     private readonly BatchRunStorageService _runStorageService;
+    private readonly BatchCsvExportService _csvExportService;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -33,18 +34,20 @@ public class MainViewModel : ObservableObject
     private CancellationTokenSource? _processingCts;
     private Dictionary<string, PromptOverride> _promptOverrides = new(StringComparer.OrdinalIgnoreCase);
 
-    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService())
+    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new BatchCsvExportService())
     {
     }
 
     public MainViewModel(
         SettingsService settingsService,
         DocumentIaBackendClient backendClient,
-        BatchRunStorageService runStorageService)
+        BatchRunStorageService runStorageService,
+        BatchCsvExportService csvExportService)
     {
         _settingsService = settingsService;
         _backendClient = backendClient;
         _runStorageService = runStorageService;
+        _csvExportService = csvExportService;
 
         Files = new ObservableCollection<BatchFileItem>();
         AvailableTipologias = new ObservableCollection<TipologiaOption>(
@@ -66,6 +69,7 @@ public class MainViewModel : ObservableObject
         RetryFailedCommand = new RelayCommand(_ => _ = RetryFailedAsync(), _ => CanRetryFailed());
         RetryFileCommand = new RelayCommand(_ => _ = RetryFileAsync(_ as BatchFileItem), file => !IsProcessing && file is BatchFileItem item && RetryPolicy.IsRetryable(item));
         ShowBatchSummaryCommand = new RelayCommand(_ => ShowBatchSummary(), _ => !IsProcessing && Files.Count > 0);
+        ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => !IsProcessing && Files.Count > 0);
         Files.CollectionChanged += (_, _) =>
         {
             RaiseFileCommandStates();
@@ -103,6 +107,8 @@ public class MainViewModel : ObservableObject
     public RelayCommand RetryFileCommand { get; }
 
     public RelayCommand ShowBatchSummaryCommand { get; }
+
+    public RelayCommand ExportCsvCommand { get; }
 
     public string BackendUrl
     {
@@ -178,6 +184,7 @@ public class MainViewModel : ObservableObject
                 RetryFailedCommand.RaiseCanExecuteChanged();
                 RetryFileCommand.RaiseCanExecuteChanged();
                 ShowBatchSummaryCommand.RaiseCanExecuteChanged();
+                ExportCsvCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -859,6 +866,7 @@ public class MainViewModel : ObservableObject
         RetryFailedCommand.RaiseCanExecuteChanged();
         RetryFileCommand.RaiseCanExecuteChanged();
         ShowBatchSummaryCommand.RaiseCanExecuteChanged();
+        ExportCsvCommand.RaiseCanExecuteChanged();
     }
 
     private void ShowBatchSummary()
@@ -875,6 +883,46 @@ public class MainViewModel : ObservableObject
         };
 
         dialog.ShowDialog();
+    }
+
+    private void ExportCsv()
+    {
+        if (IsProcessing || Files.Count == 0)
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Exportar resumen CSV",
+            Filter = "CSV (*.csv)|*.csv",
+            FileName = $"DocumentIA_Batch_{DateTime.Now:yyyyMMdd-HHmmss}.csv",
+            AddExtension = true,
+            DefaultExt = ".csv"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            _csvExportService.Export(
+                dialog.FileName,
+                Files.ToList(),
+                SelectedTipologia?.Code ?? string.Empty,
+                NumeroColas,
+                UmbralConfianza,
+                SubirAGdc,
+                EjecutarConAssetResolver);
+
+            ProcessStatus = $"CSV exportado: {dialog.FileName}";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"No se pudo exportar el CSV: {ex.Message}", "Exportar CSV", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
     }
 
     private BatchRunSummary BuildRunSummary(string operationName)
