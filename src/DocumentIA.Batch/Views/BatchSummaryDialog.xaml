@@ -7,7 +7,7 @@
         MinHeight="540"
         MinWidth="760"
         WindowStartupLocation="CenterOwner">
-    <Grid Margin="12">
+    <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -31,13 +31,13 @@
         </StackPanel>
 
         <Border Grid.Row="1"
-                Background="#101826"
+                Background="{StaticResource BrushSurface}"
                 BorderBrush="{StaticResource BrushBorder}"
                 BorderThickness="1"
                 CornerRadius="8"
                 Padding="10"
                 Margin="0,0,0,12">
-            <UniformGrid Columns="5">
+            <UniformGrid Columns="6">
                 <StackPanel Margin="4">
                     <TextBlock Text="Total" Foreground="{StaticResource BrushMuted}" />
                     <TextBlock Text="{Binding TotalFiles}" FontSize="20" FontWeight="SemiBold" />
@@ -78,6 +78,10 @@
                     <TextBlock Text="JSON" Foreground="{StaticResource BrushMuted}" />
                     <TextBlock Text="{Binding OutputJsonFiles}" FontSize="18" FontWeight="SemiBold" />
                 </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Dur. lote" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding TotalDuration}" FontSize="18" FontWeight="SemiBold" />
+                </StackPanel>
             </UniformGrid>
         </Border>
 
@@ -92,13 +96,11 @@
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       IsReadOnly="True"
-                      Background="#101826"
                       BorderBrush="{StaticResource BrushBorder}"
                       BorderThickness="1"
                       HeadersVisibility="Column"
                       RowHeaderWidth="0"
-                      GridLinesVisibility="Horizontal"
-                      Foreground="{StaticResource BrushText}">
+                      GridLinesVisibility="Horizontal">
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Archivo" Binding="{Binding FileName}" Width="2*" />
                     <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="1*" />

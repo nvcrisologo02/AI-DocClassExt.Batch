@@ -1,42 +1,46 @@
-using System.Globalization;
+using System.Text.Json;
 using DocumentIA.Batch.Models;
 
 namespace DocumentIA.Batch.Services;
 
 public static class BatchExportRows
 {
-    private static readonly BatchOutputAuditExtractor AuditExtractor = new();
-
-    private static readonly string[] BaseHeaders =
+    private static readonly string[] PrefixHeaders =
     {
-        "NombreArchivo",
-        "RutaCompleta",
-        "TamanoBytes",
-        "Estado",
-        "RuntimeStatus",
-        "EstadoCalidad",
-        "ConfianzaGlobal",
-        "ConfianzaPorcentaje",
-        "DuracionSegundos",
-        "Duracion",
-        "FechaInicio",
-        "FechaFin",
-        "CorrelationId",
-        "InstanceId",
-        "OutputJsonPath",
-        "MensajeError",
-        "Tipologia",
-        "NumeroColas",
-        "UmbralConfianza",
-        "SubirAGdc",
-        "EjecutarConAssetResolver"
+        "Identificacion.Documento",
+        "Identificacion.Guid",
+        "Identificacion.Tipologia",
+        "Identificacion.TipologiaFamilia",
+        "Identificacion.TipologiaVersion",
+        "Identificacion.FechaProceso",
+        "Integridad.CRC32",
+        "Integridad.SHA256",
+        "Integridad.MD5",
+        "Integridad.IdActivo",
+        "Integridad.IdActivoEntrada",
+        "Integridad.IdActivoCambiado"
     };
 
-    public static readonly IReadOnlyList<string> Headers = BaseHeaders
-        .Concat(BatchOutputAuditExtractor.Headers)
-        .ToArray();
+    private static readonly string[] SuffixHeaders =
+    {
+        "DetalleEjecucion.Extraccion.Modelo",
+        "DetalleEjecucion.Extraccion.CamposConDuda",
+        "DetalleEjecucion.AssetResolver.ActivosAAII",
+        "DetalleEjecucion.AssetResolver.ActivosAACC",
+        "DetalleEjecucion.AssetResolver.Mensaje",
+        "DetalleEjecucion.Prompt",
+        "Resultado.Estado",
+        "Resultado.MensajeError",
+        "Resultado.ConfianzaGlobal",
+        "Resultado.EstadoCalidad",
+        "Resultado.ConfianzaClasificacion",
+        "Resultado.ConfianzaExtraccion",
+        "Resultado.ConfianzaValidacion",
+        "Resultado.ReutilizadaPorDuplicado",
+        "Resultado.MensajeReutilizacion"
+    };
 
-    public static IEnumerable<IReadOnlyList<string>> BuildRows(
+    public static BatchExportTable BuildTable(
         IEnumerable<BatchFileItem> files,
         string tipologia,
         int numeroColas,
@@ -44,61 +48,77 @@ public static class BatchExportRows
         bool subirAGdc,
         bool ejecutarConAssetResolver)
     {
-        foreach (var file in files)
+        var documents = files
+            .Select(file => new BatchExportDocument(file, BatchOutputJsonReader.LoadDocument(file.OutputJsonPath)))
+            .ToList();
+
+        var datosExtraidosFields = DiscoverDatosExtraidosFields(documents);
+        var headers = BuildHeaders(datosExtraidosFields);
+        var rows = documents
+            .Select(document => BuildRow(document, headers))
+            .ToList();
+
+        foreach (var document in documents)
         {
-            yield return BuildRow(
-                file,
-                tipologia,
-                numeroColas,
-                umbralConfianza,
-                subirAGdc,
-                ejecutarConAssetResolver).ToArray();
+            document.Output?.Dispose();
         }
+
+        return new BatchExportTable(headers, rows);
     }
 
-    private static IEnumerable<string> BuildRow(
-        BatchFileItem file,
-        string tipologia,
-        int numeroColas,
-        int umbralConfianza,
-        bool subirAGdc,
-        bool ejecutarConAssetResolver)
+    private static IReadOnlyList<string> BuildHeaders(IReadOnlyList<string> datosExtraidosFields)
     {
-        var audit = AuditExtractor.Extract(file.OutputJsonPath);
-        var duration = file.FechaInicio.HasValue && file.FechaFin.HasValue
-            ? file.FechaFin.Value - file.FechaInicio.Value
-            : (TimeSpan?)null;
+        var headers = new List<string>();
+        headers.AddRange(PrefixHeaders);
 
-        yield return file.FileName;
-        yield return file.FullPath;
-        yield return file.SizeBytes.ToString(CultureInfo.InvariantCulture);
-        yield return file.Estado;
-        yield return file.RuntimeStatus;
-        yield return file.EstadoCalidad;
-        yield return file.ConfianzaGlobal?.ToString("0.########", CultureInfo.InvariantCulture) ?? string.Empty;
-        yield return file.ConfidenceDisplay;
-        yield return duration?.TotalSeconds.ToString("0.###", CultureInfo.InvariantCulture) ?? string.Empty;
-        yield return file.DurationDisplay;
-        yield return FormatDate(file.FechaInicio);
-        yield return FormatDate(file.FechaFin);
-        yield return file.CorrelationId;
-        yield return file.InstanceId;
-        yield return file.OutputJsonPath;
-        yield return file.MensajeError;
-        yield return tipologia;
-        yield return numeroColas.ToString(CultureInfo.InvariantCulture);
-        yield return umbralConfianza.ToString(CultureInfo.InvariantCulture);
-        yield return subirAGdc ? "true" : "false";
-        yield return ejecutarConAssetResolver ? "true" : "false";
-
-        foreach (var value in audit.Values)
+        foreach (var field in datosExtraidosFields)
         {
-            yield return value;
+            headers.Add($"DatosExtraidos.{field}");
+            headers.Add($"DetalleEjecucion.Extraccion.ConfianzaPorCampo.{field}");
         }
+
+        headers.AddRange(SuffixHeaders);
+        return headers;
     }
 
-    private static string FormatDate(DateTime? value)
+    private static IReadOnlyList<string> DiscoverDatosExtraidosFields(IReadOnlyList<BatchExportDocument> documents)
     {
-        return value?.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) ?? string.Empty;
+        var fields = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var document in documents)
+        {
+            if (document.Output is null)
+            {
+                continue;
+            }
+
+            foreach (var field in BatchOutputJsonReader.GetObjectPropertyNames(document.Output.RootElement, "DatosExtraidos"))
+            {
+                if (seen.Add(field))
+                {
+                    fields.Add(field);
+                }
+            }
+        }
+
+        return fields;
     }
+
+    private static IReadOnlyList<string> BuildRow(BatchExportDocument document, IReadOnlyList<string> headers)
+    {
+        if (document.Output is null)
+        {
+            return headers.Select(_ => string.Empty).ToArray();
+        }
+
+        var root = document.Output.RootElement;
+        return headers
+            .Select(header => BatchOutputJsonReader.GetPathValue(root, header))
+            .ToArray();
+    }
+
+    private sealed record BatchExportDocument(BatchFileItem File, JsonDocument? Output);
 }
+
+public sealed record BatchExportTable(IReadOnlyList<string> Headers, IReadOnlyList<IReadOnlyList<string>> Rows);

@@ -15,16 +15,18 @@ public class BatchCsvExportService
         bool subirAGdc,
         bool ejecutarConAssetResolver)
     {
-        var builder = new StringBuilder();
-        builder.AppendLine(string.Join(';', BatchExportRows.Headers.Select(Escape)));
-
-        foreach (var row in BatchExportRows.BuildRows(
+        var table = BatchExportRows.BuildTable(
             files,
             tipologia,
             numeroColas,
             umbralConfianza,
             subirAGdc,
-            ejecutarConAssetResolver))
+            ejecutarConAssetResolver);
+
+        var builder = new StringBuilder();
+        builder.AppendLine(string.Join(';', table.Headers.Select(Escape)));
+
+        foreach (var row in table.Rows)
         {
             builder.AppendLine(string.Join(';', row.Select(Escape)));
         }

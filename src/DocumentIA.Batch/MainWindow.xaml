@@ -13,17 +13,17 @@
         AllowDrop="True"
         DragOver="Window_DragOver"
         Drop="Window_Drop">
-    <Grid Margin="14">
+    <Grid Margin="16">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="300" />
-            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="340" />
+            <ColumnDefinition Width="16" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Style="{StaticResource CardBorder}">
             <ScrollViewer VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <TextBlock Text="Configuración" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,12" />
+                    <TextBlock Text="Configuración" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,14" />
 
                     <TextBlock Text="Versión de Nota Simple" Foreground="{StaticResource BrushMuted}" />
                     <Grid Margin="0,0,0,6">
@@ -38,7 +38,7 @@
                                 Content="Recargar"
                                 Command="{Binding RefreshTipologiasCommand}"
                                 Margin="8,0,0,0"
-                                Padding="8,4" />
+                                Padding="10,4" />
                     </Grid>
 
                     <Grid Margin="0,6,0,0">
@@ -93,13 +93,13 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
-                    <TextBlock Text="Carga y Gestión" FontSize="24" FontWeight="SemiBold" />
-                    <TextBlock Grid.Column="1" Text="Sprint 1" Foreground="{StaticResource BrushMuted}" VerticalAlignment="Bottom" />
+                    <TextBlock Text="Carga y gestión" FontSize="22" FontWeight="SemiBold" />
+                    <TextBlock Grid.Column="1" Text="Procesamiento batch" Foreground="{StaticResource BrushMuted}" VerticalAlignment="Bottom" />
                 </Grid>
 
                 <Border Grid.Row="1"
                         Margin="0,12,0,12"
-                        Background="#101826"
+                        Background="{StaticResource BrushSurface}"
                         BorderBrush="{StaticResource BrushBorder}"
                         BorderThickness="1"
                         CornerRadius="8"
@@ -116,7 +116,7 @@
                 </Border>
 
                 <Border Grid.Row="2"
-                        Background="#101826"
+                        Background="{StaticResource BrushSurface}"
                         BorderBrush="{StaticResource BrushBorder}"
                         BorderThickness="1"
                         CornerRadius="8"
@@ -178,14 +178,12 @@
                           ItemsSource="{Binding Files}"
                           AutoGenerateColumns="False"
                           CanUserAddRows="False"
-                          Background="#101826"
                           BorderBrush="{StaticResource BrushBorder}"
                           BorderThickness="1"
                           HeadersVisibility="Column"
                           IsReadOnly="True"
                           RowHeaderWidth="0"
-                          GridLinesVisibility="Horizontal"
-                          Foreground="{StaticResource BrushText}">
+                          GridLinesVisibility="Horizontal">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Nombre del archivo" Binding="{Binding FileName}" Width="2.2*" />
                         <DataGridTextColumn Header="Tamaño" Binding="{Binding DisplaySize}" Width="0.8*" />
@@ -219,7 +217,7 @@
                     </DataGrid.Columns>
                 </DataGrid>
 
-                <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
+                <WrapPanel Grid.Row="4" HorizontalAlignment="Left" Margin="0,12,0,0">
                     <Button Content="Agregar PDFs" Command="{Binding PickFilesCommand}" />
                     <Button Content="Procesar lote"
                             Command="{Binding StartProcessingCommand}"
@@ -248,8 +246,8 @@
                     <TextBlock Text="{Binding ProcessStatus}"
                                VerticalAlignment="Center"
                                Foreground="{StaticResource BrushMuted}"
-                               Margin="8,0,0,0" />
-                </StackPanel>
+                               Margin="8,8,0,0" />
+                </WrapPanel>
             </Grid>
         </Border>
     </Grid>

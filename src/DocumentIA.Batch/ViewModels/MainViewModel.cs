@@ -218,7 +218,7 @@ public class MainViewModel : ObservableObject
 
     public int FinishedFiles => Files.Count(IsFinishedFile);
 
-    public int OutputJsonFiles => Files.Count(file => !string.IsNullOrWhiteSpace(file.OutputJsonPath));
+    public int OutputJsonFiles => Files.Count(file => !string.IsNullOrWhiteSpace(file.OutputJsonPath) && File.Exists(file.OutputJsonPath));
 
     public string SuccessRateDisplay => FinishedFiles > 0
         ? $"{CompletedFiles / (double)FinishedFiles:P1}"
@@ -626,7 +626,7 @@ public class MainViewModel : ObservableObject
                         item.FechaFin = DateTime.Now;
                     });
 
-                    if (string.Equals(estadoCalidad, "REVISION", StringComparison.OrdinalIgnoreCase))
+                    if (IsRevisionQuality(estadoCalidad))
                     {
                         incrementRevisions();
                         await SetFileStatusAsync(file, "Revision");
@@ -771,17 +771,10 @@ public class MainViewModel : ObservableObject
             return string.Empty;
         }
 
-        if (!output.Value.TryGetProperty("resultado", out var resultado) || resultado.ValueKind != JsonValueKind.Object)
-        {
-            return string.Empty;
-        }
-
-        if (!resultado.TryGetProperty("estadoCalidad", out var estadoCalidad))
-        {
-            return string.Empty;
-        }
-
-        return estadoCalidad.GetString() ?? string.Empty;
+        var estadoCalidad = BatchOutputJsonReader.GetPathValue(output.Value, "Resultado.EstadoCalidad");
+        return !string.IsNullOrWhiteSpace(estadoCalidad)
+            ? estadoCalidad
+            : BatchOutputJsonReader.GetPathValue(output.Value, "Resultado.Estado");
     }
 
     private static double? TryGetConfianzaGlobal(JsonElement? output)
@@ -791,19 +784,7 @@ public class MainViewModel : ObservableObject
             return null;
         }
 
-        if (!output.Value.TryGetProperty("resultado", out var resultado) || resultado.ValueKind != JsonValueKind.Object)
-        {
-            return null;
-        }
-
-        if (!resultado.TryGetProperty("confianzaGlobal", out var confianzaGlobal))
-        {
-            return null;
-        }
-
-        return confianzaGlobal.ValueKind == JsonValueKind.Number && confianzaGlobal.TryGetDouble(out var value)
-            ? value
-            : null;
+        return BatchOutputJsonReader.GetDoublePathValue(output.Value, "Resultado.ConfianzaGlobal");
     }
 
     private string SaveOutputIfPresent(string runFolder, BatchFileItem file, JsonElement? output)
@@ -1047,7 +1028,14 @@ public class MainViewModel : ObservableObject
     private static bool IsRevisionFile(BatchFileItem file)
     {
         return string.Equals(file.Estado, "Revision", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(file.EstadoCalidad, "REVISION", StringComparison.OrdinalIgnoreCase);
+            || IsRevisionQuality(file.EstadoCalidad);
+    }
+
+    private static bool IsRevisionQuality(string value)
+    {
+        return string.Equals(value, "REVISION", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "VALIDACION_CON_ERRORES", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(value, "BAJA_CONFIANZA", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsErrorFile(BatchFileItem file)

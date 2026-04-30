@@ -17,6 +17,14 @@ public class BatchExcelExportService
         bool subirAGdc,
         bool ejecutarConAssetResolver)
     {
+        var table = BatchExportRows.BuildTable(
+            files,
+            tipologia,
+            numeroColas,
+            umbralConfianza,
+            subirAGdc,
+            ejecutarConAssetResolver);
+
         using var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
         using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
 
@@ -24,17 +32,10 @@ public class BatchExcelExportService
         WriteTextEntry(archive, "_rels/.rels", BuildRootRelationshipsXml());
         WriteTextEntry(archive, "xl/workbook.xml", BuildWorkbookXml());
         WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", BuildWorkbookRelationshipsXml());
-        WriteWorksheet(archive, files, tipologia, numeroColas, umbralConfianza, subirAGdc, ejecutarConAssetResolver);
+        WriteWorksheet(archive, table);
     }
 
-    private static void WriteWorksheet(
-        ZipArchive archive,
-        IEnumerable<BatchFileItem> files,
-        string tipologia,
-        int numeroColas,
-        int umbralConfianza,
-        bool subirAGdc,
-        bool ejecutarConAssetResolver)
+    private static void WriteWorksheet(ZipArchive archive, BatchExportTable table)
     {
         var entry = archive.CreateEntry("xl/worksheets/sheet1.xml", CompressionLevel.Optimal);
         var settings = new XmlWriterSettings
@@ -49,9 +50,9 @@ public class BatchExcelExportService
         writer.WriteStartElement("sheetData");
 
         var rowNumber = 1;
-        WriteRow(writer, rowNumber++, BatchExportRows.Headers);
+        WriteRow(writer, rowNumber++, table.Headers);
 
-        foreach (var row in BatchExportRows.BuildRows(files, tipologia, numeroColas, umbralConfianza, subirAGdc, ejecutarConAssetResolver))
+        foreach (var row in table.Rows)
         {
             WriteRow(writer, rowNumber++, row);
         }
