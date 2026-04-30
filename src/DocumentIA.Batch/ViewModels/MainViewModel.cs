@@ -29,6 +29,7 @@ public class MainViewModel : ObservableObject
     private bool _subirAGdc;
     private bool _isProcessing;
     private string _processStatus = "Sin ejecuciones";
+    private BatchRunSummary? _lastRunSummary;
     private CancellationTokenSource? _processingCts;
     private Dictionary<string, PromptOverride> _promptOverrides = new(StringComparer.OrdinalIgnoreCase);
 
@@ -64,6 +65,7 @@ public class MainViewModel : ObservableObject
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
         RetryFailedCommand = new RelayCommand(_ => _ = RetryFailedAsync(), _ => CanRetryFailed());
         RetryFileCommand = new RelayCommand(_ => _ = RetryFileAsync(_ as BatchFileItem), file => !IsProcessing && file is BatchFileItem item && RetryPolicy.IsRetryable(item));
+        ShowBatchSummaryCommand = new RelayCommand(_ => ShowBatchSummary(), _ => !IsProcessing && Files.Count > 0);
         Files.CollectionChanged += (_, _) =>
         {
             RaiseFileCommandStates();
@@ -99,6 +101,8 @@ public class MainViewModel : ObservableObject
     public RelayCommand RetryFailedCommand { get; }
 
     public RelayCommand RetryFileCommand { get; }
+
+    public RelayCommand ShowBatchSummaryCommand { get; }
 
     public string BackendUrl
     {
@@ -173,6 +177,7 @@ public class MainViewModel : ObservableObject
                 RemoveFileCommand.RaiseCanExecuteChanged();
                 RetryFailedCommand.RaiseCanExecuteChanged();
                 RetryFileCommand.RaiseCanExecuteChanged();
+                ShowBatchSummaryCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -515,6 +520,7 @@ public class MainViewModel : ObservableObject
             await SetProcessStatusAsync(
                 $"Lote finalizado en {stopwatch.Elapsed:mm\\:ss}. " +
                 $"Procesados {processed}/{total}. Revisión: {revisions}. Error: {errors}. Cancelados: {canceled}.");
+            _lastRunSummary = BuildRunSummary(operationName);
         }
         catch (OperationCanceledException)
         {
@@ -522,6 +528,7 @@ public class MainViewModel : ObservableObject
             await SetProcessStatusAsync(
                 $"Lote cancelado en {stopwatch.Elapsed:mm\\:ss}. " +
                 $"Procesados {processed}/{total}. Revisión: {revisions}. Error: {errors}. Cancelados: {canceled}.");
+            _lastRunSummary = BuildRunSummary($"{operationName} cancelado");
         }
         finally
         {
@@ -529,6 +536,12 @@ public class MainViewModel : ObservableObject
             _processingCts?.Dispose();
             _processingCts = null;
             RaiseFileCommandStates();
+            ShowBatchSummaryCommand.RaiseCanExecuteChanged();
+
+            if (_lastRunSummary is not null)
+            {
+                ShowBatchSummary(_lastRunSummary);
+            }
         }
     }
 
@@ -845,6 +858,58 @@ public class MainViewModel : ObservableObject
         StartProcessingCommand.RaiseCanExecuteChanged();
         RetryFailedCommand.RaiseCanExecuteChanged();
         RetryFileCommand.RaiseCanExecuteChanged();
+        ShowBatchSummaryCommand.RaiseCanExecuteChanged();
+    }
+
+    private void ShowBatchSummary()
+    {
+        var summary = _lastRunSummary ?? BuildRunSummary("estado actual");
+        ShowBatchSummary(summary);
+    }
+
+    private static void ShowBatchSummary(BatchRunSummary summary)
+    {
+        var dialog = new BatchSummaryDialog(summary)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        dialog.ShowDialog();
+    }
+
+    private BatchRunSummary BuildRunSummary(string operationName)
+    {
+        return new BatchRunSummary
+        {
+            OperationName = operationName,
+            ProcessStatus = ProcessStatus,
+            Tipologia = SelectedTipologia?.Code ?? string.Empty,
+            NumeroColas = NumeroColas,
+            GeneratedAt = DateTime.Now,
+            TotalFiles = TotalFiles,
+            FinishedFiles = FinishedFiles,
+            CompletedFiles = CompletedFiles,
+            RevisionFiles = RevisionFiles,
+            ErrorFiles = ErrorFiles,
+            CanceledFiles = CanceledFiles,
+            OutputJsonFiles = OutputJsonFiles,
+            SuccessRate = SuccessRateDisplay,
+            AverageConfidence = AverageConfidenceDisplay,
+            AverageDuration = AverageDurationDisplay,
+            TotalDuration = TotalDurationDisplay,
+            Issues = Files
+                .Where(file => IsRevisionFile(file) || IsErrorFile(file) || IsCanceledFile(file))
+                .Select(file => new BatchRunIssueSummary
+                {
+                    FileName = file.FileName,
+                    Estado = file.Estado,
+                    EstadoCalidad = file.EstadoCalidad,
+                    Confidence = file.ConfidenceDisplay,
+                    Duration = file.DurationDisplay,
+                    MensajeError = file.MensajeError
+                })
+                .ToList()
+        };
     }
 
     private void RefreshBatchKpis()

@@ -1,0 +1,117 @@
+<Window x:Class="DocumentIA.Batch.Views.BatchSummaryDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Resumen del lote"
+        Height="620"
+        Width="860"
+        MinHeight="540"
+        MinWidth="760"
+        WindowStartupLocation="CenterOwner">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="Resumen post-proceso" FontSize="22" FontWeight="SemiBold" />
+            <TextBlock Text="{Binding ProcessStatus}"
+                       Foreground="{StaticResource BrushMuted}"
+                       Margin="0,4,0,0" />
+            <TextBlock Foreground="{StaticResource BrushMuted}" Margin="0,2,0,0">
+                <Run Text="Operación: " />
+                <Run Text="{Binding OperationName}" />
+                <Run Text=" | Tipología: " />
+                <Run Text="{Binding Tipologia}" />
+                <Run Text=" | Colas: " />
+                <Run Text="{Binding NumeroColas}" />
+            </TextBlock>
+        </StackPanel>
+
+        <Border Grid.Row="1"
+                Background="#101826"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1"
+                CornerRadius="8"
+                Padding="10"
+                Margin="0,0,0,12">
+            <UniformGrid Columns="5">
+                <StackPanel Margin="4">
+                    <TextBlock Text="Total" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding TotalFiles}" FontSize="20" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Finalizados" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding FinishedFiles}" FontSize="20" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="OK" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding CompletedFiles}" FontSize="20" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Revisión" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding RevisionFiles}" FontSize="20" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Errores" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding ErrorFiles}" FontSize="20" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Cancelados" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding CanceledFiles}" FontSize="18" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Éxito" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding SuccessRate}" FontSize="18" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Conf. media" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding AverageConfidence}" FontSize="18" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="Dur. media" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding AverageDuration}" FontSize="18" FontWeight="SemiBold" />
+                </StackPanel>
+                <StackPanel Margin="4">
+                    <TextBlock Text="JSON" Foreground="{StaticResource BrushMuted}" />
+                    <TextBlock Text="{Binding OutputJsonFiles}" FontSize="18" FontWeight="SemiBold" />
+                </StackPanel>
+            </UniformGrid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <TextBlock Text="Incidencias" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" />
+            <DataGrid Grid.Row="1"
+                      ItemsSource="{Binding Issues}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      IsReadOnly="True"
+                      Background="#101826"
+                      BorderBrush="{StaticResource BrushBorder}"
+                      BorderThickness="1"
+                      HeadersVisibility="Column"
+                      RowHeaderWidth="0"
+                      GridLinesVisibility="Horizontal"
+                      Foreground="{StaticResource BrushText}">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Archivo" Binding="{Binding FileName}" Width="2*" />
+                    <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="1*" />
+                    <DataGridTextColumn Header="Calidad" Binding="{Binding EstadoCalidad}" Width="1*" />
+                    <DataGridTextColumn Header="Confianza" Binding="{Binding Confidence}" Width="1*" />
+                    <DataGridTextColumn Header="Duración" Binding="{Binding Duration}" Width="1*" />
+                    <DataGridTextColumn Header="Mensaje" Binding="{Binding MensajeError}" Width="2*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+
+        <DockPanel Grid.Row="3" LastChildFill="False" Margin="0,12,0,0">
+            <Button Content="Cerrar" Click="Close_Click" DockPanel.Dock="Right" />
+        </DockPanel>
+    </Grid>
+</Window>
