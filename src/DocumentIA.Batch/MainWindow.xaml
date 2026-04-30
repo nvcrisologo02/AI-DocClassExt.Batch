@@ -26,9 +26,20 @@
                     <TextBlock Text="Configuración" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,12" />
 
                     <TextBlock Text="Versión de Nota Simple" Foreground="{StaticResource BrushMuted}" />
-                    <ComboBox ItemsSource="{Binding AvailableTipologias}"
-                              SelectedItem="{Binding SelectedTipologia, Mode=TwoWay}"
-                              Height="32" />
+                    <Grid Margin="0,0,0,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox ItemsSource="{Binding AvailableTipologias}"
+                                  SelectedItem="{Binding SelectedTipologia, Mode=TwoWay}"
+                                  Height="32" />
+                        <Button Grid.Column="1"
+                                Content="Recargar"
+                                Command="{Binding RefreshTipologiasCommand}"
+                                Margin="8,0,0,0"
+                                Padding="8,4" />
+                    </Grid>
 
                     <Grid Margin="0,6,0,0">
                         <Grid.ColumnDefinitions>
@@ -136,7 +147,15 @@
 
                 <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Left" Margin="0,12,0,0">
                     <Button Content="Agregar PDFs" Command="{Binding PickFilesCommand}" />
-                    <TextBlock Text="Listo para Sprint 2: ejecución por colas y monitorización en tiempo real."
+                    <Button Content="Procesar lote"
+                            Command="{Binding StartProcessingCommand}"
+                            Margin="8,0,0,0"
+                            Background="#065F46" />
+                    <Button Content="Cancelar"
+                        Command="{Binding CancelProcessingCommand}"
+                        Margin="8,0,0,0"
+                        Background="#9A3412" />
+                    <TextBlock Text="{Binding ProcessStatus}"
                                VerticalAlignment="Center"
                                Foreground="{StaticResource BrushMuted}"
                                Margin="8,0,0,0" />

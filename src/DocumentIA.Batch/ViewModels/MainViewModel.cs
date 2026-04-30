@@ -1,6 +1,9 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
+using System.Threading;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Data;
 using DocumentIA.Batch.Models;
@@ -13,6 +16,7 @@ namespace DocumentIA.Batch.ViewModels;
 public class MainViewModel : ObservableObject
 {
     private readonly SettingsService _settingsService;
+    private readonly DocumentIaBackendClient _backendClient;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -22,15 +26,19 @@ public class MainViewModel : ObservableObject
     private int _numeroColas;
     private bool _ejecutarConAssetResolver;
     private bool _subirAGdc;
+    private bool _isProcessing;
+    private string _processStatus = "Sin ejecuciones";
+    private CancellationTokenSource? _processingCts;
     private Dictionary<string, PromptOverride> _promptOverrides = new(StringComparer.OrdinalIgnoreCase);
 
-    public MainViewModel() : this(new SettingsService())
+    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient())
     {
     }
 
-    public MainViewModel(SettingsService settingsService)
+    public MainViewModel(SettingsService settingsService, DocumentIaBackendClient backendClient)
     {
         _settingsService = settingsService;
+        _backendClient = backendClient;
 
         Files = new ObservableCollection<BatchFileItem>();
         AvailableTipologias = new ObservableCollection<TipologiaOption>(
@@ -42,14 +50,19 @@ public class MainViewModel : ObservableObject
                 new TipologiaOption { Code = "nota.simple.1_4" }
             });
 
-        RemoveFileCommand = new RelayCommand(RemoveFile);
-        PickFilesCommand = new RelayCommand(_ => PickFiles());
+        RemoveFileCommand = new RelayCommand(RemoveFile, _ => !IsProcessing);
+        PickFilesCommand = new RelayCommand(_ => PickFiles(), _ => !IsProcessing);
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
         EditPromptCommand = new RelayCommand(_ => EditPrompt(), _ => SelectedTipologia is not null);
+        RefreshTipologiasCommand = new RelayCommand(_ => _ = RefreshTipologiasAsync(), _ => !IsProcessing && !string.IsNullOrWhiteSpace(BackendUrl));
+        StartProcessingCommand = new RelayCommand(_ => _ = StartProcessingAsync(), _ => CanProcess());
+        CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
+        Files.CollectionChanged += (_, _) => StartProcessingCommand.RaiseCanExecuteChanged();
 
         FilesView = CollectionViewSource.GetDefaultView(Files);
 
         LoadConfig();
+        _ = RefreshTipologiasAsync();
     }
 
     public ObservableCollection<BatchFileItem> Files { get; }
@@ -65,6 +78,12 @@ public class MainViewModel : ObservableObject
     public RelayCommand SaveConfigCommand { get; }
 
     public RelayCommand EditPromptCommand { get; }
+
+    public RelayCommand RefreshTipologiasCommand { get; }
+
+    public RelayCommand StartProcessingCommand { get; }
+
+    public RelayCommand CancelProcessingCommand { get; }
 
     public string BackendUrl
     {
@@ -86,6 +105,8 @@ public class MainViewModel : ObservableObject
             if (SetProperty(ref _selectedTipologia, value))
             {
                 EditPromptCommand.RaiseCanExecuteChanged();
+                StartProcessingCommand.RaiseCanExecuteChanged();
+                OnPropertyChanged(nameof(HasPromptOverride));
             }
         }
     }
@@ -123,6 +144,28 @@ public class MainViewModel : ObservableObject
         set => SetProperty(ref _subirAGdc, value);
     }
 
+    public bool IsProcessing
+    {
+        get => _isProcessing;
+        private set
+        {
+            if (SetProperty(ref _isProcessing, value))
+            {
+                StartProcessingCommand.RaiseCanExecuteChanged();
+                CancelProcessingCommand.RaiseCanExecuteChanged();
+                RefreshTipologiasCommand.RaiseCanExecuteChanged();
+                PickFilesCommand.RaiseCanExecuteChanged();
+                RemoveFileCommand.RaiseCanExecuteChanged();
+            }
+        }
+    }
+
+    public string ProcessStatus
+    {
+        get => _processStatus;
+        private set => SetProperty(ref _processStatus, value);
+    }
+
     public void AddFiles(IEnumerable<string> paths)
     {
         foreach (var path in paths)
@@ -151,6 +194,8 @@ public class MainViewModel : ObservableObject
                 Estado = "Pendiente"
             });
         }
+
+        StartProcessingCommand.RaiseCanExecuteChanged();
     }
 
     private void PickFiles()
@@ -172,6 +217,7 @@ public class MainViewModel : ObservableObject
         if (parameter is BatchFileItem item)
         {
             Files.Remove(item);
+            StartProcessingCommand.RaiseCanExecuteChanged();
         }
     }
 
@@ -191,6 +237,8 @@ public class MainViewModel : ObservableObject
             string.Equals(x.Code, config.SelectedTipologia, StringComparison.OrdinalIgnoreCase))
             ?? AvailableTipologias.Last();
         OnPropertyChanged(nameof(HasPromptOverride));
+        RefreshTipologiasCommand.RaiseCanExecuteChanged();
+        StartProcessingCommand.RaiseCanExecuteChanged();
     }
 
     private void SaveConfig()
@@ -254,5 +302,335 @@ public class MainViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasPromptOverride));
         SaveConfig();
+    }
+
+    private bool CanProcess()
+    {
+        return !IsProcessing
+            && Files.Count > 0
+            && SelectedTipologia is not null
+            && !string.IsNullOrWhiteSpace(BackendUrl);
+    }
+
+    private async Task RefreshTipologiasAsync()
+    {
+        if (IsProcessing || string.IsNullOrWhiteSpace(BackendUrl))
+        {
+            return;
+        }
+
+        try
+        {
+            var selectedCode = SelectedTipologia?.Code;
+            var tipologias = await _backendClient.GetTipologiasAsync(BackendUrl, CancellationToken.None);
+            if (tipologias.Count == 0)
+            {
+                ProcessStatus = "No se encontraron tipologías publicadas en backend.";
+                return;
+            }
+
+            AvailableTipologias.Clear();
+            foreach (var code in tipologias)
+            {
+                AvailableTipologias.Add(new TipologiaOption { Code = code });
+            }
+
+            SelectedTipologia = AvailableTipologias.FirstOrDefault(x =>
+                string.Equals(x.Code, selectedCode, StringComparison.OrdinalIgnoreCase))
+                ?? AvailableTipologias.First();
+
+            ProcessStatus = $"Tipologías cargadas: {AvailableTipologias.Count}";
+        }
+        catch (Exception ex)
+        {
+            ProcessStatus = $"No se pudieron cargar tipologías del backend: {ex.Message}";
+        }
+    }
+
+    private async Task StartProcessingAsync()
+    {
+        if (!CanProcess())
+        {
+            return;
+        }
+
+        IsProcessing = true;
+        _processingCts = new CancellationTokenSource();
+        var cancellationToken = _processingCts.Token;
+        var stopwatch = Stopwatch.StartNew();
+        var total = Files.Count;
+        var tipologiaCode = SelectedTipologia?.Code ?? "nota.simple.1_4";
+        var promptOverridesSnapshot = new Dictionary<string, PromptOverride>(_promptOverrides, StringComparer.OrdinalIgnoreCase);
+        var maxParallelism = Math.Clamp(NumeroColas, 1, 10);
+        var processed = 0;
+        var errors = 0;
+        var revisions = 0;
+        var canceled = 0;
+        using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
+
+        try
+        {
+            await SetProcessStatusAsync($"Iniciando procesamiento de {total} fichero(s) con {maxParallelism} cola(s).");
+
+            var tasks = Files.Select(file => ProcessFileWithSemaphoreAsync(
+                file,
+                tipologiaCode,
+                promptOverridesSnapshot,
+                semaphore,
+                total,
+                () => Volatile.Read(ref processed),
+                () => Volatile.Read(ref revisions),
+                () => Volatile.Read(ref errors),
+                () => Volatile.Read(ref canceled),
+                () => Interlocked.Increment(ref processed),
+                () => Interlocked.Increment(ref revisions),
+                () => Interlocked.Increment(ref errors),
+                () => Interlocked.Increment(ref canceled),
+                cancellationToken));
+
+            await Task.WhenAll(tasks);
+
+            stopwatch.Stop();
+            await SetProcessStatusAsync(
+                $"Lote finalizado en {stopwatch.Elapsed:mm\\:ss}. " +
+                $"Procesados {processed}/{total}. Revisión: {revisions}. Error: {errors}. Cancelados: {canceled}.");
+        }
+        catch (OperationCanceledException)
+        {
+            stopwatch.Stop();
+            await SetProcessStatusAsync(
+                $"Lote cancelado en {stopwatch.Elapsed:mm\\:ss}. " +
+                $"Procesados {processed}/{total}. Revisión: {revisions}. Error: {errors}. Cancelados: {canceled}.");
+        }
+        finally
+        {
+            IsProcessing = false;
+            _processingCts?.Dispose();
+            _processingCts = null;
+        }
+    }
+
+    private async Task ProcessFileWithSemaphoreAsync(
+        BatchFileItem file,
+        string tipologiaCode,
+        Dictionary<string, PromptOverride> promptOverrides,
+        SemaphoreSlim semaphore,
+        int total,
+        Func<int> getProcessed,
+        Func<int> getRevisions,
+        Func<int> getErrors,
+        Func<int> getCanceled,
+        Func<int> incrementProcessed,
+        Func<int> incrementRevisions,
+        Func<int> incrementErrors,
+        Func<int> incrementCanceled,
+        CancellationToken cancellationToken)
+    {
+        await semaphore.WaitAsync(cancellationToken);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            try
+            {
+                await SetFileStatusAsync(file, "En cola");
+                await SetFileStatusAsync(file, "Enviando a backend");
+
+                var request = BuildIngestRequest(file, tipologiaCode, promptOverrides);
+                var ingestResponse = await _backendClient.IngestAsync(BackendUrl, FunctionKey, request, cancellationToken);
+
+                await SetFileStatusAsync(file, "En ejecución");
+                var finalStatus = await WaitForFinalStatusAsync(ingestResponse.StatusQueryUri, cancellationToken);
+
+                if (string.Equals(finalStatus.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase))
+                {
+                    var estadoCalidad = TryGetEstadoCalidad(finalStatus.Output);
+                    if (string.Equals(estadoCalidad, "REVISION", StringComparison.OrdinalIgnoreCase))
+                    {
+                        incrementRevisions();
+                        await SetFileStatusAsync(file, "Revision");
+                    }
+                    else
+                    {
+                        await SetFileStatusAsync(file, "Completado");
+                    }
+                }
+                else
+                {
+                    incrementErrors();
+                    await SetFileStatusAsync(file, "Error");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                incrementCanceled();
+                await SetFileStatusAsync(file, "Cancelado");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                incrementErrors();
+                await SetFileStatusAsync(file, $"Error: {TrimError(ex.Message)}");
+            }
+
+            incrementProcessed();
+            await SetProcessStatusAsync(
+                $"Procesados {getProcessed()}/{total}. Revisión: {getRevisions()}. " +
+                $"Error: {getErrors()}. Cancelados: {getCanceled()}.");
+        }
+        finally
+        {
+            semaphore.Release();
+        }
+    }
+
+    private void CancelProcessing()
+    {
+        if (!IsProcessing || _processingCts is null)
+        {
+            return;
+        }
+
+        _processingCts.Cancel();
+        _ = SetProcessStatusAsync("Cancelación solicitada. Finalizando tareas en curso...");
+    }
+
+    private IngestRequest BuildIngestRequest(
+        BatchFileItem file,
+        string tipologiaCode,
+        Dictionary<string, PromptOverride> promptOverrides)
+    {
+        promptOverrides.TryGetValue(tipologiaCode, out var promptOverride);
+        var umbral = Math.Clamp(UmbralConfianza / 100d, 0d, 1d);
+
+        var request = new IngestRequest
+        {
+            Instrucciones = new IngestInstrucciones
+            {
+                ExpectedType = tipologiaCode,
+                SkipDuplicateCheck = false,
+                ForceReprocess = false,
+                SkipGdcUpload = !SubirAGdc,
+                Classification = new IngestIaConfig
+                {
+                    Provider = "auto",
+                    Model = "auto",
+                    Umbral = umbral
+                },
+                Extraction = new IngestIaConfig
+                {
+                    Provider = "auto",
+                    Model = "auto",
+                    Umbral = umbral
+                }
+            },
+            Documento = new IngestDocumento
+            {
+                Name = file.FileName,
+                Content = new IngestDocumentoContent
+                {
+                    Base64 = Convert.ToBase64String(File.ReadAllBytes(file.FullPath))
+                }
+            },
+            Trazabilidad = new IngestTrazabilidad
+            {
+                CorrelationId = Guid.NewGuid().ToString(),
+                SubmittedBy = "DocumentIA.Batch"
+            }
+        };
+
+        if (PromptingEnabled && promptOverride is not null &&
+            (!string.IsNullOrWhiteSpace(promptOverride.SystemPrompt) || !string.IsNullOrWhiteSpace(promptOverride.UserPromptTemplate)))
+        {
+            request.Instrucciones.Prompt = new IngestPromptConfig
+            {
+                SystemPrompt = string.IsNullOrWhiteSpace(promptOverride.SystemPrompt) ? null : promptOverride.SystemPrompt,
+                UserPromptTemplate = string.IsNullOrWhiteSpace(promptOverride.UserPromptTemplate) ? null : promptOverride.UserPromptTemplate
+            };
+        }
+
+        return request;
+    }
+
+    private async Task<DurableStatusResponse> WaitForFinalStatusAsync(string statusQueryUri, CancellationToken cancellationToken)
+    {
+        var maxAttempts = 180;
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            var status = await _backendClient.GetDurableStatusAsync(statusQueryUri, cancellationToken);
+            if (string.Equals(status.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status.RuntimeStatus, "Failed", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(status.RuntimeStatus, "Terminated", StringComparison.OrdinalIgnoreCase))
+            {
+                return status;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+        }
+
+        throw new TimeoutException("Timeout esperando estado final de la orquestación.");
+    }
+
+    private static string TryGetEstadoCalidad(JsonElement? output)
+    {
+        if (!output.HasValue || output.Value.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        if (!output.Value.TryGetProperty("resultado", out var resultado) || resultado.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        if (!resultado.TryGetProperty("estadoCalidad", out var estadoCalidad))
+        {
+            return string.Empty;
+        }
+
+        return estadoCalidad.GetString() ?? string.Empty;
+    }
+
+    private void SetFileStatus(BatchFileItem file, string status)
+    {
+        file.Estado = status;
+        FilesView.Refresh();
+    }
+
+    private async Task SetFileStatusAsync(BatchFileItem file, string status)
+    {
+        await RunOnUiAsync(() =>
+        {
+            file.Estado = status;
+            FilesView.Refresh();
+        });
+    }
+
+    private async Task SetProcessStatusAsync(string status)
+    {
+        await RunOnUiAsync(() => ProcessStatus = status);
+    }
+
+    private static Task RunOnUiAsync(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+            return Task.CompletedTask;
+        }
+
+        return dispatcher.InvokeAsync(action).Task;
+    }
+
+    private static string TrimError(string message)
+    {
+        const int max = 120;
+        if (string.IsNullOrWhiteSpace(message) || message.Length <= max)
+        {
+            return message;
+        }
+
+        return message[..max] + "...";
     }
 }
