@@ -9,6 +9,9 @@ public class BatchFileItem
     public string InstanceId { get; set; } = string.Empty;
     public string CorrelationId { get; set; } = string.Empty;
     public string RuntimeStatus { get; set; } = string.Empty;
+    public string ActividadActual { get; set; } = string.Empty;
+    public string ProgresoActividades { get; set; } = string.Empty;
+    public string DetalleActividad { get; set; } = string.Empty;
     public string EstadoCalidad { get; set; } = string.Empty;
     public double? ConfianzaGlobal { get; set; }
     public string MensajeError { get; set; } = string.Empty;

@@ -257,6 +257,9 @@ public class DurableStatusResponse
     [JsonPropertyName("runtimeStatus")]
     public string RuntimeStatus { get; set; } = string.Empty;
 
+    [JsonPropertyName("customStatus")]
+    public JsonElement? CustomStatus { get; set; }
+
     [JsonPropertyName("output")]
     public JsonElement? Output { get; set; }
 }

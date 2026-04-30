@@ -23,6 +23,9 @@ public static class RetryPolicy
         file.InstanceId = string.Empty;
         file.CorrelationId = string.Empty;
         file.RuntimeStatus = string.Empty;
+        file.ActividadActual = string.Empty;
+        file.ProgresoActividades = string.Empty;
+        file.DetalleActividad = string.Empty;
         file.EstadoCalidad = string.Empty;
         file.ConfianzaGlobal = null;
         file.MensajeError = string.Empty;

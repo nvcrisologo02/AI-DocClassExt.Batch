@@ -609,7 +609,10 @@ public class MainViewModel : ObservableObject
                 await SetFileTraceAsync(file, item => item.InstanceId = ingestResponse.InstanceId);
 
                 await SetFileStatusAsync(file, "En ejecución");
-                var finalStatus = await WaitForFinalStatusAsync(ingestResponse.StatusQueryUri, cancellationToken);
+                var finalStatus = await WaitForFinalStatusAsync(
+                    ingestResponse.StatusQueryUri,
+                    status => UpdateFileActivityAsync(file, status, getProcessed, total),
+                    cancellationToken);
                 await SetFileTraceAsync(file, item => item.RuntimeStatus = finalStatus.RuntimeStatus);
 
                 if (string.Equals(finalStatus.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase))
@@ -745,12 +748,17 @@ public class MainViewModel : ObservableObject
         return request;
     }
 
-    private async Task<DurableStatusResponse> WaitForFinalStatusAsync(string statusQueryUri, CancellationToken cancellationToken)
+    private async Task<DurableStatusResponse> WaitForFinalStatusAsync(
+        string statusQueryUri,
+        Func<DurableStatusResponse, Task> onStatusUpdate,
+        CancellationToken cancellationToken)
     {
         var maxAttempts = 180;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
             var status = await _backendClient.GetDurableStatusAsync(statusQueryUri, cancellationToken);
+            await onStatusUpdate(status);
+
             if (string.Equals(status.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status.RuntimeStatus, "Failed", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status.RuntimeStatus, "Terminated", StringComparison.OrdinalIgnoreCase))
@@ -762,6 +770,34 @@ public class MainViewModel : ObservableObject
         }
 
         throw new TimeoutException("Timeout esperando estado final de la orquestación.");
+    }
+
+    private async Task UpdateFileActivityAsync(
+        BatchFileItem file,
+        DurableStatusResponse status,
+        Func<int> getProcessed,
+        int total)
+    {
+        var progress = DurableCustomStatusReader.Read(status.CustomStatus);
+        if (string.IsNullOrWhiteSpace(progress.ActivityName)
+            && string.IsNullOrWhiteSpace(progress.ProgressText)
+            && string.IsNullOrWhiteSpace(progress.Detail))
+        {
+            await SetFileTraceAsync(file, item => item.RuntimeStatus = status.RuntimeStatus);
+            return;
+        }
+
+        await SetFileTraceAsync(file, item =>
+        {
+            item.RuntimeStatus = status.RuntimeStatus;
+            item.ActividadActual = progress.ActivityName;
+            item.ProgresoActividades = progress.ProgressText;
+            item.DetalleActividad = progress.Detail;
+        });
+
+        var activityText = string.IsNullOrWhiteSpace(progress.ActivityName) ? status.RuntimeStatus : progress.ActivityName;
+        var progressText = string.IsNullOrWhiteSpace(progress.ProgressText) ? string.Empty : $" ({progress.ProgressText})";
+        await SetProcessStatusAsync($"Procesados {getProcessed()}/{total}. {file.FileName}: {activityText}{progressText}.");
     }
 
     private static string TryGetEstadoCalidad(JsonElement? output)
