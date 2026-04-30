@@ -17,6 +17,7 @@ public class MainViewModel : ObservableObject
 {
     private readonly SettingsService _settingsService;
     private readonly DocumentIaBackendClient _backendClient;
+    private readonly BatchRunStorageService _runStorageService;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -31,14 +32,18 @@ public class MainViewModel : ObservableObject
     private CancellationTokenSource? _processingCts;
     private Dictionary<string, PromptOverride> _promptOverrides = new(StringComparer.OrdinalIgnoreCase);
 
-    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient())
+    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService())
     {
     }
 
-    public MainViewModel(SettingsService settingsService, DocumentIaBackendClient backendClient)
+    public MainViewModel(
+        SettingsService settingsService,
+        DocumentIaBackendClient backendClient,
+        BatchRunStorageService runStorageService)
     {
         _settingsService = settingsService;
         _backendClient = backendClient;
+        _runStorageService = runStorageService;
 
         Files = new ObservableCollection<BatchFileItem>();
         AvailableTipologias = new ObservableCollection<TipologiaOption>(
@@ -362,6 +367,7 @@ public class MainViewModel : ObservableObject
         var tipologiaCode = SelectedTipologia?.Code ?? "nota.simple.1_4";
         var promptOverridesSnapshot = new Dictionary<string, PromptOverride>(_promptOverrides, StringComparer.OrdinalIgnoreCase);
         var maxParallelism = Math.Clamp(NumeroColas, 1, 10);
+        var runFolder = _runStorageService.CreateRunFolder();
         var processed = 0;
         var errors = 0;
         var revisions = 0;
@@ -376,6 +382,7 @@ public class MainViewModel : ObservableObject
                 file,
                 tipologiaCode,
                 promptOverridesSnapshot,
+                runFolder,
                 semaphore,
                 total,
                 () => Volatile.Read(ref processed),
@@ -414,6 +421,7 @@ public class MainViewModel : ObservableObject
         BatchFileItem file,
         string tipologiaCode,
         Dictionary<string, PromptOverride> promptOverrides,
+        string runFolder,
         SemaphoreSlim semaphore,
         int total,
         Func<int> getProcessed,
@@ -433,18 +441,39 @@ public class MainViewModel : ObservableObject
 
             try
             {
+                await ResetFileTraceAsync(file);
                 await SetFileStatusAsync(file, "En cola");
                 await SetFileStatusAsync(file, "Enviando a backend");
 
-                var request = BuildIngestRequest(file, tipologiaCode, promptOverrides);
+                var correlationId = Guid.NewGuid().ToString();
+                await SetFileTraceAsync(file, item =>
+                {
+                    item.CorrelationId = correlationId;
+                    item.FechaInicio = DateTime.Now;
+                });
+
+                var request = BuildIngestRequest(file, tipologiaCode, promptOverrides, correlationId);
                 var ingestResponse = await _backendClient.IngestAsync(BackendUrl, FunctionKey, request, cancellationToken);
+                await SetFileTraceAsync(file, item => item.InstanceId = ingestResponse.InstanceId);
 
                 await SetFileStatusAsync(file, "En ejecución");
                 var finalStatus = await WaitForFinalStatusAsync(ingestResponse.StatusQueryUri, cancellationToken);
+                await SetFileTraceAsync(file, item => item.RuntimeStatus = finalStatus.RuntimeStatus);
 
                 if (string.Equals(finalStatus.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase))
                 {
                     var estadoCalidad = TryGetEstadoCalidad(finalStatus.Output);
+                    var confianzaGlobal = TryGetConfianzaGlobal(finalStatus.Output);
+                    var outputJsonPath = SaveOutputIfPresent(runFolder, file, finalStatus.Output);
+
+                    await SetFileTraceAsync(file, item =>
+                    {
+                        item.EstadoCalidad = estadoCalidad;
+                        item.ConfianzaGlobal = confianzaGlobal;
+                        item.OutputJsonPath = outputJsonPath;
+                        item.FechaFin = DateTime.Now;
+                    });
+
                     if (string.Equals(estadoCalidad, "REVISION", StringComparison.OrdinalIgnoreCase))
                     {
                         incrementRevisions();
@@ -458,18 +487,29 @@ public class MainViewModel : ObservableObject
                 else
                 {
                     incrementErrors();
+                    await SetFileTraceAsync(file, item =>
+                    {
+                        item.FechaFin = DateTime.Now;
+                        item.MensajeError = finalStatus.RuntimeStatus;
+                    });
                     await SetFileStatusAsync(file, "Error");
                 }
             }
             catch (OperationCanceledException)
             {
                 incrementCanceled();
+                await SetFileTraceAsync(file, item => item.FechaFin = DateTime.Now);
                 await SetFileStatusAsync(file, "Cancelado");
                 throw;
             }
             catch (Exception ex)
             {
                 incrementErrors();
+                await SetFileTraceAsync(file, item =>
+                {
+                    item.FechaFin = DateTime.Now;
+                    item.MensajeError = ex.Message;
+                });
                 await SetFileStatusAsync(file, $"Error: {TrimError(ex.Message)}");
             }
 
@@ -498,7 +538,8 @@ public class MainViewModel : ObservableObject
     private IngestRequest BuildIngestRequest(
         BatchFileItem file,
         string tipologiaCode,
-        Dictionary<string, PromptOverride> promptOverrides)
+        Dictionary<string, PromptOverride> promptOverrides,
+        string correlationId)
     {
         promptOverrides.TryGetValue(tipologiaCode, out var promptOverride);
         var umbral = Math.Clamp(UmbralConfianza / 100d, 0d, 1d);
@@ -534,7 +575,7 @@ public class MainViewModel : ObservableObject
             },
             Trazabilidad = new IngestTrazabilidad
             {
-                CorrelationId = Guid.NewGuid().ToString(),
+                CorrelationId = correlationId,
                 SubmittedBy = "DocumentIA.Batch"
             }
         };
@@ -591,6 +632,38 @@ public class MainViewModel : ObservableObject
         return estadoCalidad.GetString() ?? string.Empty;
     }
 
+    private static double? TryGetConfianzaGlobal(JsonElement? output)
+    {
+        if (!output.HasValue || output.Value.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!output.Value.TryGetProperty("resultado", out var resultado) || resultado.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (!resultado.TryGetProperty("confianzaGlobal", out var confianzaGlobal))
+        {
+            return null;
+        }
+
+        return confianzaGlobal.ValueKind == JsonValueKind.Number && confianzaGlobal.TryGetDouble(out var value)
+            ? value
+            : null;
+    }
+
+    private string SaveOutputIfPresent(string runFolder, BatchFileItem file, JsonElement? output)
+    {
+        if (!output.HasValue || output.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return string.Empty;
+        }
+
+        return _runStorageService.SaveOutputJson(runFolder, file, output.Value);
+    }
+
     private void SetFileStatus(BatchFileItem file, string status)
     {
         file.Estado = status;
@@ -602,6 +675,31 @@ public class MainViewModel : ObservableObject
         await RunOnUiAsync(() =>
         {
             file.Estado = status;
+            FilesView.Refresh();
+        });
+    }
+
+    private async Task ResetFileTraceAsync(BatchFileItem file)
+    {
+        await SetFileTraceAsync(file, item =>
+        {
+            item.InstanceId = string.Empty;
+            item.CorrelationId = string.Empty;
+            item.RuntimeStatus = string.Empty;
+            item.EstadoCalidad = string.Empty;
+            item.ConfianzaGlobal = null;
+            item.MensajeError = string.Empty;
+            item.FechaInicio = null;
+            item.FechaFin = null;
+            item.OutputJsonPath = string.Empty;
+        });
+    }
+
+    private async Task SetFileTraceAsync(BatchFileItem file, Action<BatchFileItem> update)
+    {
+        await RunOnUiAsync(() =>
+        {
+            update(file);
             FilesView.Refresh();
         });
     }

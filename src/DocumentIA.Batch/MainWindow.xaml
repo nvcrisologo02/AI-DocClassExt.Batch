@@ -127,9 +127,15 @@
                           GridLinesVisibility="Horizontal"
                           Foreground="{StaticResource BrushText}">
                     <DataGrid.Columns>
-                        <DataGridTextColumn Header="Nombre del archivo" Binding="{Binding FileName}" Width="3*" />
-                        <DataGridTextColumn Header="Tamaño" Binding="{Binding DisplaySize}" Width="1.1*" />
-                        <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="1.2*" />
+                        <DataGridTextColumn Header="Nombre del archivo" Binding="{Binding FileName}" Width="2.2*" />
+                        <DataGridTextColumn Header="Tamaño" Binding="{Binding DisplaySize}" Width="0.8*" />
+                        <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="1.1*" />
+                        <DataGridTextColumn Header="Calidad" Binding="{Binding EstadoCalidad}" Width="0.8*" />
+                        <DataGridTextColumn Header="Confianza" Binding="{Binding ConfidenceDisplay}" Width="0.9*" />
+                        <DataGridTextColumn Header="Duración" Binding="{Binding DurationDisplay}" Width="0.8*" />
+                        <DataGridTextColumn Header="CorrelationId" Binding="{Binding CorrelationId}" Width="1.8*" />
+                        <DataGridTextColumn Header="InstanceId" Binding="{Binding InstanceId}" Width="1.8*" />
+                        <DataGridTextColumn Header="Error" Binding="{Binding MensajeError}" Width="2*" />
                         <DataGridTemplateColumn Header="Acción" Width="1*">
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
