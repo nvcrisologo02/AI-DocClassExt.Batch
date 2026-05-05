@@ -1,0 +1,113 @@
+<UserControl x:Class="DocumentIA.Batch.Views.HistorialView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="1000">
+    <Grid Background="White">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar de filtros -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10" VerticalAlignment="Center">
+            <TextBlock Text="Desde:" VerticalAlignment="Center"/>
+            <DatePicker SelectedDate="{Binding FechaDesde}" Width="120"/>
+            
+            <TextBlock Text="Hasta:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            <DatePicker SelectedDate="{Binding FechaHasta}" Width="120"/>
+            
+            <TextBlock Text="Tipología:" VerticalAlignment="Center" Margin="10,0,0,0"/>
+            <ComboBox ItemsSource="{Binding AvailableTipologias}" 
+                      SelectedItem="{Binding FiltroTipologia}"
+                      Width="150"/>
+            
+            <Button Command="{Binding LoadRunsCommand}" Content="Filtrar" Padding="10,5"/>
+            <Button Command="{Binding RefreshCommand}" Content="Refrescar" Padding="10,5" Margin="10,0,0,0"/>
+            <Button Command="{Binding ImportarRunsCommand}" 
+                    Content="Importar anteriores" 
+                    Padding="10,5" Margin="20,0,0,0"
+                    ToolTip="Escanea la carpeta runs/ e importa ejecuciones previas al historial"/>
+        </StackPanel>
+
+        <!-- Contenido principal: 2 DataGrids -->
+        <Grid Grid.Row="1" Margin="10">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="300"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- DataGrid de Runs (superior) -->
+            <Border Grid.Row="0" BorderBrush="#CCCCCC" BorderThickness="1">
+                <DataGrid ItemsSource="{Binding Runs}"
+                          SelectedItem="{Binding SelectedRun}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          IsReadOnly="True">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Eliminar ejecución" Command="{Binding DataContext.DeleteRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Ejecución" Binding="{Binding RunKey}" Width="140"/>
+                        <DataGridTextColumn Header="Fecha" Binding="{Binding CreatedAtDisplay}" Width="150"/>
+                        <DataGridTextColumn Header="Tipología" Binding="{Binding Tipologia}" Width="150"/>
+                        <DataGridTextColumn Header="Total" Binding="{Binding TotalFiles}" Width="60"/>
+                        <DataGridTextColumn Header="Completados" Binding="{Binding CompletedFiles}" Width="80"/>
+                        <DataGridTextColumn Header="Revisión" Binding="{Binding RevisionFiles}" Width="70"/>
+                        <DataGridTextColumn Header="Error" Binding="{Binding ErrorFiles}" Width="60"/>
+                        <DataGridTextColumn Header="Tasa Éxito" Binding="{Binding SuccessRate}" Width="80"/>
+                        <DataGridTextColumn Header="Conf. Media" Binding="{Binding AverageConfidence}" Width="80"/>
+                        <DataGridTextColumn Header="Duración Total" Binding="{Binding TotalDuration}" Width="100"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+
+            <!-- Separador -->
+            <Separator Grid.Row="1" Margin="0,10"/>
+
+            <!-- DataGrid de Archivos (inferior) -->
+            <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1">
+                <DataGrid ItemsSource="{Binding SelectedRunFiles}"
+                          AutoGenerateColumns="False"
+                          CanUserAddRows="False"
+                          CanUserDeleteRows="False"
+                          IsReadOnly="True">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Archivo" Binding="{Binding FileName}" Width="200"/>
+                        <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="80"/>
+                        <DataGridTextColumn Header="Calidad" Binding="{Binding EstadoCalidad}" Width="80"/>
+                        <DataGridTextColumn Header="Confianza" Binding="{Binding ConfidenceDisplay}" Width="80"/>
+                        <DataGridTextColumn Header="Duración" Binding="{Binding DurationDisplay}" Width="70"/>
+                        <DataGridTextColumn Header="Inicio" Binding="{Binding FechaInicio}" Width="120"/>
+                        <DataGridTextColumn Header="Fin" Binding="{Binding FechaFin}" Width="120"/>
+                        <DataGridTextColumn Header="Error" Binding="{Binding MensajeError}" Width="200"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </Border>
+        </Grid>
+
+        <!-- StatusBar inferior -->
+        <Grid Grid.Row="2" Background="#F0F0F0" Margin="10" Height="35" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0"/>
+            <Button Grid.Column="1" Command="{Binding DeleteRunCommand}" Content="Eliminar" Padding="10,5" Margin="5,0"
+                    Background="#FFEEEE" Foreground="DarkRed"
+                    ToolTip="Elimina la ejecución seleccionada del historial"/>
+            <Button Grid.Column="2" Command="{Binding ExportCsvCommand}" Content="Exportar CSV" Padding="10,5" Margin="5,0"/>
+            <Button Grid.Column="3" Command="{Binding ExportExcelCommand}" Content="Exportar Excel" Padding="10,5" Margin="5,0"/>
+        </Grid>
+    </Grid>
+</UserControl>

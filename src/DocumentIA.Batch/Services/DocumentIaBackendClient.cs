@@ -23,7 +23,7 @@ public class DocumentIaBackendClient
         };
     }
 
-    public async Task<IReadOnlyList<string>> GetTipologiasAsync(string backendUrl, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TipologiaPublicaDto>> GetTipologiasAsync(string backendUrl, CancellationToken cancellationToken)
     {
         var endpoint = BuildEndpoint(backendUrl, "/api/tipologias");
         using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
@@ -34,11 +34,57 @@ public class DocumentIaBackendClient
         var tipologias = await JsonSerializer.DeserializeAsync<List<TipologiaPublicaDto>>(responseStream, JsonOptions, cancellationToken)
             ?? new List<TipologiaPublicaDto>();
 
+        // Deduplica por código (parte antes del @) preservando nombre y identificador completo
         return tipologias
-            .Select(x => NormalizeTipologiaCode(x.Identificador))
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(x => !string.IsNullOrWhiteSpace(x.Identificador))
+            .GroupBy(x => NormalizeTipologiaCode(x.Identificador), StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
             .ToList();
+    }
+
+    public async Task<BackendHealthInfo> GetHealthAsync(string backendUrl, string functionKey, CancellationToken cancellationToken)
+    {
+        var normalizedFunctionKey = NormalizeFunctionKey(functionKey);
+        var endpoint = BuildEndpoint(backendUrl, "/api/healthcheck", normalizedFunctionKey);
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
+
+        if (!string.IsNullOrWhiteSpace(normalizedFunctionKey))
+        {
+            request.Headers.TryAddWithoutValidation("x-functions-key", normalizedFunctionKey);
+        }
+
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            throw new InvalidOperationException(
+                "Error 401: La Function Key no es válida o ha expirado. " +
+                "Actualiza la clave en la sección Herramientas.");
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Error consultando healthcheck: {(int)response.StatusCode} {response.ReasonPhrase}. {payload}");
+        }
+
+        using var json = JsonDocument.Parse(payload);
+        var root = json.RootElement;
+        var components = root.TryGetProperty("components", out var componentsElement) && componentsElement.ValueKind == JsonValueKind.Object
+            ? componentsElement
+            : default;
+
+        var aggregate = TryReadStatus(root, "status", "overall", "aggregate") ?? "unknown";
+
+        return new BackendHealthInfo
+        {
+            AggregateStatus = aggregate,
+            FunctionsStatus = ReadComponentStatus(components, "functions"),
+            AssetResolverStatus = ReadComponentStatus(components, "assetResolver"),
+            GdcStatus = ReadComponentStatus(components, "gdc"),
+            ModelProvidersStatus = ReadComponentStatus(components, "modelProviders"),
+            RawPayload = payload
+        };
     }
 
     public async Task<IngestResponse> IngestAsync(
@@ -47,11 +93,12 @@ public class DocumentIaBackendClient
         IngestRequest request,
         CancellationToken cancellationToken)
     {
+        var normalizedFunctionKey = NormalizeFunctionKey(functionKey);
         var body = JsonSerializer.Serialize(request, JsonOptions);
         var endpoints = new[]
         {
-            BuildEndpoint(backendUrl, "/api/ingest"),
-            BuildEndpoint(backendUrl, "/api/IngestDocument")
+            BuildEndpoint(backendUrl, "/api/ingest", normalizedFunctionKey),
+            BuildEndpoint(backendUrl, "/api/IngestDocument", normalizedFunctionKey)
         };
 
         HttpStatusCode lastStatusCode = HttpStatusCode.NotFound;
@@ -63,9 +110,9 @@ public class DocumentIaBackendClient
                 Content = new StringContent(body, Encoding.UTF8, "application/json")
             };
 
-            if (!string.IsNullOrWhiteSpace(functionKey))
+            if (!string.IsNullOrWhiteSpace(normalizedFunctionKey))
             {
-                httpRequest.Headers.TryAddWithoutValidation("x-functions-key", functionKey.Trim());
+                httpRequest.Headers.TryAddWithoutValidation("x-functions-key", normalizedFunctionKey);
             }
 
             using var response = await _httpClient.SendAsync(httpRequest, cancellationToken);
@@ -74,6 +121,13 @@ public class DocumentIaBackendClient
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 continue;
+            }
+
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                throw new InvalidOperationException(
+                    "Error 401: La Function Key no es válida o ha expirado. " +
+                    "Actualiza la clave en 'Herramientas > Function Key' y guarda la configuración.");
             }
 
             var payload = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -98,26 +152,99 @@ public class DocumentIaBackendClient
         throw new InvalidOperationException($"No se encontró endpoint de ingest. Último estado HTTP: {(int)lastStatusCode}.");
     }
 
-    public async Task<DurableStatusResponse> GetDurableStatusAsync(string statusQueryUri, CancellationToken cancellationToken)
+    public async Task<DurableStatusResponse> GetDurableStatusAsync(string statusQueryUri, string functionKey, CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, statusQueryUri);
-        using var response = await _httpClient.SendAsync(request, cancellationToken);
-        var payload = await response.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        var normalizedFunctionKey = NormalizeFunctionKey(functionKey);
+        var endpointCandidates = new[]
         {
-            throw new InvalidOperationException($"Error consultando estado durable: {(int)response.StatusCode} {response.ReasonPhrase}. {payload}");
+            statusQueryUri,
+            AppendCodeQuery(statusQueryUri, normalizedFunctionKey)
+        }
+        .Where(x => !string.IsNullOrWhiteSpace(x))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+        HttpStatusCode? lastStatusCode = null;
+        string? lastPayload = null;
+        string? lastReason = null;
+
+        foreach (var endpoint in endpointCandidates)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+            if (!string.IsNullOrWhiteSpace(normalizedFunctionKey))
+            {
+                request.Headers.TryAddWithoutValidation("x-functions-key", normalizedFunctionKey);
+            }
+
+            using var response = await _httpClient.SendAsync(request, cancellationToken);
+            var payload = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                return JsonSerializer.Deserialize<DurableStatusResponse>(payload, JsonOptions)
+                    ?? throw new InvalidOperationException("Respuesta de estado durable inválida.");
+            }
+
+            lastStatusCode = response.StatusCode;
+            lastPayload = payload;
+            lastReason = response.ReasonPhrase;
+
+            if (response.StatusCode != HttpStatusCode.Unauthorized)
+            {
+                break;
+            }
         }
 
-        return JsonSerializer.Deserialize<DurableStatusResponse>(payload, JsonOptions)
-            ?? throw new InvalidOperationException("Respuesta de estado durable inválida.");
+        throw new InvalidOperationException(
+            $"Error consultando estado durable: {(int)(lastStatusCode ?? HttpStatusCode.BadRequest)} {lastReason}. {lastPayload}");
     }
 
-    private static string BuildEndpoint(string backendUrl, string path)
+    private static string BuildEndpoint(string backendUrl, string path, string? functionKey = null)
     {
         var normalizedBase = backendUrl.Trim().TrimEnd('/');
         var normalizedPath = path.StartsWith('/') ? path : $"/{path}";
-        return $"{normalizedBase}{normalizedPath}";
+        var endpoint = $"{normalizedBase}{normalizedPath}";
+
+        if (string.IsNullOrWhiteSpace(functionKey))
+        {
+            return endpoint;
+        }
+
+        var separator = endpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{endpoint}{separator}code={Uri.EscapeDataString(functionKey)}";
+    }
+
+    private static string AppendCodeQuery(string endpoint, string functionKey)
+    {
+        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(functionKey))
+        {
+            return endpoint;
+        }
+
+        if (endpoint.Contains("code=", StringComparison.OrdinalIgnoreCase))
+        {
+            return endpoint;
+        }
+
+        var separator = endpoint.Contains('?', StringComparison.Ordinal) ? '&' : '?';
+        return $"{endpoint}{separator}code={Uri.EscapeDataString(functionKey)}";
+    }
+
+    private static string NormalizeFunctionKey(string functionKey)
+    {
+        if (string.IsNullOrWhiteSpace(functionKey))
+        {
+            return string.Empty;
+        }
+
+        var trimmed = functionKey.Trim();
+
+        if ((trimmed.StartsWith('"') && trimmed.EndsWith('"'))
+            || (trimmed.StartsWith('\'') && trimmed.EndsWith('\'')))
+        {
+            trimmed = trimmed[1..^1].Trim();
+        }
+
+        return trimmed;
     }
 
     private static string NormalizeTipologiaCode(string identificador)
@@ -160,6 +287,40 @@ public class DocumentIaBackendClient
             || string.Equals(host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
             || string.Equals(host, "::1", StringComparison.OrdinalIgnoreCase);
     }
+
+    private static string ReadComponentStatus(JsonElement components, string componentName)
+    {
+        if (components.ValueKind != JsonValueKind.Object || !components.TryGetProperty(componentName, out var component))
+        {
+            return "unknown";
+        }
+
+        var status = TryReadStatus(component, "status", "state", "health");
+        return string.IsNullOrWhiteSpace(status) ? "unknown" : status;
+    }
+
+    private static string? TryReadStatus(JsonElement source, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (source.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String)
+            {
+                return value.GetString();
+            }
+        }
+
+        return null;
+    }
+}
+
+public class BackendHealthInfo
+{
+    public string AggregateStatus { get; set; } = "unknown";
+    public string FunctionsStatus { get; set; } = "unknown";
+    public string AssetResolverStatus { get; set; } = "unknown";
+    public string GdcStatus { get; set; } = "unknown";
+    public string ModelProvidersStatus { get; set; } = "unknown";
+    public string RawPayload { get; set; } = string.Empty;
 }
 
 public class IngestRequest
@@ -196,6 +357,18 @@ public class IngestInstrucciones
 
     [JsonPropertyName("prompt")]
     public IngestPromptConfig? Prompt { get; set; }
+
+    [JsonPropertyName("assetResolver")]
+    public IngestAssetResolverSettings? AssetResolver { get; set; }
+}
+
+public class IngestAssetResolverSettings
+{
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
+
+    [JsonPropertyName("camposSolicitados")]
+    public List<string>? CamposSolicitados { get; set; }
 }
 
 public class IngestIaConfig
@@ -208,6 +381,12 @@ public class IngestIaConfig
 
     [JsonPropertyName("umbral")]
     public double? Umbral { get; set; }
+
+    [JsonPropertyName("umbralCompletitud")]
+    public double? UmbralCompletitud { get; set; }
+
+    [JsonPropertyName("umbralConfianza")]
+    public double? UmbralConfianza { get; set; }
 }
 
 public class IngestPromptConfig

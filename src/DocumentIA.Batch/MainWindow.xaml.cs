@@ -52,4 +52,5 @@ public partial class MainWindow : Window
             _viewModel.ShowFileOutputCommand.Execute(item);
         }
     }
+
 }

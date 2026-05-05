@@ -6,6 +6,7 @@ using System.Threading;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Threading;
 using DocumentIA.Batch.Models;
 using DocumentIA.Batch.Services;
 using DocumentIA.Batch.Views;
@@ -20,22 +21,32 @@ public class MainViewModel : ObservableObject
     private readonly BatchRunStorageService _runStorageService;
     private readonly BatchCsvExportService _csvExportService;
     private readonly BatchExcelExportService _excelExportService;
+    private readonly BatchHistorialService _historialService;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
     private TipologiaOption? _selectedTipologia;
     private bool _promptingEnabled;
-    private int _umbralConfianza;
+    private bool _sobreescribirUmbrales;
+    private string _umbralExtraccion = "0.80";
+    private string _umbralExtraccionCompletitud = string.Empty;
+    private string _umbralExtraccionConfianza = string.Empty;
     private int _numeroColas;
     private bool _ejecutarConAssetResolver;
+    private string _assetResolverCamposSolicitados = string.Empty;
     private bool _subirAGdc;
+    private bool _forceReprocess;
     private bool _isProcessing;
     private string _processStatus = "Sin ejecuciones";
     private BatchRunSummary? _lastRunSummary;
     private CancellationTokenSource? _processingCts;
+    private readonly DispatcherTimer _healthTimer;
+    private bool _isRefreshingHealth;
     private Dictionary<string, PromptOverride> _promptOverrides = new(StringComparer.OrdinalIgnoreCase);
 
-    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new BatchCsvExportService(), new BatchExcelExportService())
+    private const string DefaultBackendUrl = "https://srbappprodocai.azurewebsites.net";
+
+    public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new BatchCsvExportService(), new BatchExcelExportService(), new BatchHistorialService())
     {
     }
 
@@ -44,13 +55,15 @@ public class MainViewModel : ObservableObject
         DocumentIaBackendClient backendClient,
         BatchRunStorageService runStorageService,
         BatchCsvExportService csvExportService,
-        BatchExcelExportService excelExportService)
+        BatchExcelExportService excelExportService,
+        BatchHistorialService historialService)
     {
         _settingsService = settingsService;
         _backendClient = backendClient;
         _runStorageService = runStorageService;
         _csvExportService = csvExportService;
         _excelExportService = excelExportService;
+        _historialService = historialService;
 
         Files = new ObservableCollection<BatchFileItem>();
         AvailableTipologias = new ObservableCollection<TipologiaOption>(
@@ -67,6 +80,7 @@ public class MainViewModel : ObservableObject
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
         EditPromptCommand = new RelayCommand(_ => EditPrompt(), _ => SelectedTipologia is not null);
         RefreshTipologiasCommand = new RelayCommand(_ => _ = RefreshTipologiasAsync(), _ => !IsProcessing && !string.IsNullOrWhiteSpace(BackendUrl));
+        RefreshHealthCommand = new RelayCommand(_ => _ = RefreshHealthAsync());
         StartProcessingCommand = new RelayCommand(_ => _ = StartProcessingAsync(), _ => CanProcess());
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
         RetryFailedCommand = new RelayCommand(_ => _ = RetryFailedAsync(), _ => CanRetryFailed());
@@ -84,8 +98,16 @@ public class MainViewModel : ObservableObject
 
         FilesView = CollectionViewSource.GetDefaultView(Files);
 
+        _healthTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(30)
+        };
+        _healthTimer.Tick += (_, _) => _ = RefreshHealthAsync();
+        _healthTimer.Start();
+
         LoadConfig();
         _ = RefreshTipologiasAsync();
+        _ = RefreshHealthAsync();
     }
 
     public ObservableCollection<BatchFileItem> Files { get; }
@@ -103,6 +125,8 @@ public class MainViewModel : ObservableObject
     public RelayCommand EditPromptCommand { get; }
 
     public RelayCommand RefreshTipologiasCommand { get; }
+
+    public RelayCommand RefreshHealthCommand { get; }
 
     public RelayCommand StartProcessingCommand { get; }
 
@@ -125,13 +149,87 @@ public class MainViewModel : ObservableObject
     public string BackendUrl
     {
         get => _backendUrl;
-        set => SetProperty(ref _backendUrl, value);
+        set
+        {
+            if (SetProperty(ref _backendUrl, value))
+            {
+                OnPropertyChanged(nameof(EffectiveBackendUrl));
+                RefreshTipologiasCommand.RaiseCanExecuteChanged();
+                StartProcessingCommand.RaiseCanExecuteChanged();
+                RetryFailedCommand.RaiseCanExecuteChanged();
+            }
+        }
     }
+
+    public string EffectiveBackendUrl => string.IsNullOrWhiteSpace(BackendUrl) ? DefaultBackendUrl : BackendUrl.Trim();
 
     public string FunctionKey
     {
         get => _functionKey;
         set => SetProperty(ref _functionKey, value);
+    }
+
+    private bool _isSystemOnline = true;
+    public bool IsSystemOnline
+    {
+        get => _isSystemOnline;
+        private set => SetProperty(ref _isSystemOnline, value);
+    }
+
+    private string _systemOnlineLabel = "Sistema online";
+    public string SystemOnlineLabel
+    {
+        get => _systemOnlineLabel;
+        private set => SetProperty(ref _systemOnlineLabel, value);
+    }
+
+    private string _healthAggregate = "unknown";
+    public string HealthAggregate
+    {
+        get => _healthAggregate;
+        private set => SetProperty(ref _healthAggregate, value);
+    }
+
+    private string _healthFunctions = "unknown";
+    public string HealthFunctions
+    {
+        get => _healthFunctions;
+        private set => SetProperty(ref _healthFunctions, value);
+    }
+
+    private string _healthAssetResolver = "unknown";
+    public string HealthAssetResolver
+    {
+        get => _healthAssetResolver;
+        private set => SetProperty(ref _healthAssetResolver, value);
+    }
+
+    private string _healthGdc = "unknown";
+    public string HealthGdc
+    {
+        get => _healthGdc;
+        private set => SetProperty(ref _healthGdc, value);
+    }
+
+    private string _healthModelProviders = "unknown";
+    public string HealthModelProviders
+    {
+        get => _healthModelProviders;
+        private set => SetProperty(ref _healthModelProviders, value);
+    }
+
+    private string _healthUpdatedAt = "—";
+    public string HealthUpdatedAt
+    {
+        get => _healthUpdatedAt;
+        private set => SetProperty(ref _healthUpdatedAt, value);
+    }
+
+    private string _healthRawPayload = string.Empty;
+    public string HealthRawPayload
+    {
+        get => _healthRawPayload;
+        private set => SetProperty(ref _healthRawPayload, value);
     }
 
     public TipologiaOption? SelectedTipologia
@@ -157,10 +255,28 @@ public class MainViewModel : ObservableObject
         set => SetProperty(ref _promptingEnabled, value);
     }
 
-    public int UmbralConfianza
+    public bool SobreescribirUmbrales
     {
-        get => _umbralConfianza;
-        set => SetProperty(ref _umbralConfianza, value);
+        get => _sobreescribirUmbrales;
+        set => SetProperty(ref _sobreescribirUmbrales, value);
+    }
+
+    public string UmbralExtraccion
+    {
+        get => _umbralExtraccion;
+        set => SetProperty(ref _umbralExtraccion, value);
+    }
+
+    public string UmbralExtraccionCompletitud
+    {
+        get => _umbralExtraccionCompletitud;
+        set => SetProperty(ref _umbralExtraccionCompletitud, value);
+    }
+
+    public string UmbralExtraccionConfianza
+    {
+        get => _umbralExtraccionConfianza;
+        set => SetProperty(ref _umbralExtraccionConfianza, value);
     }
 
     public int NumeroColas
@@ -172,13 +288,33 @@ public class MainViewModel : ObservableObject
     public bool EjecutarConAssetResolver
     {
         get => _ejecutarConAssetResolver;
-        set => SetProperty(ref _ejecutarConAssetResolver, value);
+        set
+        {
+            if (SetProperty(ref _ejecutarConAssetResolver, value))
+            {
+                OnPropertyChanged(nameof(AssetResolverCamposVisible));
+            }
+        }
+    }
+
+    public bool AssetResolverCamposVisible => _ejecutarConAssetResolver;
+
+    public string AssetResolverCamposSolicitados
+    {
+        get => _assetResolverCamposSolicitados;
+        set => SetProperty(ref _assetResolverCamposSolicitados, value);
     }
 
     public bool SubirAGdc
     {
         get => _subirAGdc;
         set => SetProperty(ref _subirAGdc, value);
+    }
+
+    public bool ForceReprocess
+    {
+        get => _forceReprocess;
+        set => SetProperty(ref _forceReprocess, value);
     }
 
     public bool IsProcessing
@@ -332,13 +468,21 @@ public class MainViewModel : ObservableObject
     private void LoadConfig()
     {
         var config = _settingsService.Load();
-        BackendUrl = config.BackendUrl;
+        BackendUrl = string.IsNullOrWhiteSpace(config.BackendUrl)
+            || string.Equals(config.BackendUrl.Trim(), "http://localhost:7071", StringComparison.OrdinalIgnoreCase)
+            ? DefaultBackendUrl
+            : config.BackendUrl;
         FunctionKey = config.FunctionKey;
         PromptingEnabled = config.PromptingEnabled;
-        UmbralConfianza = config.UmbralConfianza;
+        SobreescribirUmbrales = config.SobreescribirUmbrales;
+        UmbralExtraccion = string.IsNullOrWhiteSpace(config.UmbralExtraccion) ? "0.80" : config.UmbralExtraccion;
+        UmbralExtraccionCompletitud = config.UmbralExtraccionCompletitud;
+        UmbralExtraccionConfianza = config.UmbralExtraccionConfianza;
         NumeroColas = config.NumeroColas;
         EjecutarConAssetResolver = config.EjecutarConAssetResolver;
+        AssetResolverCamposSolicitados = config.AssetResolverCamposSolicitados;
         SubirAGdc = config.SubirAGdc;
+        ForceReprocess = config.ForceReprocess;
         _promptOverrides = new Dictionary<string, PromptOverride>(config.PromptOverrides, StringComparer.OrdinalIgnoreCase);
 
         SelectedTipologia = AvailableTipologias.FirstOrDefault(x =>
@@ -353,10 +497,25 @@ public class MainViewModel : ObservableObject
 
     private void SaveConfig()
     {
-        if (UmbralConfianza < 0 || UmbralConfianza > 100)
+        if (SobreescribirUmbrales)
         {
-            MessageBox.Show("El umbral debe estar entre 0 y 100.", "Validación", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            if (!TryParseUmbral(UmbralExtraccion, out _))
+            {
+                MessageBox.Show("El umbral de extracci\u00f3n debe ser un valor decimal entre 0 y 1 (ej: 0.80).", "Validaci\u00f3n", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(UmbralExtraccionCompletitud) && !TryParseUmbral(UmbralExtraccionCompletitud, out _))
+            {
+                MessageBox.Show("El umbral de completitud debe ser un valor decimal entre 0 y 1 o estar vac\u00edo.", "Validaci\u00f3n", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(UmbralExtraccionConfianza) && !TryParseUmbral(UmbralExtraccionConfianza, out _))
+            {
+                MessageBox.Show("El umbral de confianza debe ser un valor decimal entre 0 y 1 o estar vac\u00edo.", "Validaci\u00f3n", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
         }
 
         if (NumeroColas < 1 || NumeroColas > 10)
@@ -371,10 +530,15 @@ public class MainViewModel : ObservableObject
             FunctionKey = FunctionKey,
             SelectedTipologia = SelectedTipologia?.Code ?? "nota.simple.1_4",
             PromptingEnabled = PromptingEnabled,
-            UmbralConfianza = UmbralConfianza,
+            SobreescribirUmbrales = SobreescribirUmbrales,
+            UmbralExtraccion = UmbralExtraccion,
+            UmbralExtraccionCompletitud = UmbralExtraccionCompletitud,
+            UmbralExtraccionConfianza = UmbralExtraccionConfianza,
             NumeroColas = NumeroColas,
             EjecutarConAssetResolver = EjecutarConAssetResolver,
+            AssetResolverCamposSolicitados = AssetResolverCamposSolicitados,
             SubirAGdc = SubirAGdc,
+            ForceReprocess = ForceReprocess,
             PromptOverrides = new Dictionary<string, PromptOverride>(_promptOverrides, StringComparer.OrdinalIgnoreCase)
         };
 
@@ -448,9 +612,15 @@ public class MainViewModel : ObservableObject
             }
 
             AvailableTipologias.Clear();
-            foreach (var code in tipologias)
+            foreach (var dto in tipologias)
             {
-                AvailableTipologias.Add(new TipologiaOption { Code = code });
+                var code = NormalizeTipologiaCode(dto.Identificador);
+                AvailableTipologias.Add(new TipologiaOption
+                {
+                    Code = code,
+                    Identificador = dto.Identificador,
+                    Nombre = dto.Nombre
+                });
             }
 
             SelectedTipologia = AvailableTipologias.FirstOrDefault(x =>
@@ -464,6 +634,55 @@ public class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             ProcessStatus = $"No se pudieron cargar tipologías del backend: {ex.Message}";
+        }
+    }
+
+    public async Task RefreshHealthAsync()
+    {
+        if (_isRefreshingHealth)
+        {
+            return;
+        }
+
+        _isRefreshingHealth = true;
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            var health = await _backendClient.GetHealthAsync(EffectiveBackendUrl, FunctionKey, cts.Token);
+
+            await RunOnUiAsync(() =>
+            {
+                HealthAggregate = NormalizeHealthStatus(health.AggregateStatus);
+                HealthFunctions = NormalizeHealthStatus(health.FunctionsStatus);
+                HealthAssetResolver = NormalizeHealthStatus(health.AssetResolverStatus);
+                HealthGdc = NormalizeHealthStatus(health.GdcStatus);
+                HealthModelProviders = NormalizeHealthStatus(health.ModelProvidersStatus);
+                HealthUpdatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+                HealthRawPayload = health.RawPayload;
+
+                IsSystemOnline = IsHealthyStatus(HealthAggregate);
+                SystemOnlineLabel = IsSystemOnline ? "Sistema online" : "Sistema con incidencias";
+            });
+        }
+        catch (Exception ex)
+        {
+            await RunOnUiAsync(() =>
+            {
+                HealthAggregate = "offline";
+                HealthFunctions = "unknown";
+                HealthAssetResolver = "unknown";
+                HealthGdc = "unknown";
+                HealthModelProviders = "unknown";
+                HealthUpdatedAt = DateTime.Now.ToString("dd/MM/yyyy HH:mm:ss");
+                HealthRawPayload = ex.Message;
+                IsSystemOnline = false;
+                SystemOnlineLabel = "Sistema offline";
+            });
+        }
+        finally
+        {
+            _isRefreshingHealth = false;
         }
     }
 
@@ -571,8 +790,59 @@ public class MainViewModel : ObservableObject
             if (_lastRunSummary is not null)
             {
                 ShowBatchSummary(_lastRunSummary);
+
+                // Guardar en historial (best-effort, no interrumpe si falla)
+                try
+                {
+                    _ = _historialService.SaveRunAsync(
+                        runKey: Path.GetFileName(runFolder),
+                        runFolderPath: runFolder,
+                        summary: _lastRunSummary,
+                        files: Files.ToList(),
+                        umbralConfianza: 0,
+                        subirAGdc: SubirAGdc,
+                        ejecutarConAssetResolver: EjecutarConAssetResolver);
+                }
+                catch
+                {
+                    // Historial es best-effort; no interrumpe el flujo principal
+                }
             }
         }
+    }
+
+    private static bool TryParseUmbral(string? value, out double result)
+    {
+        if (double.TryParse(value?.Replace(',', '.'),
+                System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out result))
+        {
+            return result >= 0d && result <= 1d;
+        }
+
+        result = 0d;
+        return false;
+    }
+
+    /// <summary>
+    /// Parsea "CAMPO1, CAMPO2, CAMPO3" → List&lt;string&gt;. Devuelve null si está vacío.
+    /// </summary>
+    private static List<string>? ParseCamposSolicitados(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var list = raw
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
+        return list.Count > 0 ? list : null;
+    }
+
+    private static string NormalizeTipologiaCode(string identificador)
+    {
+        if (string.IsNullOrWhiteSpace(identificador)) return string.Empty;
+        var parts = identificador.Split('@', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return parts.Length > 0 ? parts[0].Trim() : identificador.Trim();
     }
 
     private bool CanProcessFiles(IReadOnlyCollection<BatchFileItem> filesToProcess)
@@ -619,7 +889,7 @@ public class MainViewModel : ObservableObject
                 });
 
                 var request = BuildIngestRequest(file, tipologiaCode, promptOverrides, correlationId);
-                var ingestResponse = await _backendClient.IngestAsync(BackendUrl, FunctionKey, request, cancellationToken);
+                var ingestResponse = await _backendClient.IngestAsync(EffectiveBackendUrl, FunctionKey, request, cancellationToken);
                 await SetFileTraceAsync(file, item => item.InstanceId = ingestResponse.InstanceId);
 
                 await SetFileStatusAsync(file, "En ejecución");
@@ -711,27 +981,38 @@ public class MainViewModel : ObservableObject
         string correlationId)
     {
         promptOverrides.TryGetValue(tipologiaCode, out var promptOverride);
-        var umbral = Math.Clamp(UmbralConfianza / 100d, 0d, 1d);
+
+        double? umbralExtraccion = null;
+        double? umbralCompletitud = null;
+        double? umbralConfianzaExt = null;
+
+        if (SobreescribirUmbrales)
+        {
+            if (TryParseUmbral(UmbralExtraccion, out var ue)) umbralExtraccion = ue;
+            if (!string.IsNullOrWhiteSpace(UmbralExtraccionCompletitud) && TryParseUmbral(UmbralExtraccionCompletitud, out var uc)) umbralCompletitud = uc;
+            if (!string.IsNullOrWhiteSpace(UmbralExtraccionConfianza) && TryParseUmbral(UmbralExtraccionConfianza, out var ucf)) umbralConfianzaExt = ucf;
+        }
 
         var request = new IngestRequest
         {
             Instrucciones = new IngestInstrucciones
             {
                 ExpectedType = tipologiaCode,
-                SkipDuplicateCheck = false,
-                ForceReprocess = false,
+                SkipDuplicateCheck = ForceReprocess,
+                ForceReprocess = ForceReprocess,
                 SkipGdcUpload = !SubirAGdc,
                 Classification = new IngestIaConfig
                 {
                     Provider = "auto",
-                    Model = "auto",
-                    Umbral = umbral
+                    Model = "auto"
                 },
                 Extraction = new IngestIaConfig
                 {
                     Provider = "auto",
                     Model = "auto",
-                    Umbral = umbral
+                    Umbral = umbralExtraccion,
+                    UmbralCompletitud = umbralCompletitud,
+                    UmbralConfianza = umbralConfianzaExt
                 }
             },
             Documento = new IngestDocumento
@@ -759,6 +1040,16 @@ public class MainViewModel : ObservableObject
             };
         }
 
+        if (EjecutarConAssetResolver)
+        {
+            var camposSolicitados = ParseCamposSolicitados(AssetResolverCamposSolicitados);
+            request.Instrucciones.AssetResolver = new IngestAssetResolverSettings
+            {
+                Enabled = true,
+                CamposSolicitados = camposSolicitados
+            };
+        }
+
         return request;
     }
 
@@ -770,7 +1061,7 @@ public class MainViewModel : ObservableObject
         var maxAttempts = 180;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            var status = await _backendClient.GetDurableStatusAsync(statusQueryUri, cancellationToken);
+            var status = await _backendClient.GetDurableStatusAsync(statusQueryUri, FunctionKey, cancellationToken);
             await onStatusUpdate(status);
 
             if (string.Equals(status.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase)
@@ -956,7 +1247,7 @@ public class MainViewModel : ObservableObject
                 Files.ToList(),
                 SelectedTipologia?.Code ?? string.Empty,
                 NumeroColas,
-                UmbralConfianza,
+                0,
                 SubirAGdc,
                 EjecutarConAssetResolver);
 
@@ -996,7 +1287,7 @@ public class MainViewModel : ObservableObject
                 Files.ToList(),
                 SelectedTipologia?.Code ?? string.Empty,
                 NumeroColas,
-                UmbralConfianza,
+                0,
                 SubirAGdc,
                 EjecutarConAssetResolver);
 
@@ -1175,5 +1466,20 @@ public class MainViewModel : ObservableObject
         }
 
         return message[..max] + "...";
+    }
+
+    private static string NormalizeHealthStatus(string status)
+    {
+        return string.IsNullOrWhiteSpace(status)
+            ? "unknown"
+            : status.Trim().ToLowerInvariant();
+    }
+
+    private static bool IsHealthyStatus(string status)
+    {
+        return string.Equals(status, "healthy", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "online", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "running", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "ok", StringComparison.OrdinalIgnoreCase);
     }
 }
