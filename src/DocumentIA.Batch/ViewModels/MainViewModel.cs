@@ -76,6 +76,7 @@ public class MainViewModel : ObservableObject
             });
 
         RemoveFileCommand = new RelayCommand(RemoveFile, _ => !IsProcessing);
+        ClearAllFilesCommand = new RelayCommand(_ => ClearAllFiles(), _ => !IsProcessing && Files.Count > 0);
         PickFilesCommand = new RelayCommand(_ => PickFiles(), _ => !IsProcessing);
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
         EditPromptCommand = new RelayCommand(_ => EditPrompt(), _ => SelectedTipologia is not null);
@@ -90,6 +91,8 @@ public class MainViewModel : ObservableObject
         ShowBatchSummaryCommand = new RelayCommand(_ => ShowBatchSummary(), _ => !IsProcessing && Files.Count > 0);
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => !IsProcessing && Files.Count > 0);
         ExportExcelCommand = new RelayCommand(_ => ExportExcel(), _ => !IsProcessing && Files.Count > 0);
+        CopyCorrelationIdCommand = new RelayCommand(CopyCorrelationId, file => file is BatchFileItem item && !string.IsNullOrWhiteSpace(item.CorrelationId));
+        CopyInstanceIdCommand = new RelayCommand(CopyInstanceId, file => file is BatchFileItem item && !string.IsNullOrWhiteSpace(item.InstanceId));
         Files.CollectionChanged += (_, _) =>
         {
             RaiseFileCommandStates();
@@ -118,6 +121,8 @@ public class MainViewModel : ObservableObject
 
     public RelayCommand RemoveFileCommand { get; }
 
+    public RelayCommand ClearAllFilesCommand { get; }
+
     public RelayCommand PickFilesCommand { get; }
 
     public RelayCommand SaveConfigCommand { get; }
@@ -145,6 +150,10 @@ public class MainViewModel : ObservableObject
     public RelayCommand ExportCsvCommand { get; }
 
     public RelayCommand ExportExcelCommand { get; }
+
+    public RelayCommand CopyCorrelationIdCommand { get; }
+
+    public RelayCommand CopyInstanceIdCommand { get; }
 
     public string BackendUrl
     {
@@ -329,12 +338,15 @@ public class MainViewModel : ObservableObject
                 RefreshTipologiasCommand.RaiseCanExecuteChanged();
                 PickFilesCommand.RaiseCanExecuteChanged();
                 RemoveFileCommand.RaiseCanExecuteChanged();
+                ClearAllFilesCommand.RaiseCanExecuteChanged();
                 RetryFailedCommand.RaiseCanExecuteChanged();
                 RetryFileCommand.RaiseCanExecuteChanged();
                 ClearFileDataCommand.RaiseCanExecuteChanged();
                 ShowBatchSummaryCommand.RaiseCanExecuteChanged();
                 ExportCsvCommand.RaiseCanExecuteChanged();
                 ExportExcelCommand.RaiseCanExecuteChanged();
+                CopyCorrelationIdCommand.RaiseCanExecuteChanged();
+                CopyInstanceIdCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -463,6 +475,30 @@ public class MainViewModel : ObservableObject
             Files.Remove(item);
             RaiseFileCommandStates();
         }
+    }
+
+    private void ClearAllFiles()
+    {
+        if (IsProcessing || Files.Count == 0)
+        {
+            return;
+        }
+
+        var result = MessageBox.Show(
+            "Se van a eliminar todos los ficheros adjuntos del listado. ¿Deseas continuar?",
+            "Limpiar adjuntos",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        Files.Clear();
+        ProcessStatus = "Adjuntos eliminados del listado.";
+        RaiseFileCommandStates();
+        RefreshBatchKpis();
     }
 
     private void LoadConfig()
@@ -1201,6 +1237,51 @@ public class MainViewModel : ObservableObject
         ShowBatchSummaryCommand.RaiseCanExecuteChanged();
         ExportCsvCommand.RaiseCanExecuteChanged();
         ExportExcelCommand.RaiseCanExecuteChanged();
+        ClearAllFilesCommand.RaiseCanExecuteChanged();
+        CopyCorrelationIdCommand.RaiseCanExecuteChanged();
+        CopyInstanceIdCommand.RaiseCanExecuteChanged();
+    }
+
+    private void CopyCorrelationId(object? parameter)
+    {
+        if (parameter is not BatchFileItem file)
+        {
+            return;
+        }
+
+        CopyToClipboard(file.CorrelationId, "CorrelationId", file.FileName);
+    }
+
+    private void CopyInstanceId(object? parameter)
+    {
+        if (parameter is not BatchFileItem file)
+        {
+            return;
+        }
+
+        CopyToClipboard(file.InstanceId, "InstanceId", file.FileName);
+    }
+
+    private void CopyToClipboard(string? value, string fieldName, string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        try
+        {
+            Clipboard.SetText(value);
+            ProcessStatus = $"{fieldName} copiado al portapapeles ({fileName}).";
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"No se pudo copiar {fieldName}: {ex.Message}",
+                "Copiar al portapapeles",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void ShowBatchSummary()

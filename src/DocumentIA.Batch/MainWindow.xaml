@@ -583,9 +583,20 @@
                           BorderThickness="1"
                           HeadersVisibility="Column"
                           IsReadOnly="True"
+                          ClipboardCopyMode="IncludeHeader"
                           RowHeaderWidth="0"
                           GridLinesVisibility="Horizontal"
                           MouseDoubleClick="FilesGrid_MouseDoubleClick">
+                    <DataGrid.ContextMenu>
+                        <ContextMenu>
+                            <MenuItem Header="Copiar CorrelationId"
+                                      Command="{Binding DataContext.CopyCorrelationIdCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                            <MenuItem Header="Copiar InstanceId"
+                                      Command="{Binding DataContext.CopyInstanceIdCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                      CommandParameter="{Binding PlacementTarget.SelectedItem, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                        </ContextMenu>
+                    </DataGrid.ContextMenu>
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Nombre del archivo" Binding="{Binding FileName}" Width="2.2*" />
                         <DataGridTextColumn Header="Tamaño" Binding="{Binding DisplaySize}" Width="0.8*" />
@@ -662,6 +673,11 @@
                                 Foreground="#334155" />
                             <Button Content="Agregar PDFs"
                                 Command="{Binding PickFilesCommand}"
+                                Background="#FFFFFF"
+                                BorderBrush="#CBD5E1"
+                                Foreground="#334155" />
+                            <Button Content="Limpiar adjuntos"
+                                Command="{Binding ClearAllFilesCommand}"
                                 Background="#FFFFFF"
                                 BorderBrush="#CBD5E1"
                                 Foreground="#334155" />

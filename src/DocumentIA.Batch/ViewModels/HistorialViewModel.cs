@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.IO;
 using System.Windows.Input;
 using DocumentIA.Batch.Models;
@@ -8,7 +9,7 @@ namespace DocumentIA.Batch.ViewModels;
 
 /// <summary>
 /// ViewModel para la pestaña de Historial.
-/// Gestiona consulta, filtrado y exportación del historial de ejecuciones.
+/// Muestra directamente los ficheros procesados (JOIN BatchRunFile + BatchRun).
 /// </summary>
 public class HistorialViewModel : ObservableObject
 {
@@ -18,30 +19,56 @@ public class HistorialViewModel : ObservableObject
     private DateTime? _fechaDesde;
     private DateTime? _fechaHasta;
     private string? _filtroTipologia;
-    private BatchRunRecord? _selectedRun;
-    private int _totalRuns;
+    private int _totalFiles;
     private string _statusText = "Sin datos";
-    private int _currentPage;
+    private bool _isImporting;
+    private bool? _selectAllFiles = false;
+    private int _selectedFilesCount;
+    private bool _isUpdatingSelection;
 
-    public ObservableCollection<BatchRunRecord> Runs { get; }
-    public ObservableCollection<BatchRunFileRecord> SelectedRunFiles { get; }
+    public ObservableCollection<HistorialFileRow> Files { get; }
     public ObservableCollection<string> AvailableTipologias { get; }
 
-    public ICommand LoadRunsCommand { get; }
+    public ICommand LoadFilesCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand ExportCsvCommand { get; }
     public ICommand ExportExcelCommand { get; }
     public ICommand ImportarRunsCommand { get; }
-    public ICommand DeleteRunCommand { get; }
+    public ICommand ClearAndReimportCommand { get; }
 
-    private bool _isImporting;
     public bool IsImporting
     {
         get => _isImporting;
         private set { _isImporting = value; OnPropertyChanged(); }
     }
 
-    private const int PageSize = 50;
+    public bool? SelectAllFiles
+    {
+        get => _selectAllFiles;
+        set
+        {
+            if (_selectAllFiles == value)
+            {
+                return;
+            }
+
+            _selectAllFiles = value;
+            OnPropertyChanged();
+
+            if (_isUpdatingSelection || value is null)
+            {
+                return;
+            }
+
+            SetAllSelection(value.Value);
+        }
+    }
+
+    public int SelectedFilesCount
+    {
+        get => _selectedFilesCount;
+        private set => SetProperty(ref _selectedFilesCount, value);
+    }
 
     public HistorialViewModel() : this(new BatchHistorialService(), new HistorialExportService())
     {
@@ -52,20 +79,26 @@ public class HistorialViewModel : ObservableObject
         _historialService = historialService;
         _exportService = exportService;
 
-        Runs = new ObservableCollection<BatchRunRecord>();
-        SelectedRunFiles = new ObservableCollection<BatchRunFileRecord>();
+        var today = DateTime.Today;
+        _fechaDesde = today.AddDays(-30);
+        _fechaHasta = today;
+        _filtroTipologia = "Todas";
+
+        Files = new ObservableCollection<HistorialFileRow>();
         AvailableTipologias = new ObservableCollection<string> { "Todas" };
 
-        LoadRunsCommand = new RelayCommand(_ => _ = LoadRunsAsync(), _ => true);
-        RefreshCommand = new RelayCommand(_ => _ = RefreshAsync(), _ => true);
-        ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => SelectedRun is not null && SelectedRunFiles.Count > 0);
-        ExportExcelCommand = new RelayCommand(_ => ExportExcel(), _ => SelectedRun is not null && SelectedRunFiles.Count > 0);
-        ImportarRunsCommand = new RelayCommand(_ => _ = ImportarRunsAsync(), _ => !IsImporting);
-        DeleteRunCommand = new RelayCommand(_ => _ = DeleteRunAsync(), _ => SelectedRun is not null);
+        LoadFilesCommand        = new RelayCommand(_ => _ = LoadFilesAsync(),         _ => true);
+        RefreshCommand          = new RelayCommand(_ => _ = RefreshAsync(),            _ => true);
+        ExportCsvCommand        = new RelayCommand(_ => _ = ExportCsvAsync(),          _ => SelectedFilesCount > 0);
+        ExportExcelCommand      = new RelayCommand(_ => _ = ExportExcelAsync(),        _ => SelectedFilesCount > 0);
+        ImportarRunsCommand     = new RelayCommand(_ => _ = ImportarRunsAsync(),       _ => !IsImporting);
+        ClearAndReimportCommand = new RelayCommand(_ => _ = ClearAndReimportAsync(),   _ => !IsImporting);
 
-        // Cargar tipologías disponibles al inicializar
         _ = LoadAvailableTipologiasAsync();
+        _ = LoadFilesAsync();
     }
+
+    // ── Propiedades de filtro ─────────────────────────────────────────────────
 
     public DateTime? FechaDesde
     {
@@ -85,33 +118,13 @@ public class HistorialViewModel : ObservableObject
         set => SetProperty(ref _filtroTipologia, value);
     }
 
-    public BatchRunRecord? SelectedRun
+    public int TotalFiles
     {
-        get => _selectedRun;
-        set
-        {
-            if (SetProperty(ref _selectedRun, value))
-            {
-                if (value is not null)
-                {
-                    _ = LoadRunFilesAsync(value.Id);
-                }
-                else
-                {
-                    SelectedRunFiles.Clear();
-                }
-
-                ((RelayCommand)ExportCsvCommand).RaiseCanExecuteChanged();
-                ((RelayCommand)ExportExcelCommand).RaiseCanExecuteChanged();
-            }
-        }
+        get => _totalFiles;
+        set => SetProperty(ref _totalFiles, value);
     }
 
-    public int TotalRuns
-    {
-        get => _totalRuns;
-        set => SetProperty(ref _totalRuns, value);
-    }
+    public int UnselectedFilesCount => Files.Count - SelectedFilesCount;
 
     public string StatusText
     {
@@ -119,17 +132,65 @@ public class HistorialViewModel : ObservableObject
         set => SetProperty(ref _statusText, value);
     }
 
+    // ── Carga ─────────────────────────────────────────────────────────────────
+
+    private async Task LoadFilesAsync()
+    {
+        try
+        {
+            StatusText = "Cargando...";
+
+            UnsubscribeFromFileSelectionChanges();
+
+            var files = await _historialService.GetAllFilesAsync(
+                from: FechaDesde,
+                to: FechaHasta,
+                tipologia: FiltroTipologia,
+                page: 0,
+                pageSize: 500);
+
+            var total = await _historialService.GetTotalFilesAsync(
+                from: FechaDesde,
+                to: FechaHasta,
+                tipologia: FiltroTipologia);
+
+            Files.Clear();
+            foreach (var f in files)
+            {
+                f.IsSelected = false;
+                Files.Add(f);
+                f.PropertyChanged += OnFilePropertyChanged;
+            }
+
+            TotalFiles = total;
+            RefreshSelectionState();
+            StatusText = total == 0
+                ? "No se encontraron ficheros."
+                : $"{total} ficheros encontrados. Selecciona los que quieras exportar.";
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Error: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"Error cargando ficheros: {ex.Message}");
+        }
+    }
+
     private async Task LoadAvailableTipologiasAsync()
     {
         try
         {
             var tipologias = await _historialService.GetAvailableTipologiasAsync();
+
+            var current = FiltroTipologia;
             AvailableTipologias.Clear();
             AvailableTipologias.Add("Todas");
-            foreach (var tip in tipologias)
-            {
-                AvailableTipologias.Add(tip);
-            }
+            foreach (var t in tipologias)
+                if (!string.IsNullOrWhiteSpace(t))
+                    AvailableTipologias.Add(t);
+
+            FiltroTipologia = AvailableTipologias.Contains(current ?? "Todas")
+                ? current
+                : "Todas";
         }
         catch (Exception ex)
         {
@@ -137,70 +198,22 @@ public class HistorialViewModel : ObservableObject
         }
     }
 
-    private async Task LoadRunsAsync()
-    {
-        try
-        {
-            _currentPage = 0;
-            StatusText = "Cargando...";
-
-            var runs = await _historialService.GetRunsAsync(
-                from: FechaDesde,
-                to: FechaHasta,
-                tipologia: FiltroTipologia,
-                page: _currentPage,
-                pageSize: PageSize);
-
-            var total = await _historialService.GetTotalRunsAsync(
-                from: FechaDesde,
-                to: FechaHasta,
-                tipologia: FiltroTipologia);
-
-            Runs.Clear();
-            foreach (var run in runs)
-            {
-                Runs.Add(run);
-            }
-
-            TotalRuns = total;
-            StatusText = $"{total} ejecuciones encontradas";
-
-            SelectedRun = null;
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Error: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"Error cargando runs: {ex.Message}");
-        }
-    }
-
-    private async Task LoadRunFilesAsync(int runId)
-    {
-        try
-        {
-            var files = await _historialService.GetRunFilesAsync(runId);
-            SelectedRunFiles.Clear();
-            foreach (var file in files)
-            {
-                SelectedRunFiles.Add(file);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error cargando archivos del run: {ex.Message}");
-        }
-    }
-
     private async Task RefreshAsync()
     {
         await LoadAvailableTipologiasAsync();
-        await LoadRunsAsync();
+        await LoadFilesAsync();
     }
 
-    private void ExportCsv()
+    // ── Exportación ───────────────────────────────────────────────────────────
+
+    private async Task ExportCsvAsync()
     {
-        if (SelectedRun is null)
+        var snapshot = Files.Where(file => file.IsSelected).ToList();
+        if (snapshot.Count == 0)
+        {
+            StatusText = "Selecciona al menos un fichero para exportar.";
             return;
+        }
 
         try
         {
@@ -208,13 +221,13 @@ public class HistorialViewModel : ObservableObject
             {
                 Filter = "CSV files (*.csv)|*.csv",
                 DefaultExt = ".csv",
-                FileName = $"historial_{SelectedRun.RunKey}.csv"
+                FileName = $"historial_{DateTime.Now:yyyyMMdd-HHmmss}.csv"
             };
 
             if (dialog.ShowDialog() == true)
             {
-                _exportService.ExportCsv(dialog.FileName, SelectedRun, SelectedRunFiles);
-                StatusText = $"Exportado a CSV: {Path.GetFileName(dialog.FileName)}";
+                await Task.Run(() => _exportService.ExportCsv(dialog.FileName, snapshot));
+                StatusText = $"Exportados {snapshot.Count} ficheros a CSV: {Path.GetFileName(dialog.FileName)}";
             }
         }
         catch (Exception ex)
@@ -224,10 +237,14 @@ public class HistorialViewModel : ObservableObject
         }
     }
 
-    private void ExportExcel()
+    private async Task ExportExcelAsync()
     {
-        if (SelectedRun is null)
+        var snapshot = Files.Where(file => file.IsSelected).ToList();
+        if (snapshot.Count == 0)
+        {
+            StatusText = "Selecciona al menos un fichero para exportar.";
             return;
+        }
 
         try
         {
@@ -235,13 +252,13 @@ public class HistorialViewModel : ObservableObject
             {
                 Filter = "Excel files (*.xlsx)|*.xlsx",
                 DefaultExt = ".xlsx",
-                FileName = $"historial_{SelectedRun.RunKey}.xlsx"
+                FileName = $"historial_{DateTime.Now:yyyyMMdd-HHmmss}.xlsx"
             };
 
             if (dialog.ShowDialog() == true)
             {
-                _exportService.ExportExcel(dialog.FileName, SelectedRun, SelectedRunFiles);
-                StatusText = $"Exportado a Excel: {Path.GetFileName(dialog.FileName)}";
+                await Task.Run(() => _exportService.ExportExcel(dialog.FileName, snapshot));
+                StatusText = $"Exportados {snapshot.Count} ficheros a Excel: {Path.GetFileName(dialog.FileName)}";
             }
         }
         catch (Exception ex)
@@ -250,6 +267,73 @@ public class HistorialViewModel : ObservableObject
             System.Diagnostics.Debug.WriteLine($"Error en ExportExcel: {ex.Message}");
         }
     }
+
+    private void RaiseCanExecuteExport()
+    {
+        ((RelayCommand)ExportCsvCommand).RaiseCanExecuteChanged();
+        ((RelayCommand)ExportExcelCommand).RaiseCanExecuteChanged();
+    }
+
+    private void SetAllSelection(bool selected)
+    {
+        _isUpdatingSelection = true;
+        try
+        {
+            foreach (var file in Files)
+            {
+                file.IsSelected = selected;
+            }
+        }
+        finally
+        {
+            _isUpdatingSelection = false;
+        }
+
+        RefreshSelectionState();
+    }
+
+    private void RefreshSelectionState()
+    {
+        var selectedCount = Files.Count(file => file.IsSelected);
+        SelectedFilesCount = selectedCount;
+        OnPropertyChanged(nameof(UnselectedFilesCount));
+
+        _isUpdatingSelection = true;
+        try
+        {
+            SelectAllFiles = Files.Count switch
+            {
+                0 => false,
+                _ when selectedCount == 0 => false,
+                _ when selectedCount == Files.Count => true,
+                _ => null
+            };
+        }
+        finally
+        {
+            _isUpdatingSelection = false;
+        }
+
+        RaiseCanExecuteExport();
+    }
+
+    private void OnFilePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(HistorialFileRow.IsSelected))
+        {
+            RefreshSelectionState();
+        }
+    }
+
+    private void UnsubscribeFromFileSelectionChanges()
+    {
+        foreach (var file in Files)
+        {
+            file.PropertyChanged -= OnFilePropertyChanged;
+        }
+    }
+
+    // ── Importación / limpieza ────────────────────────────────────────────────
 
     private async Task ImportarRunsAsync()
     {
@@ -279,33 +363,45 @@ public class HistorialViewModel : ObservableObject
         }
     }
 
-    private async Task DeleteRunAsync()
+    private async Task ClearAndReimportAsync()
     {
-        if (SelectedRun is null)
-            return;
-
         var confirm = System.Windows.MessageBox.Show(
-            $"¿Eliminar la ejecución '{SelectedRun.RunKey}' y todos sus archivos del historial?",
-            "Confirmar eliminación",
+            "¿Borrar TODO el historial y regenerarlo desde las carpetas runs/?\n\nEsta operación no se puede deshacer.",
+            "Confirmar borrado y regeneración",
             System.Windows.MessageBoxButton.YesNo,
             System.Windows.MessageBoxImage.Warning);
 
         if (confirm != System.Windows.MessageBoxResult.Yes)
             return;
 
+        IsImporting = true;
+        StatusText = "Borrando historial...";
+
         try
         {
-            var runId = SelectedRun.Id;
-            await _historialService.DeleteRunAsync(runId);
-            Runs.Remove(SelectedRun);
-            SelectedRunFiles.Clear();
-            SelectedRun = null;
-            StatusText = "Ejecución eliminada del historial.";
+            await _historialService.ClearAllHistoryAsync();
+            UnsubscribeFromFileSelectionChanges();
+            Files.Clear();
+            RefreshSelectionState();
+
+            StatusText = "Historial borrado. Importando desde runs/...";
+            var progress = new Progress<string>(msg => StatusText = msg);
+            var (imported, _) = await _historialService.ImportExistingRunsAsync(progress);
+
+            StatusText = imported == 0
+                ? "No se encontraron ejecuciones en runs/."
+                : $"Regenerado: {imported} ejecuciones importadas.";
+
+            await RefreshAsync();
         }
         catch (Exception ex)
         {
-            StatusText = $"Error eliminando: {ex.Message}";
-            System.Diagnostics.Debug.WriteLine($"Error en DeleteRunAsync: {ex.Message}");
+            StatusText = $"Error al regenerar historial: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"Error en ClearAndReimportAsync: {ex.Message}");
+        }
+        finally
+        {
+            IsImporting = false;
         }
     }
 }

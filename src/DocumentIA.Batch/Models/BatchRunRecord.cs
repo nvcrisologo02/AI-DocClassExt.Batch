@@ -1,13 +1,29 @@
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace DocumentIA.Batch.Models;
 
 /// <summary>
 /// Record de una ejecución batch completa en SQLite.
 /// Cabecera del run con metadatos y estadísticas agregadas.
 /// </summary>
-public class BatchRunRecord
+public class BatchRunRecord : INotifyPropertyChanged
 {
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
     public int Id { get; set; }
+
+    private bool _isSelected;
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set { if (_isSelected != value) { _isSelected = value; OnPropertyChanged(); } }
+    }
+
     public string RunKey { get; set; } = string.Empty;  // yyyyMMdd-HHmmss
+    public string FirstFileName { get; set; } = string.Empty;
     public string RunFolderPath { get; set; } = string.Empty;
     public string OperationName { get; set; } = string.Empty;
     public string Tipologia { get; set; } = string.Empty;

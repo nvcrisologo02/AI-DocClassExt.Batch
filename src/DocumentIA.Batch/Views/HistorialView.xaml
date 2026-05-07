@@ -4,110 +4,283 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
-             d:DesignHeight="600" d:DesignWidth="1000">
-    <Grid Background="White">
+             d:DesignHeight="700" d:DesignWidth="1200">
+
+    <Grid Background="{StaticResource BrushBackground}" Margin="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Toolbar de filtros -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="10" VerticalAlignment="Center">
-            <TextBlock Text="Desde:" VerticalAlignment="Center"/>
-            <DatePicker SelectedDate="{Binding FechaDesde}" Width="120"/>
-            
-            <TextBlock Text="Hasta:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-            <DatePicker SelectedDate="{Binding FechaHasta}" Width="120"/>
-            
-            <TextBlock Text="Tipología:" VerticalAlignment="Center" Margin="10,0,0,0"/>
-            <ComboBox ItemsSource="{Binding AvailableTipologias}" 
-                      SelectedItem="{Binding FiltroTipologia}"
-                      Width="150"/>
-            
-            <Button Command="{Binding LoadRunsCommand}" Content="Filtrar" Padding="10,5"/>
-            <Button Command="{Binding RefreshCommand}" Content="Refrescar" Padding="10,5" Margin="10,0,0,0"/>
-            <Button Command="{Binding ImportarRunsCommand}" 
-                    Content="Importar anteriores" 
-                    Padding="10,5" Margin="20,0,0,0"
-                    ToolTip="Escanea la carpeta runs/ e importa ejecuciones previas al historial"/>
-        </StackPanel>
+        <!-- ══ Cabecera ══════════════════════════════════════════════════════ -->
+        <Border Grid.Row="0"
+                Background="{StaticResource BrushPanel}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="10"
+                Padding="20,14" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-        <!-- Contenido principal: 2 DataGrids -->
-        <Grid Grid.Row="1" Margin="10">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="300"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+                <StackPanel>
+                    <TextBlock Text="Historial de ficheros procesados"
+                               FontSize="18" FontWeight="Bold"/>
+                    <TextBlock Text="Consulta y exporta los documentos procesados en todas las ejecuciones"
+                               Foreground="{StaticResource BrushMuted}" FontSize="12" Margin="0,2,0,0"/>
+                </StackPanel>
 
-            <!-- DataGrid de Runs (superior) -->
-            <Border Grid.Row="0" BorderBrush="#CCCCCC" BorderThickness="1">
-                <DataGrid ItemsSource="{Binding Runs}"
-                          SelectedItem="{Binding SelectedRun}"
-                          AutoGenerateColumns="False"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          IsReadOnly="True">
-                    <DataGrid.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="Eliminar ejecución" Command="{Binding DataContext.DeleteRunCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
-                        </ContextMenu>
-                    </DataGrid.ContextMenu>
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Ejecución" Binding="{Binding RunKey}" Width="140"/>
-                        <DataGridTextColumn Header="Fecha" Binding="{Binding CreatedAtDisplay}" Width="150"/>
-                        <DataGridTextColumn Header="Tipología" Binding="{Binding Tipologia}" Width="150"/>
-                        <DataGridTextColumn Header="Total" Binding="{Binding TotalFiles}" Width="60"/>
-                        <DataGridTextColumn Header="Completados" Binding="{Binding CompletedFiles}" Width="80"/>
-                        <DataGridTextColumn Header="Revisión" Binding="{Binding RevisionFiles}" Width="70"/>
-                        <DataGridTextColumn Header="Error" Binding="{Binding ErrorFiles}" Width="60"/>
-                        <DataGridTextColumn Header="Tasa Éxito" Binding="{Binding SuccessRate}" Width="80"/>
-                        <DataGridTextColumn Header="Conf. Media" Binding="{Binding AverageConfidence}" Width="80"/>
-                        <DataGridTextColumn Header="Duración Total" Binding="{Binding TotalDuration}" Width="100"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </Border>
+                <!-- Contador total -->
+                <Border Grid.Column="1"
+                        Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1"
+                        CornerRadius="8" Padding="14,8" VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding TotalFiles}"
+                                   FontSize="22" FontWeight="Bold" Foreground="#2563EB"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text=" ficheros"
+                                   FontSize="13" Foreground="#2563EB"
+                                   VerticalAlignment="Bottom" Margin="2,0,0,2"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
 
-            <!-- Separador -->
-            <Separator Grid.Row="1" Margin="0,10"/>
+        <!-- ══ Barra de filtros y acciones ═══════════════════════════════════ -->
+        <Border Grid.Row="1"
+                Background="{StaticResource BrushPanel}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="10"
+                Padding="16,12" Margin="0,0,0,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-            <!-- DataGrid de Archivos (inferior) -->
-            <Border Grid.Row="2" BorderBrush="#CCCCCC" BorderThickness="1">
-                <DataGrid ItemsSource="{Binding SelectedRunFiles}"
-                          AutoGenerateColumns="False"
-                          CanUserAddRows="False"
-                          CanUserDeleteRows="False"
-                          IsReadOnly="True">
-                    <DataGrid.Columns>
-                        <DataGridTextColumn Header="Archivo" Binding="{Binding FileName}" Width="200"/>
-                        <DataGridTextColumn Header="Estado" Binding="{Binding Estado}" Width="80"/>
-                        <DataGridTextColumn Header="Calidad" Binding="{Binding EstadoCalidad}" Width="80"/>
-                        <DataGridTextColumn Header="Confianza" Binding="{Binding ConfidenceDisplay}" Width="80"/>
-                        <DataGridTextColumn Header="Duración" Binding="{Binding DurationDisplay}" Width="70"/>
-                        <DataGridTextColumn Header="Inicio" Binding="{Binding FechaInicio}" Width="120"/>
-                        <DataGridTextColumn Header="Fin" Binding="{Binding FechaFin}" Width="120"/>
-                        <DataGridTextColumn Header="Error" Binding="{Binding MensajeError}" Width="200"/>
-                    </DataGrid.Columns>
-                </DataGrid>
-            </Border>
-        </Grid>
+                <!-- Desde -->
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <TextBlock Text="DESDE" FontSize="11" FontWeight="SemiBold"
+                               Foreground="#64748B" Margin="0,0,0,4"/>
+                    <DatePicker SelectedDate="{Binding FechaDesde}" Width="130" Margin="0"/>
+                </StackPanel>
 
-        <!-- StatusBar inferior -->
-        <Grid Grid.Row="2" Background="#F0F0F0" Margin="10" Height="35" VerticalAlignment="Center">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
+                <!-- Hasta -->
+                <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                    <TextBlock Text="HASTA" FontSize="11" FontWeight="SemiBold"
+                               Foreground="#64748B" Margin="0,0,0,4"/>
+                    <DatePicker SelectedDate="{Binding FechaHasta}" Width="130" Margin="0"/>
+                </StackPanel>
 
-            <TextBlock Grid.Column="0" Text="{Binding StatusText}" VerticalAlignment="Center" Margin="10,0"/>
-            <Button Grid.Column="1" Command="{Binding DeleteRunCommand}" Content="Eliminar" Padding="10,5" Margin="5,0"
-                    Background="#FFEEEE" Foreground="DarkRed"
-                    ToolTip="Elimina la ejecución seleccionada del historial"/>
-            <Button Grid.Column="2" Command="{Binding ExportCsvCommand}" Content="Exportar CSV" Padding="10,5" Margin="5,0"/>
-            <Button Grid.Column="3" Command="{Binding ExportExcelCommand}" Content="Exportar Excel" Padding="10,5" Margin="5,0"/>
-        </Grid>
+                <!-- Tipología -->
+                <StackPanel Grid.Column="2" Margin="0,0,16,0">
+                    <TextBlock Text="TIPOLOGÍA" FontSize="11" FontWeight="SemiBold"
+                               Foreground="#64748B" Margin="0,0,0,4"/>
+                    <ComboBox ItemsSource="{Binding AvailableTipologias}"
+                              SelectedItem="{Binding FiltroTipologia}"
+                              Width="160" Margin="0"/>
+                </StackPanel>
+
+                <!-- Filtrar -->
+                <Button Grid.Column="3"
+                        Command="{Binding LoadFilesCommand}"
+                        Content="Filtrar"
+                        VerticalAlignment="Bottom" Margin="0,0,6,0"/>
+
+                <!-- Refrescar -->
+                <Button Grid.Column="4"
+                        Command="{Binding RefreshCommand}"
+                        Content="Refrescar"
+                        Background="{StaticResource BrushSurface}"
+                        BorderBrush="{StaticResource BrushBorder}"
+                        Foreground="{StaticResource BrushText}"
+                        VerticalAlignment="Bottom" Margin="0,0,0,0"/>
+
+                <!-- Espaciador -->
+                <Border Grid.Column="5"/>
+
+                <!-- Importar -->
+                <Button Grid.Column="6"
+                        Command="{Binding ImportarRunsCommand}"
+                        Content="Importar anteriores"
+                        Background="#EFF6FF" BorderBrush="#BFDBFE" Foreground="#2563EB"
+                        VerticalAlignment="Bottom" Margin="0,0,6,0"
+                        ToolTip="Escanea la carpeta runs/ e importa ejecuciones previas al historial"/>
+
+                <!-- Exportar CSV -->
+                <Button Grid.Column="7"
+                        Command="{Binding ExportCsvCommand}"
+                    Content="Exportar selección CSV"
+                        Background="#F0FDF4" BorderBrush="#86EFAC" Foreground="#166534"
+                        VerticalAlignment="Bottom" Margin="0,0,6,0"/>
+
+                <!-- Exportar Excel -->
+                <Button Grid.Column="8"
+                        Command="{Binding ExportExcelCommand}"
+                    Content="Exportar selección Excel"
+                        Background="#F0FDF4" BorderBrush="#86EFAC" Foreground="#166534"
+                        VerticalAlignment="Bottom" Margin="0,0,6,0"/>
+
+                <!-- Borrar y regenerar -->
+                <Button Grid.Column="9"
+                        Command="{Binding ClearAndReimportCommand}"
+                        Content="Borrar y regenerar"
+                        Background="#FEF2F2" BorderBrush="#FCA5A5" Foreground="#991B1B"
+                        VerticalAlignment="Bottom" Margin="0"
+                        ToolTip="Elimina todo el historial de la BD y lo regenera desde las carpetas runs/"/>
+            </Grid>
+        </Border>
+
+        <!-- ══ DataGrid de ficheros ═══════════════════════════════════════════ -->
+        <Border Grid.Row="2"
+                Background="{StaticResource BrushPanel}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="10"
+                Padding="0" Margin="0,0,0,12">
+            <DataGrid ItemsSource="{Binding Files}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      IsReadOnly="False"
+                      GridLinesVisibility="Horizontal"
+                      HeadersVisibility="Column"
+                      AlternatingRowBackground="#F8FAFC"
+                      RowBackground="White"
+                      BorderThickness="0"
+                      ClipboardCopyMode="IncludeHeader"
+                      SelectionMode="Extended">
+
+                <DataGrid.ColumnHeaderStyle>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="{StaticResource BrushHeader}"/>
+                        <Setter Property="Foreground" Value="#475569"/>
+                        <Setter Property="FontWeight" Value="SemiBold"/>
+                        <Setter Property="FontSize" Value="12"/>
+                        <Setter Property="Padding" Value="10,8"/>
+                        <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+                        <Setter Property="BorderThickness" Value="0,0,1,1"/>
+                    </Style>
+                </DataGrid.ColumnHeaderStyle>
+
+                <DataGrid.CellStyle>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="Padding" Value="10,6"/>
+                        <Setter Property="BorderThickness" Value="0"/>
+                        <Setter Property="VerticalAlignment" Value="Center"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter Property="Background" Value="{StaticResource BrushSelection}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </DataGrid.CellStyle>
+
+                <DataGrid.Columns>
+                    <DataGridTemplateColumn Width="54" SortMemberPath="IsSelected">
+                        <DataGridTemplateColumn.HeaderTemplate>
+                            <DataTemplate>
+                                <CheckBox IsThreeState="True"
+                                          IsChecked="{Binding DataContext.SelectAllFiles, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          ToolTip="Seleccionar o deseleccionar todos los ficheros visibles"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.HeaderTemplate>
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          ToolTip="Incluir este fichero en la exportación"/>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <!-- Estado — chip de color -->
+                    <DataGridTemplateColumn Header="Estado" Width="100" SortMemberPath="Estado">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Border CornerRadius="999" Padding="8,3" HorizontalAlignment="Left" Margin="6,2">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#F1F5F9"/>
+                                            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Estado}" Value="Completado">
+                                                    <Setter Property="Background" Value="#E8F7EE"/>
+                                                    <Setter Property="BorderBrush" Value="#86EFAC"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Estado}" Value="Revisión">
+                                                    <Setter Property="Background" Value="#FFF7E6"/>
+                                                    <Setter Property="BorderBrush" Value="#FCD34D"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Estado}" Value="Error">
+                                                    <Setter Property="Background" Value="#FEF2F2"/>
+                                                    <Setter Property="BorderBrush" Value="#FCA5A5"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding Estado}" FontSize="11" FontWeight="SemiBold">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#334155"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Estado}" Value="Completado">
+                                                        <Setter Property="Foreground" Value="#166534"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Estado}" Value="Revisión">
+                                                        <Setter Property="Foreground" Value="#92400E"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Estado}" Value="Error">
+                                                        <Setter Property="Foreground" Value="#991B1B"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Border>
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+
+                    <DataGridTextColumn Header="Fichero" Binding="{Binding FileName}" Width="240" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Tipología" Binding="{Binding Tipologia}" Width="150" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Fecha Run" Binding="{Binding RunDateDisplay}" Width="140" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Run" Binding="{Binding RunKey}" Width="140" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Calidad" Binding="{Binding EstadoCalidad}" Width="100" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Confianza" Binding="{Binding ConfidenceDisplay}" Width="90" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Duración" Binding="{Binding DurationDisplay}" Width="80" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="InstanceId" Binding="{Binding InstanceId}" Width="200" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="CorrelationId" Binding="{Binding CorrelationId}" Width="200" IsReadOnly="True"/>
+                    <DataGridTextColumn Header="Error / Motivo revisión" Binding="{Binding MensajeError}" Width="250" IsReadOnly="True"/>
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- ══ StatusBar ══════════════════════════════════════════════════════ -->
+        <Border Grid.Row="3"
+                Background="{StaticResource BrushPanel}"
+                BorderBrush="{StaticResource BrushBorder}"
+                BorderThickness="1" CornerRadius="8"
+                Padding="16,8">
+            <TextBlock Text="{Binding StatusText}"
+                       Foreground="{StaticResource BrushMuted}"
+                       VerticalAlignment="Center" FontSize="12"/>
+        </Border>
     </Grid>
 </UserControl>

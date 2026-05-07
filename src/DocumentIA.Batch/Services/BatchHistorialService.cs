@@ -132,7 +132,7 @@ public class BatchHistorialService
                         @ProcessStatus, @CreatedAt
                     )";
 
-                var runId = await connection.ExecuteScalarAsync<int>(
+                await connection.ExecuteAsync(
                     insertRunSql,
                     new
                     {
@@ -156,6 +156,10 @@ public class BatchHistorialService
                         ProcessStatus = summary.ProcessStatus,
                         CreatedAt = DateTime.UtcNow.ToString("O")
                     },
+                    transaction: transaction);
+
+                var runId = await connection.ExecuteScalarAsync<long>(
+                    "SELECT last_insert_rowid()",
                     transaction: transaction);
 
                 // Insertar BatchRunFile por cada documento
@@ -229,35 +233,57 @@ public class BatchHistorialService
             await connection.OpenAsync();
 
             var sql = new System.Text.StringBuilder(@"
-                SELECT Id, RunKey, RunFolderPath, OperationName, Tipologia,
-                       NumeroColas, UmbralConfianza, SubirAGdc, EjecutarConAssetResolver,
-                       TotalFiles, CompletedFiles, RevisionFiles, ErrorFiles, CanceledFiles,
-                       SuccessRate, AverageConfidence, AverageDuration, TotalDuration,
-                       ProcessStatus, CreatedAt
-                FROM BatchRun
+                SELECT r.Id,
+                       r.RunKey,
+                       COALESCE((
+                           SELECT rf.FileName
+                           FROM BatchRunFile rf
+                           WHERE rf.RunId = r.Id
+                           ORDER BY rf.Id
+                           LIMIT 1
+                       ), '') AS FirstFileName,
+                       r.RunFolderPath,
+                       r.OperationName,
+                       r.Tipologia,
+                       r.NumeroColas,
+                       r.UmbralConfianza,
+                       r.SubirAGdc,
+                       r.EjecutarConAssetResolver,
+                       r.TotalFiles,
+                       r.CompletedFiles,
+                       r.RevisionFiles,
+                       r.ErrorFiles,
+                       r.CanceledFiles,
+                       r.SuccessRate,
+                       r.AverageConfidence,
+                       r.AverageDuration,
+                       r.TotalDuration,
+                       r.ProcessStatus,
+                       r.CreatedAt
+                FROM BatchRun r
                 WHERE 1=1");
 
             var parameters = new Dictionary<string, object>();
 
             if (from.HasValue)
             {
-                sql.Append(" AND datetime(CreatedAt) >= datetime(@From)");
+                sql.Append(" AND datetime(r.CreatedAt) >= datetime(@From)");
                 parameters["From"] = from.Value.ToString("O");
             }
 
             if (to.HasValue)
             {
-                sql.Append(" AND datetime(CreatedAt) <= datetime(@To)");
+                sql.Append(" AND datetime(r.CreatedAt) <= datetime(@To)");
                 parameters["To"] = to.Value.AddDays(1).ToString("O"); // Include whole day
             }
 
             if (!string.IsNullOrEmpty(tipologia) && tipologia != "Todas")
             {
-                sql.Append(" AND Tipologia = @Tipologia");
+                sql.Append(" AND r.Tipologia = @Tipologia");
                 parameters["Tipologia"] = tipologia;
             }
 
-            sql.Append(" ORDER BY CreatedAt DESC");
+            sql.Append(" ORDER BY r.CreatedAt DESC");
             sql.Append($" LIMIT {pageSize} OFFSET {page * pageSize}");
 
             var runs = await connection.QueryAsync<BatchRunRecord>(
@@ -396,6 +422,31 @@ public class BatchHistorialService
                 new { Id = runId },
                 transaction: transaction);
 
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Borra todo el historial (BatchRunFile + BatchRun) y devuelve control.
+    /// Llamar antes de ImportExistingRunsAsync para forzar una regeneración completa.
+    /// </summary>
+    public async Task ClearAllHistoryAsync()
+    {
+        await using var connection = new SqliteConnection(
+            string.Format(ConnectionStringTemplate, _dbPath));
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+
+        try
+        {
+            await connection.ExecuteAsync("DELETE FROM BatchRunFile", transaction: transaction);
+            await connection.ExecuteAsync("DELETE FROM BatchRun",     transaction: transaction);
+            await connection.ExecuteAsync("DELETE FROM sqlite_sequence WHERE name IN ('BatchRunFile','BatchRun')", transaction: transaction);
             await transaction.CommitAsync();
         }
         catch
@@ -566,7 +617,7 @@ public class BatchHistorialService
                     @ProcessStatus, @CreatedAt
                 )";
 
-            var runId = await connection.ExecuteScalarAsync<int>(
+            await connection.ExecuteAsync(
                 insertRunSql,
                 new
                 {
@@ -590,6 +641,10 @@ public class BatchHistorialService
                     ProcessStatus = "Importado",
                     CreatedAt = createdAt.ToString("O")
                 },
+                transaction: transaction);
+
+            var runId = await connection.ExecuteScalarAsync<long>(
+                "SELECT last_insert_rowid()",
                 transaction: transaction);
 
             if (runId > 0)
@@ -649,6 +704,116 @@ public class BatchHistorialService
         {
             await transaction.RollbackAsync();
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Obtiene todos los ficheros procesados aplanados (JOIN con BatchRun),
+    /// filtrando por fecha y tipología del run padre.
+    /// </summary>
+    public async Task<IReadOnlyList<HistorialFileRow>> GetAllFilesAsync(
+        DateTime? from = null,
+        DateTime? to = null,
+        string? tipologia = null,
+        int page = 0,
+        int pageSize = 500)
+    {
+        try
+        {
+            await using var connection = new SqliteConnection(
+                string.Format(ConnectionStringTemplate, _dbPath));
+            await connection.OpenAsync();
+
+            var sql = new StringBuilder(@"
+                SELECT f.Id, f.RunId, f.FileName, f.FullPath, f.SizeBytes,
+                       f.Estado, f.InstanceId, f.CorrelationId, f.RuntimeStatus,
+                       f.EstadoCalidad, f.ConfianzaGlobal, f.MensajeError,
+                       f.FechaInicio, f.FechaFin, f.OutputJsonPath,
+                       r.RunKey, r.Tipologia, r.CreatedAt AS RunCreatedAt
+                FROM BatchRunFile f
+                JOIN BatchRun r ON r.Id = f.RunId
+                WHERE 1=1");
+
+            var parameters = new Dictionary<string, object>();
+
+            if (from.HasValue)
+            {
+                sql.Append(" AND datetime(r.CreatedAt) >= datetime(@From)");
+                parameters["From"] = from.Value.ToString("O");
+            }
+
+            if (to.HasValue)
+            {
+                sql.Append(" AND datetime(r.CreatedAt) <= datetime(@To)");
+                parameters["To"] = to.Value.AddDays(1).ToString("O");
+            }
+
+            if (!string.IsNullOrEmpty(tipologia) && tipologia != "Todas")
+            {
+                sql.Append(" AND r.Tipologia = @Tipologia");
+                parameters["Tipologia"] = tipologia;
+            }
+
+            sql.Append(" ORDER BY r.CreatedAt DESC, f.FileName");
+            sql.Append($" LIMIT {pageSize} OFFSET {page * pageSize}");
+
+            var rows = await connection.QueryAsync<HistorialFileRow>(
+                sql.ToString(),
+                parameters.Count > 0 ? parameters : null);
+
+            return rows.ToList();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BatchHistorialService] Error en GetAllFilesAsync: {ex.Message}");
+            return new List<HistorialFileRow>();
+        }
+    }
+
+    /// <summary>
+    /// Obtiene el total de ficheros que coinciden con los filtros.
+    /// </summary>
+    public async Task<int> GetTotalFilesAsync(DateTime? from = null, DateTime? to = null, string? tipologia = null)
+    {
+        try
+        {
+            await using var connection = new SqliteConnection(
+                string.Format(ConnectionStringTemplate, _dbPath));
+            await connection.OpenAsync();
+
+            var sql = new StringBuilder(@"
+                SELECT COUNT(*) FROM BatchRunFile f
+                JOIN BatchRun r ON r.Id = f.RunId
+                WHERE 1=1");
+
+            var parameters = new Dictionary<string, object>();
+
+            if (from.HasValue)
+            {
+                sql.Append(" AND datetime(r.CreatedAt) >= datetime(@From)");
+                parameters["From"] = from.Value.ToString("O");
+            }
+
+            if (to.HasValue)
+            {
+                sql.Append(" AND datetime(r.CreatedAt) <= datetime(@To)");
+                parameters["To"] = to.Value.AddDays(1).ToString("O");
+            }
+
+            if (!string.IsNullOrEmpty(tipologia) && tipologia != "Todas")
+            {
+                sql.Append(" AND r.Tipologia = @Tipologia");
+                parameters["Tipologia"] = tipologia;
+            }
+
+            return await connection.ExecuteScalarAsync<int>(
+                sql.ToString(),
+                parameters.Count > 0 ? parameters : null);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BatchHistorialService] Error en GetTotalFilesAsync: {ex.Message}");
+            return 0;
         }
     }
 

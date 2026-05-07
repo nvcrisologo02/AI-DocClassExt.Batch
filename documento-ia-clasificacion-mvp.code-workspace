@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "../documento-ia-clasificacion-mvp"
+		},
+		{
+			"path": "../poc-gdc"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"debug.internalConsoleOptions": "neverOpen",
+		"powershell.cwd": "documento-ia-clasificacion-mvp"
+	}
+}
