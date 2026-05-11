@@ -14,6 +14,8 @@ public class BatchConfig
     public bool EjecutarConAssetResolver { get; set; } = true;
     public bool SubirAGdc { get; set; } = true;
     public bool ForceReprocess { get; set; } = false;
+    public bool ClassificationOnly { get; set; } = false;
+    public bool EjecutarIntegridad { get; set; } = false;
     /// <summary>Campos a solicitar al AssetResolver (separados por coma). Vacío = todos los disponibles.</summary>
     public string AssetResolverCamposSolicitados { get; set; } = string.Empty;
     public Dictionary<string, PromptOverride> PromptOverrides { get; set; } = new();

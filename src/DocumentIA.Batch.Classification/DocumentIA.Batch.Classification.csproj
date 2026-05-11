@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>DocumentIA.Batch.Classification</AssemblyName>
+    <RootNamespace>DocumentIA.Batch.Classification</RootNamespace>
+    <Version>1.0.0</Version>
+    <Authors>GDC SAREB</Authors>
+    <Description>Batch WPF app for document classification and minimal export.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DocumentIA.Batch\DocumentIA.Batch.csproj" />
+  </ItemGroup>
+
+</Project>

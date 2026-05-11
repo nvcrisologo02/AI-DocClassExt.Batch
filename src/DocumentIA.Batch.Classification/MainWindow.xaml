@@ -1,0 +1,140 @@
+<Window x:Class="DocumentIA.Batch.Classification.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        Title="DocumentIA Classification - Batch Processor"
+        Height="820"
+        Width="1360"
+        MinHeight="700"
+        MinWidth="1100"
+        WindowStartupLocation="CenterScreen"
+        AllowDrop="True"
+        DragOver="Window_DragOver"
+        Drop="Window_Drop"
+        Background="#F8F9FA">
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" />
+            <ColumnDefinition Width="16" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="White" CornerRadius="4" BorderBrush="#E0E0E0" BorderThickness="1">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="12">
+                    <Border Background="#1B7C3F" CornerRadius="4" Padding="8" Margin="0,0,0,16">
+                        <TextBlock Text="📊 Classification Batch" FontSize="18" FontWeight="Bold" Foreground="White" />
+                    </Border>
+
+                    <TextBlock Text="Configuration" FontSize="13" FontWeight="Bold" Foreground="#1B7C3F" Margin="0,0,0,8" />
+                    <TextBlock Text="Backend URL" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <TextBox Text="{Binding BackendUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="6" />
+
+                    <TextBlock Text="Function Key" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <TextBox Text="{Binding FunctionKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="6" />
+
+                    <TextBlock Text="Parallel Queues" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <TextBox Text="{Binding NumeroColas, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="6" />
+
+                    <CheckBox Content="Classification Only"
+                              IsChecked="{Binding ClassificationOnly, Mode=TwoWay}"
+                              Margin="0,10,0,0" />
+                    <CheckBox Content="Force Reprocess"
+                              IsChecked="{Binding ForceReprocess, Mode=TwoWay}"
+                              ToolTip="Si está activo, no reutiliza ejecuciones previas de duplicados."
+                              Margin="0,4,0,0" />
+                    <CheckBox Content="Ejecutar Integridad"
+                              IsChecked="{Binding EjecutarIntegridad, Mode=TwoWay}"
+                              ToolTip="Se aplica como executeIntegrarWhenClassificationOnly cuando Classification Only está activo."
+                              Margin="0,4,0,0" />
+
+                    <Button Content="Save Configuration" Command="{Binding SaveConfigCommand}" Margin="0,12,0,0" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
+
+                    <Separator Margin="0,16,0,12" />
+
+                    <TextBlock Text="Processing" FontSize="13" FontWeight="Bold" Foreground="#1B7C3F" Margin="0,0,0,8" />
+                    <Button Content="+ Add PDFs" Command="{Binding PickFilesCommand}" Margin="0,0,0,4" Padding="8" />
+                    <Button Content="▶ Start Classification" Command="{Binding StartProcessingCommand}" Margin="0,0,0,4" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
+                    <Button Content="⏹ Stop" Command="{Binding CancelProcessingCommand}" Margin="0,0,0,16" Padding="8" Background="#C41E3A" Foreground="White" FontWeight="SemiBold" />
+
+                    <Separator Margin="0,0,0,12" />
+
+                    <TextBlock Text="Export Results" FontSize="13" FontWeight="Bold" Foreground="#1B7C3F" Margin="0,0,0,8" />
+                    <Button Content="📄 Export to CSV" Command="{Binding ExportCsvCommand}" Margin="0,0,0,4" Padding="8" />
+                    <Button Content="📊 Export to Excel" Command="{Binding ExportExcelCommand}" Margin="0,0,0,16" Padding="8" />
+
+                    <Separator Margin="0,0,0,12" />
+
+                    <TextBlock Text="Status" FontSize="11" FontWeight="Bold" Foreground="#666" Margin="0,0,0,6" />
+                    <Border Background="#F5F5F5" CornerRadius="2" Padding="8">
+                        <TextBlock Text="{Binding ProcessStatus}" TextWrapping="Wrap" FontSize="11" Foreground="#333" />
+                    </Border>
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <Grid Grid.Column="2">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <UniformGrid Grid.Row="0" Columns="4" Margin="0,0,0,12">
+                <Border Background="White" CornerRadius="4" BorderBrush="#E0E0E0" BorderThickness="1" Padding="12" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="Total" Foreground="#999" FontSize="11" />
+                        <TextBlock Text="{Binding TotalFiles}" FontSize="28" FontWeight="Bold" Foreground="#1B7C3F" />
+                    </StackPanel>
+                </Border>
+                <Border Background="White" CornerRadius="4" BorderBrush="#E0E0E0" BorderThickness="1" Padding="12" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="Completed" Foreground="#999" FontSize="11" />
+                        <TextBlock Text="{Binding CompletedFiles}" FontSize="28" FontWeight="Bold" Foreground="#27AE60" />
+                    </StackPanel>
+                </Border>
+                <Border Background="White" CornerRadius="4" BorderBrush="#E0E0E0" BorderThickness="1" Padding="12" Margin="0,0,8,0">
+                    <StackPanel>
+                        <TextBlock Text="Errors" Foreground="#999" FontSize="11" />
+                        <TextBlock Text="{Binding ErrorFiles}" FontSize="28" FontWeight="Bold" Foreground="#C41E3A" />
+                    </StackPanel>
+                </Border>
+                <Border Background="White" CornerRadius="4" BorderBrush="#E0E0E0" BorderThickness="1" Padding="12">
+                    <StackPanel>
+                        <TextBlock Text="Processing" Foreground="#999" FontSize="11" />
+                        <TextBlock Text="{Binding RunningFiles}" FontSize="28" FontWeight="Bold" Foreground="#F39C12" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <Border Grid.Row="1" Background="White" CornerRadius="4" BorderBrush="#E0E0E0" BorderThickness="1" Padding="8,0,0,0">
+                <TextBlock Text="📋 Classified Documents" FontSize="14" FontWeight="Bold" Foreground="#1B7C3F" Margin="4,8" />
+            </Border>
+
+            <DataGrid Grid.Row="2"
+                      Name="FilesGrid"
+                      ItemsSource="{Binding FilesView}"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      IsReadOnly="True"
+                      HeadersVisibility="Column"
+                      RowHeaderWidth="0"
+                      GridLinesVisibility="Horizontal"
+                      Background="White"
+                      BorderBrush="#E0E0E0"
+                      BorderThickness="1"
+                      MouseDoubleClick="FilesGrid_MouseDoubleClick">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Filename" Binding="{Binding FileName}" Width="2.5*" />
+                    <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="1*" />
+                    <DataGridTextColumn Header="Document ID" Binding="{Binding IdentificacionDocumento}" Width="1.5*" />
+                    <DataGridTextColumn Header="Typology" Binding="{Binding TipologiaIdentificada}" Width="1.5*" />
+                    <DataGridTextColumn Header="Confidence" Binding="{Binding ConfidenceDisplay}" Width="1*" />
+                    <DataGridTextColumn Header="Error" Binding="{Binding MensajeError}" Width="1.5*" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Grid>
+    </Grid>
+</Window>

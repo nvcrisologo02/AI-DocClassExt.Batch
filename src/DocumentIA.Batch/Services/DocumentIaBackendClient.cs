@@ -340,6 +340,12 @@ public class IngestInstrucciones
     [JsonPropertyName("expectedType")]
     public string ExpectedType { get; set; } = string.Empty;
 
+    [JsonPropertyName("classificationOnly")]
+    public bool ClassificationOnly { get; set; }
+
+    [JsonPropertyName("executeIntegrarWhenClassificationOnly")]
+    public bool? ExecuteIntegrarWhenClassificationOnly { get; set; }
+
     [JsonPropertyName("skipDuplicateCheck")]
     public bool SkipDuplicateCheck { get; set; }
 
