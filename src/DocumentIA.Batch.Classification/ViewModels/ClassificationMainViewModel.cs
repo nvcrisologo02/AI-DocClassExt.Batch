@@ -20,6 +20,7 @@ public class ClassificationMainViewModel : ObservableObject
     private readonly BatchRunStorageService _runStorageService;
     private readonly ClassificationExportService _exportService;
     private readonly BatchOutputAuditExtractor _auditExtractor;
+    private readonly PdfPageLimiterService _pdfPageLimiterService;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -27,6 +28,7 @@ public class ClassificationMainViewModel : ObservableObject
     private bool _forceReprocess;
     private bool _classificationOnly;
     private bool _ejecutarIntegridad;
+    private int _maxPagesForClassificationOnly;
     private bool _isProcessing;
     private string _processStatus = "Ready";
     private CancellationTokenSource? _processingCts;
@@ -48,6 +50,7 @@ public class ClassificationMainViewModel : ObservableObject
         _runStorageService = runStorageService;
         _exportService = exportService;
         _auditExtractor = auditExtractor;
+        _pdfPageLimiterService = new PdfPageLimiterService();
 
         Files = new ObservableCollection<ClassificationDocumentItem>();
         FilesView = CollectionViewSource.GetDefaultView(Files);
@@ -116,6 +119,12 @@ public class ClassificationMainViewModel : ObservableObject
         set => SetProperty(ref _ejecutarIntegridad, value);
     }
 
+    public int MaxPagesForClassificationOnly
+    {
+        get => _maxPagesForClassificationOnly;
+        set => SetProperty(ref _maxPagesForClassificationOnly, value);
+    }
+
     public bool IsProcessing
     {
         get => _isProcessing;
@@ -155,6 +164,7 @@ public class ClassificationMainViewModel : ObservableObject
         ForceReprocess = config.ForceReprocess;
         ClassificationOnly = config.ClassificationOnly;
         EjecutarIntegridad = config.EjecutarIntegridad;
+        MaxPagesForClassificationOnly = config.MaxPagesForClassificationOnly;
     }
 
     private void SaveConfig()
@@ -166,6 +176,7 @@ public class ClassificationMainViewModel : ObservableObject
         config.ForceReprocess = ForceReprocess;
         config.ClassificationOnly = ClassificationOnly;
         config.EjecutarIntegridad = EjecutarIntegridad;
+        config.MaxPagesForClassificationOnly = Math.Max(0, MaxPagesForClassificationOnly);
         _settingsService.Save(config);
         ProcessStatus = "Configuration saved.";
     }
@@ -328,6 +339,7 @@ public class ClassificationMainViewModel : ObservableObject
                 ExpectedType = string.Empty,
                 ClassificationOnly = ClassificationOnly,
                 ExecuteIntegrarWhenClassificationOnly = ClassificationOnly ? EjecutarIntegridad : null,
+                MaxPagesForClassificationOnly = ClassificationOnly ? Math.Max(0, MaxPagesForClassificationOnly) : 0,
                 SkipDuplicateCheck = false,
                 ForceReprocess = ForceReprocess,
                 SkipGdcUpload = true,
@@ -347,7 +359,7 @@ public class ClassificationMainViewModel : ObservableObject
                 Name = file.FileName,
                 Content = new IngestDocumentoContent
                 {
-                    Base64 = Convert.ToBase64String(File.ReadAllBytes(file.FullPath))
+                    Base64 = Convert.ToBase64String(GetDocumentBytesForRequest(file.FullPath))
                 }
             },
             Trazabilidad = new IngestTrazabilidad
@@ -356,6 +368,18 @@ public class ClassificationMainViewModel : ObservableObject
                 SubmittedBy = "DocumentIA.Batch.Classification"
             }
         };
+    }
+
+    private byte[] GetDocumentBytesForRequest(string filePath)
+    {
+        var pdfBytes = File.ReadAllBytes(filePath);
+        if (!ClassificationOnly || MaxPagesForClassificationOnly <= 0)
+        {
+            return pdfBytes;
+        }
+
+        var limitResult = _pdfPageLimiterService.LimitForClassificationOnly(pdfBytes, MaxPagesForClassificationOnly);
+        return limitResult.Base64Bytes;
     }
 
     private async Task<DurableStatusResponse> WaitForFinalStatusAsync(string statusQueryUri, CancellationToken cancellationToken)

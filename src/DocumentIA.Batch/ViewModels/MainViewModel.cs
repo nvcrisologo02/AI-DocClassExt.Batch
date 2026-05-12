@@ -22,6 +22,7 @@ public class MainViewModel : ObservableObject
     private readonly BatchCsvExportService _csvExportService;
     private readonly BatchExcelExportService _excelExportService;
     private readonly BatchHistorialService _historialService;
+    private readonly PdfPageLimiterService _pdfPageLimiterService;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -36,6 +37,9 @@ public class MainViewModel : ObservableObject
     private string _assetResolverCamposSolicitados = string.Empty;
     private bool _subirAGdc;
     private bool _forceReprocess;
+    private bool _classificationOnly;
+    private bool _ejecutarIntegridad;
+    private int _maxPagesForClassificationOnly;
     private bool _isProcessing;
     private string _processStatus = "Sin ejecuciones";
     private BatchRunSummary? _lastRunSummary;
@@ -64,6 +68,7 @@ public class MainViewModel : ObservableObject
         _csvExportService = csvExportService;
         _excelExportService = excelExportService;
         _historialService = historialService;
+        _pdfPageLimiterService = new PdfPageLimiterService();
 
         Files = new ObservableCollection<BatchFileItem>();
         AvailableTipologias = new ObservableCollection<TipologiaOption>(
@@ -326,6 +331,24 @@ public class MainViewModel : ObservableObject
         set => SetProperty(ref _forceReprocess, value);
     }
 
+    public bool ClassificationOnly
+    {
+        get => _classificationOnly;
+        set => SetProperty(ref _classificationOnly, value);
+    }
+
+    public bool EjecutarIntegridad
+    {
+        get => _ejecutarIntegridad;
+        set => SetProperty(ref _ejecutarIntegridad, value);
+    }
+
+    public int MaxPagesForClassificationOnly
+    {
+        get => _maxPagesForClassificationOnly;
+        set => SetProperty(ref _maxPagesForClassificationOnly, value);
+    }
+
     public bool IsProcessing
     {
         get => _isProcessing;
@@ -519,6 +542,9 @@ public class MainViewModel : ObservableObject
         AssetResolverCamposSolicitados = config.AssetResolverCamposSolicitados;
         SubirAGdc = config.SubirAGdc;
         ForceReprocess = config.ForceReprocess;
+        ClassificationOnly = config.ClassificationOnly;
+        EjecutarIntegridad = config.EjecutarIntegridad;
+        MaxPagesForClassificationOnly = config.MaxPagesForClassificationOnly;
         _promptOverrides = new Dictionary<string, PromptOverride>(config.PromptOverrides, StringComparer.OrdinalIgnoreCase);
 
         SelectedTipologia = AvailableTipologias.FirstOrDefault(x =>
@@ -560,6 +586,12 @@ public class MainViewModel : ObservableObject
             return;
         }
 
+        if (MaxPagesForClassificationOnly < 0)
+        {
+            MessageBox.Show("Limit pages debe ser 0 o mayor.", "Validación", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
         var config = new BatchConfig
         {
             BackendUrl = BackendUrl,
@@ -575,6 +607,9 @@ public class MainViewModel : ObservableObject
             AssetResolverCamposSolicitados = AssetResolverCamposSolicitados,
             SubirAGdc = SubirAGdc,
             ForceReprocess = ForceReprocess,
+            ClassificationOnly = ClassificationOnly,
+            EjecutarIntegridad = EjecutarIntegridad,
+            MaxPagesForClassificationOnly = MaxPagesForClassificationOnly,
             PromptOverrides = new Dictionary<string, PromptOverride>(_promptOverrides, StringComparer.OrdinalIgnoreCase)
         };
 
@@ -1033,7 +1068,10 @@ public class MainViewModel : ObservableObject
         {
             Instrucciones = new IngestInstrucciones
             {
-                ExpectedType = tipologiaCode,
+                ExpectedType = ClassificationOnly ? string.Empty : tipologiaCode,
+                ClassificationOnly = ClassificationOnly,
+                ExecuteIntegrarWhenClassificationOnly = ClassificationOnly ? EjecutarIntegridad : null,
+                MaxPagesForClassificationOnly = ClassificationOnly ? Math.Max(0, MaxPagesForClassificationOnly) : 0,
                 SkipDuplicateCheck = ForceReprocess,
                 ForceReprocess = ForceReprocess,
                 SkipGdcUpload = !SubirAGdc,
@@ -1056,7 +1094,7 @@ public class MainViewModel : ObservableObject
                 Name = file.FileName,
                 Content = new IngestDocumentoContent
                 {
-                    Base64 = Convert.ToBase64String(File.ReadAllBytes(file.FullPath))
+                    Base64 = Convert.ToBase64String(GetDocumentBytesForRequest(file.FullPath))
                 }
             },
             Trazabilidad = new IngestTrazabilidad
@@ -1087,6 +1125,18 @@ public class MainViewModel : ObservableObject
         }
 
         return request;
+    }
+
+    private byte[] GetDocumentBytesForRequest(string filePath)
+    {
+        var pdfBytes = File.ReadAllBytes(filePath);
+        if (!ClassificationOnly || MaxPagesForClassificationOnly <= 0)
+        {
+            return pdfBytes;
+        }
+
+        var limitResult = _pdfPageLimiterService.LimitForClassificationOnly(pdfBytes, MaxPagesForClassificationOnly);
+        return limitResult.Base64Bytes;
     }
 
     private async Task<DurableStatusResponse> WaitForFinalStatusAsync(

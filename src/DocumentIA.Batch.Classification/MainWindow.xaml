@@ -38,6 +38,11 @@
                     <TextBlock Text="Parallel Queues" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
                     <TextBox Text="{Binding NumeroColas, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="6" />
 
+                    <TextBlock Text="Limit pages" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <TextBox Text="{Binding MaxPagesForClassificationOnly, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Padding="6"
+                             ToolTip="Solo aplica cuando Classification Only está activo. 0 = sin límite." />
+
                     <CheckBox Content="Classification Only"
                               IsChecked="{Binding ClassificationOnly, Mode=TwoWay}"
                               Margin="0,10,0,0" />

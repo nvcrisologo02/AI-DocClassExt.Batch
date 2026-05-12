@@ -346,6 +346,9 @@ public class IngestInstrucciones
     [JsonPropertyName("executeIntegrarWhenClassificationOnly")]
     public bool? ExecuteIntegrarWhenClassificationOnly { get; set; }
 
+    [JsonPropertyName("maxPagesForClassificationOnly")]
+    public int MaxPagesForClassificationOnly { get; set; }
+
     [JsonPropertyName("skipDuplicateCheck")]
     public bool SkipDuplicateCheck { get; set; }
 

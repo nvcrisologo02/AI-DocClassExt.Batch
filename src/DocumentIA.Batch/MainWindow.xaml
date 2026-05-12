@@ -176,6 +176,29 @@
                         <TextBlock Text="Número de colas" Foreground="{StaticResource BrushMuted}" />
                         <TextBox Text="{Binding NumeroColas, Mode=TwoWay}" Margin="0,4,0,14" />
 
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Classification Only" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <CheckBox Grid.Column="1" IsChecked="{Binding ClassificationOnly, Mode=TwoWay}" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Ejecutar Integridad" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <CheckBox Grid.Column="1" IsChecked="{Binding EjecutarIntegridad, Mode=TwoWay}" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <TextBlock Text="Limit pages" Foreground="{StaticResource BrushMuted}" />
+                        <TextBox Text="{Binding MaxPagesForClassificationOnly, Mode=TwoWay}"
+                                 Margin="0,4,0,14"
+                                 ToolTip="Solo aplica cuando Classification Only está activo. 0 = sin límite." />
+
                         <TextBlock Text="UMBRALES" Foreground="#64748B" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,10" />
 
                         <Grid Margin="0,0,0,8">

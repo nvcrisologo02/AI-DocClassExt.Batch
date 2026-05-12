@@ -6,6 +6,7 @@ Aplicacion WPF .NET 8 para clasificacion documental por lotes basada en el batch
 
 - Carga de PDFs por lote.
 - Clasificacion contra el backend existente reutilizando el cliente HTTP del batch actual.
+- Soporte de `Limit pages` cuando `Classification Only` esta activo (`0` = sin limite).
 - Exportacion minima a CSV y Excel.
 - Columnas de salida:
   - Identificacion del documento.
