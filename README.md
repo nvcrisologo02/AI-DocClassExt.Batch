@@ -27,6 +27,9 @@ Completado:
 - Exportacion Excel MVP en `.xlsx` con estructura equivalente al CSV.
 - Columnas de exportacion para analisis y auditoria derivadas del JSON bruto: identificacion, integridad, resultado, campos extraidos, confianza por campo, validaciones, revision e IDs AAII/AACC.
 - Acceso a exportacion CSV/Excel desde el modal de resumen post-proceso.
+- Nuevo flujo en `DocumentIA.Batch.Classification` para opcion de markdown pre-ingesta: primero limita paginas (`ClassificationOnly + Limit pages`) y despues genera markdown opcional para `documento.content.markdown`.
+- Nueva libreria reusable `src/DocumentIA.Batch.Markdown` basada en `PdfPig` para extraccion de markdown por pagina.
+- Limpieza explicita de artefactos temporales al finalizar cada item de cola para evitar huerfanos tras ejecuciones/cancelaciones.
 - `.gitignore` para excluir `bin/`, `obj/`, `.vs/`, artefactos de publicacion y configuracion local.
 
 Validacion realizada:
@@ -64,6 +67,8 @@ src/DocumentIA.Batch/
 	ViewModels/    Estado y comandos de la UI
 	Views/         Dialogos secundarios
 	Resources/     Estilos WPF
+src/DocumentIA.Batch.Markdown/
+	Libreria reusable para convertir PDF a markdown
 ```
 
 ## Work items relacionados

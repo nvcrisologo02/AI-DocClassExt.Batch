@@ -7,6 +7,8 @@ Aplicacion WPF .NET 8 para clasificacion documental por lotes basada en el batch
 - Carga de PDFs por lote.
 - Clasificacion contra el backend existente reutilizando el cliente HTTP del batch actual.
 - Soporte de `Limit pages` cuando `Classification Only` esta activo (`0` = sin limite).
+- Toggle opcional `Generate Markdown before ingest` para enviar `documento.content.markdown` preprocesado.
+- Flujo en cola por fichero: primero se aplica `Limit pages` (si corresponde) y despues se genera markdown.
 - Exportacion minima a CSV y Excel.
 - Columnas de salida:
   - Identificacion del documento.
@@ -21,6 +23,15 @@ Esta app reutiliza del proyecto `DocumentIA.Batch`:
 - `BatchRunStorageService` para guardar el JSON bruto de salida por documento.
 - `BatchOutputAuditExtractor` para leer la identificacion y la tipologia desde la salida.
 - Estilos WPF compartidos desde `Resources/Styles.xaml`.
+
+Tambien reutiliza del proyecto `DocumentIA.Batch.Markdown`:
+
+- `PdfPigMarkdownGenerator` (basado en `PdfPig`) para extraccion de markdown por paginas de forma reusable.
+
+## Limpieza de temporales
+
+- El pipeline de preparacion de documentos contempla limpieza explicita de artefactos temporales al finalizar cada elemento de cola (exito, error o cancelacion).
+- La implementacion actual de markdown no requiere ficheros temporales para funcionar, por lo que no deja huerfanos.
 
 ## Ejecucion
 

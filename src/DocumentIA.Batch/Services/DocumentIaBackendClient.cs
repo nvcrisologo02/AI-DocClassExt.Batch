@@ -420,6 +420,10 @@ public class IngestDocumentoContent
 {
     [JsonPropertyName("base64")]
     public string Base64 { get; set; } = string.Empty;
+
+    [JsonPropertyName("markdown")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Markdown { get; set; }
 }
 
 public class IngestTrazabilidad

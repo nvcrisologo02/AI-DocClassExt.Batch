@@ -4,6 +4,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Threading;
+using DocumentIA.Batch.Markdown;
 using DocumentIA.Batch.Classification.Models;
 using DocumentIA.Batch.Classification.Services;
 using DocumentIA.Batch.Models;
@@ -21,6 +22,8 @@ public class ClassificationMainViewModel : ObservableObject
     private readonly ClassificationExportService _exportService;
     private readonly BatchOutputAuditExtractor _auditExtractor;
     private readonly PdfPageLimiterService _pdfPageLimiterService;
+    private readonly QueuedDocumentPreparationService _queuedDocumentPreparationService;
+    private readonly TemporaryArtifactsCleaner _temporaryArtifactsCleaner;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -28,7 +31,9 @@ public class ClassificationMainViewModel : ObservableObject
     private bool _forceReprocess;
     private bool _classificationOnly;
     private bool _ejecutarIntegridad;
+    private string _classificationProvider = "auto";
     private int _maxPagesForClassificationOnly;
+    private bool _generateMarkdownBeforeIngest;
     private bool _isProcessing;
     private string _processStatus = "Ready";
     private CancellationTokenSource? _processingCts;
@@ -51,6 +56,8 @@ public class ClassificationMainViewModel : ObservableObject
         _exportService = exportService;
         _auditExtractor = auditExtractor;
         _pdfPageLimiterService = new PdfPageLimiterService();
+        _queuedDocumentPreparationService = new QueuedDocumentPreparationService(_pdfPageLimiterService, new PdfPigMarkdownGenerator());
+        _temporaryArtifactsCleaner = new TemporaryArtifactsCleaner();
 
         Files = new ObservableCollection<ClassificationDocumentItem>();
         FilesView = CollectionViewSource.GetDefaultView(Files);
@@ -82,6 +89,17 @@ public class ClassificationMainViewModel : ObservableObject
     public RelayCommand ExportCsvCommand { get; }
 
     public RelayCommand ExportExcelCommand { get; }
+
+    public IReadOnlyList<string> ClassificationProviders { get; } =
+    [
+        "auto",
+        "azure-document-intelligence",
+        "hybrid-tdn",
+        "hybrid",
+        "azure-openai",
+        "gpt",
+        "mock"
+    ];
 
     public string BackendUrl
     {
@@ -119,10 +137,22 @@ public class ClassificationMainViewModel : ObservableObject
         set => SetProperty(ref _ejecutarIntegridad, value);
     }
 
+    public string ClassificationProvider
+    {
+        get => _classificationProvider;
+        set => SetProperty(ref _classificationProvider, NormalizeClassificationProvider(value));
+    }
+
     public int MaxPagesForClassificationOnly
     {
         get => _maxPagesForClassificationOnly;
         set => SetProperty(ref _maxPagesForClassificationOnly, value);
+    }
+
+    public bool GenerateMarkdownBeforeIngest
+    {
+        get => _generateMarkdownBeforeIngest;
+        set => SetProperty(ref _generateMarkdownBeforeIngest, value);
     }
 
     public bool IsProcessing
@@ -164,7 +194,9 @@ public class ClassificationMainViewModel : ObservableObject
         ForceReprocess = config.ForceReprocess;
         ClassificationOnly = config.ClassificationOnly;
         EjecutarIntegridad = config.EjecutarIntegridad;
+        ClassificationProvider = config.ClassificationProvider;
         MaxPagesForClassificationOnly = config.MaxPagesForClassificationOnly;
+        GenerateMarkdownBeforeIngest = config.GenerateMarkdownBeforeIngest;
     }
 
     private void SaveConfig()
@@ -176,7 +208,9 @@ public class ClassificationMainViewModel : ObservableObject
         config.ForceReprocess = ForceReprocess;
         config.ClassificationOnly = ClassificationOnly;
         config.EjecutarIntegridad = EjecutarIntegridad;
+        config.ClassificationProvider = NormalizeClassificationProvider(ClassificationProvider);
         config.MaxPagesForClassificationOnly = Math.Max(0, MaxPagesForClassificationOnly);
+        config.GenerateMarkdownBeforeIngest = GenerateMarkdownBeforeIngest;
         _settingsService.Save(config);
         ProcessStatus = "Configuration saved.";
     }
@@ -272,6 +306,7 @@ public class ClassificationMainViewModel : ObservableObject
         CancellationToken cancellationToken)
     {
         await semaphore.WaitAsync(cancellationToken);
+        QueuedDocumentPreparationResult? preparedDocument = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -279,9 +314,18 @@ public class ClassificationMainViewModel : ObservableObject
             file.Status = "En cola";
             file.CorrelationId = Guid.NewGuid().ToString();
             file.FechaInicio = DateTime.Now;
+            file.Status = "Preparando documento";
+
+            preparedDocument = await _queuedDocumentPreparationService.PrepareAsync(
+                file.FullPath,
+                ClassificationOnly,
+                MaxPagesForClassificationOnly,
+                GenerateMarkdownBeforeIngest,
+                cancellationToken);
+
             file.Status = "Enviando";
 
-            var request = BuildIngestRequest(file, file.CorrelationId);
+            var request = BuildIngestRequest(file, file.CorrelationId, preparedDocument);
             var ingestResponse = await _backendClient.IngestAsync(BackendUrl, FunctionKey, request, cancellationToken);
             file.InstanceId = ingestResponse.InstanceId;
             file.Status = "Processing";
@@ -324,13 +368,21 @@ public class ClassificationMainViewModel : ObservableObject
         }
         finally
         {
+            if (preparedDocument is not null)
+            {
+                _temporaryArtifactsCleaner.Cleanup(preparedDocument.TemporaryArtifacts);
+            }
+
             file.FechaFin = DateTime.Now;
             semaphore.Release();
             await RunOnUiAsync(() => FilesView.Refresh());
         }
     }
 
-    private IngestRequest BuildIngestRequest(ClassificationDocumentItem file, string correlationId)
+    private IngestRequest BuildIngestRequest(
+        ClassificationDocumentItem file,
+        string correlationId,
+        QueuedDocumentPreparationResult preparedDocument)
     {
         return new IngestRequest
         {
@@ -345,7 +397,7 @@ public class ClassificationMainViewModel : ObservableObject
                 SkipGdcUpload = true,
                 Classification = new IngestIaConfig
                 {
-                    Provider = "auto",
+                    Provider = NormalizeClassificationProvider(ClassificationProvider),
                     Model = "auto"
                 },
                 Extraction = new IngestIaConfig
@@ -359,7 +411,8 @@ public class ClassificationMainViewModel : ObservableObject
                 Name = file.FileName,
                 Content = new IngestDocumentoContent
                 {
-                    Base64 = Convert.ToBase64String(GetDocumentBytesForRequest(file.FullPath))
+                    Base64 = Convert.ToBase64String(preparedDocument.DocumentBytes),
+                    Markdown = string.IsNullOrWhiteSpace(preparedDocument.Markdown) ? null : preparedDocument.Markdown
                 }
             },
             Trazabilidad = new IngestTrazabilidad
@@ -368,18 +421,6 @@ public class ClassificationMainViewModel : ObservableObject
                 SubmittedBy = "DocumentIA.Batch.Classification"
             }
         };
-    }
-
-    private byte[] GetDocumentBytesForRequest(string filePath)
-    {
-        var pdfBytes = File.ReadAllBytes(filePath);
-        if (!ClassificationOnly || MaxPagesForClassificationOnly <= 0)
-        {
-            return pdfBytes;
-        }
-
-        var limitResult = _pdfPageLimiterService.LimitForClassificationOnly(pdfBytes, MaxPagesForClassificationOnly);
-        return limitResult.Base64Bytes;
     }
 
     private async Task<DurableStatusResponse> WaitForFinalStatusAsync(string statusQueryUri, CancellationToken cancellationToken)
@@ -521,6 +562,19 @@ public class ClassificationMainViewModel : ObservableObject
         return string.Equals(file.Status, "Error", StringComparison.OrdinalIgnoreCase)
             || string.Equals(file.RuntimeStatus, "Failed", StringComparison.OrdinalIgnoreCase)
             || string.Equals(file.RuntimeStatus, "Terminated", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string NormalizeClassificationProvider(string? provider)
+    {
+        if (string.IsNullOrWhiteSpace(provider))
+        {
+            return "auto";
+        }
+
+        var normalized = provider.Trim();
+        return ClassificationProviders.Contains(normalized, StringComparer.OrdinalIgnoreCase)
+            ? ClassificationProviders.First(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase))
+            : "auto";
     }
 
     private static Task RunOnUiAsync(Action action)

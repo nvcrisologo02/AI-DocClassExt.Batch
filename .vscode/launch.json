@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "DocumentIA.Batch.Classification: Launch (normal)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build (DocumentIA.Batch.Classification)",
+      "program": "${workspaceFolder}/src/DocumentIA.Batch.Classification/bin/Debug/net8.0-windows/DocumentIA.Batch.Classification.dll",
+      "cwd": "${workspaceFolder}/src/DocumentIA.Batch.Classification",
+      "console": "internalConsole",
+      "stopAtEntry": false,
+      "justMyCode": true
+    },
+    {
+      "name": "DocumentIA.Batch.Classification: Attach",
+      "type": "coreclr",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ]
+}

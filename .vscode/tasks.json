@@ -2,6 +2,23 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "build (DocumentIA.Batch.Classification)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/DocumentIA.Batch.Classification"
+      },
+      "group": "build",
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
       "label": "run (DocumentIA.Batch)",
       "type": "process",
       "command": "dotnet",
@@ -10,6 +27,22 @@
       ],
       "options": {
         "cwd": "${workspaceFolder}/src/DocumentIA.Batch"
+      },
+      "isBackground": false,
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run (DocumentIA.Batch.Classification)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/DocumentIA.Batch.Classification"
       },
       "isBackground": false,
       "presentation": {

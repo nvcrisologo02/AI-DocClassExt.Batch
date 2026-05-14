@@ -16,7 +16,9 @@ public class BatchConfig
     public bool ForceReprocess { get; set; } = false;
     public bool ClassificationOnly { get; set; } = false;
     public bool EjecutarIntegridad { get; set; } = false;
+    public string ClassificationProvider { get; set; } = "auto";
     public int MaxPagesForClassificationOnly { get; set; } = 0;
+    public bool GenerateMarkdownBeforeIngest { get; set; } = false;
     /// <summary>Campos a solicitar al AssetResolver (separados por coma). Vacío = todos los disponibles.</summary>
     public string AssetResolverCamposSolicitados { get; set; } = string.Empty;
     public Dictionary<string, PromptOverride> PromptOverrides { get; set; } = new();
