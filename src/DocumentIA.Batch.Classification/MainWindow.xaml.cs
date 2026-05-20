@@ -58,11 +58,48 @@ public partial class MainWindow : Window
         FileName: {{item.FileName}}
         Status: {{item.Status}}
         RuntimeStatus: {{item.RuntimeStatus}}
+        StatusQueryUri: {{item.StatusQueryUri}}
+        OrigenResultado: {{item.OrigenResultadoDisplay}}
+        MensajeReutilizacion: {{item.MensajeReutilizacion}}
+        ResultadoEstado: {{item.ResultadoEstado}}
         DocumentId: {{item.IdentificacionDocumento}}
+        Guid: {{item.IdentificacionGuid}}
         Typology: {{item.TipologiaIdentificada}}
+        TipologiaFamilia: {{item.TipologiaFamilia}}
+        TipologiaVersion: {{item.TipologiaVersion}}
+        FechaProceso: {{item.FechaProceso}}
+        Paginas: {{item.Paginas}}
+        Tdn1: {{item.Tdn1}}
+        Tdn2: {{item.Tdn2}}
+        Matricula: {{item.Matricula}}
+        TipologiaNombre: {{item.TipologiaNombre}}
+        TipologiaMGDCMatricula: {{item.TipologiaMgdcMatricula}}
+        GdcTipoDocumento: {{item.GdcTipoDocumento}}
+        GdcSubtipoDocumento: {{item.GdcSubtipoDocumento}}
+        GdcSerie: {{item.GdcSerie}}
+        GptDescripcion: {{item.GptDescripcion}}
+        ClassificationOnly: {{item.ClassificationOnlyOutput}}
+        Clasificador: {{item.Clasificador}}
         Confidence: {{item.ConfidenceDisplay}} (raw: {{item.ConfianzaGlobal}})
+        FallbackLLM: {{item.FallbackLlm}}
+        FallbackRazon: {{item.FallbackRazon}}
+        RecorteAplicado: {{item.RecorteAplicado}}
+        PaginasIncluidas: {{item.PaginasIncluidas}}
+        MarkdownGenerado: {{item.MarkdownGenerado}}
+        OrigenMarkdown: {{item.OrigenMarkdown}}
+        ModeloLLMUsado: {{item.ModeloLlmUsado}}
+        ActividadActual: {{item.ActividadActual}}
+        ActividadesCompletadas: {{item.ActividadesCompletadas}}
+        ActividadesTotales: {{item.ActividadesTotales}}
+        DuracionTotalMs: {{item.DuracionTotalMs}}
         Error: {{item.MensajeError}}
         OutputJsonPath: {{item.OutputJsonPath}}
+
+        ==== JUSTIFICACION ====
+        {{item.JustificacionClasificacion}}
+
+        ==== TIMELINE ====
+        {{item.TimelineActividades}}
         """;
 
         if (!string.IsNullOrWhiteSpace(item.OutputJsonPath) && File.Exists(item.OutputJsonPath))
