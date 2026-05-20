@@ -38,17 +38,6 @@
                     <TextBlock Text="Parallel Queues" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
                     <TextBox Text="{Binding NumeroColas, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="6" />
 
-                    <TextBlock Text="Classification provider" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
-                    <ComboBox ItemsSource="{Binding ClassificationProviders}"
-                              SelectedItem="{Binding ClassificationProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                              ToolTip="Proveedor enviado en instrucciones.classification.provider."
-                              Padding="4" />
-
-                    <TextBlock Text="Limit pages" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
-                    <TextBox Text="{Binding MaxPagesForClassificationOnly, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                             Padding="6"
-                             ToolTip="Solo aplica cuando Classification Only está activo. 0 = sin límite." />
-
                     <CheckBox Content="Classification Only"
                               IsChecked="{Binding ClassificationOnly, Mode=TwoWay}"
                               Margin="0,10,0,0" />
@@ -60,10 +49,6 @@
                               IsChecked="{Binding EjecutarIntegridad, Mode=TwoWay}"
                               ToolTip="Se aplica como executeIntegrarWhenClassificationOnly cuando Classification Only está activo."
                               Margin="0,4,0,0" />
-                    <CheckBox Content="Generate Markdown before ingest"
-                              IsChecked="{Binding GenerateMarkdownBeforeIngest, Mode=TwoWay}"
-                              ToolTip="Si está activo, el batch genera markdown local del PDF (tras aplicar límite de páginas) y lo envía en documento.content.markdown."
-                              Margin="0,4,0,0" />
 
                     <Button Content="Save Configuration" Command="{Binding SaveConfigCommand}" Margin="0,12,0,0" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
 
@@ -73,6 +58,7 @@
                     <Button Content="+ Add PDFs" Command="{Binding PickFilesCommand}" Margin="0,0,0,4" Padding="8" />
                     <Button Content="▶ Start Classification" Command="{Binding StartProcessingCommand}" Margin="0,0,0,4" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
                     <Button Content="⏹ Stop" Command="{Binding CancelProcessingCommand}" Margin="0,0,0,16" Padding="8" Background="#C41E3A" Foreground="White" FontWeight="SemiBold" />
+                    <Button Content="🧹 Clear / New Batch" Command="{Binding ClearBatchCommand}" Margin="0,0,0,16" Padding="8" />
 
                     <Separator Margin="0,0,0,12" />
 
@@ -95,6 +81,7 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <UniformGrid Grid.Row="0" Columns="4" Margin="0,0,0,12">
@@ -131,6 +118,7 @@
             <DataGrid Grid.Row="2"
                       Name="FilesGrid"
                       ItemsSource="{Binding FilesView}"
+                      SelectedItem="{Binding SelectedFile, Mode=TwoWay}"
                       AutoGenerateColumns="False"
                       CanUserAddRows="False"
                       IsReadOnly="True"
@@ -144,12 +132,167 @@
                 <DataGrid.Columns>
                     <DataGridTextColumn Header="Filename" Binding="{Binding FileName}" Width="2.5*" />
                     <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="1*" />
-                    <DataGridTextColumn Header="Document ID" Binding="{Binding IdentificacionDocumento}" Width="1.5*" />
+                    <DataGridTextColumn Header="Origin" Binding="{Binding OrigenResultadoDisplay}" Width="1.2*" />
                     <DataGridTextColumn Header="Typology" Binding="{Binding TipologiaIdentificada}" Width="1.5*" />
                     <DataGridTextColumn Header="Confidence" Binding="{Binding ConfidenceDisplay}" Width="1*" />
                     <DataGridTextColumn Header="Error" Binding="{Binding MensajeError}" Width="1.5*" />
+                    <!-- Columnas eliminadas: Provider, Discard Reason, Detalle Proveedores -->
                 </DataGrid.Columns>
             </DataGrid>
+
+            <Border Grid.Row="3"
+                    Margin="0,12,0,0"
+                    Background="White"
+                    CornerRadius="4"
+                    BorderBrush="#E0E0E0"
+                    BorderThickness="1"
+                    Padding="10">
+                <StackPanel>
+                    <TextBlock Text="🧭 Summary (selección actual)"
+                               FontSize="13"
+                               FontWeight="Bold"
+                               Foreground="#1B7C3F"
+                               Margin="0,0,0,8" />
+
+                    <Grid Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                            <TextBlock Text="Fichero" FontSize="10" Foreground="#777" />
+                            <TextBlock Text="{Binding SelectedFile.FileName}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="InstanceId" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.InstanceId}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="StatusUri" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.StatusQueryUri}" TextWrapping="Wrap" MaxHeight="52" />
+
+                            <TextBlock Text="RuntimeStatus" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.RuntimeStatus}" />
+
+                            <TextBlock Text="Origen resultado" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.OrigenResultadoDisplay}" FontWeight="SemiBold" />
+
+                            <TextBlock Text="Estado final" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.ResultadoEstado}" FontWeight="SemiBold" />
+
+                            <TextBlock Text="Documento / Guid" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.IdentificacionDocumento}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.IdentificacionGuid}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Tipología" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.TipologiaIdentificada}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.TipologiaFamilia}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.TipologiaVersion}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="TDN1 / TDN2 / Matrícula" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.Tdn1}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.Tdn2}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.Matricula}" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                            <TextBlock Text="Clasificador" FontSize="10" Foreground="#777" />
+                            <TextBlock Text="{Binding SelectedFile.Clasificador}" FontWeight="SemiBold" />
+
+                            <TextBlock Text="Confianza" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.ConfidenceDisplay}" />
+
+                            <TextBlock Text="Fallback LLM" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.FallbackLlm}" />
+
+                            <TextBlock Text="Fallback razón" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.FallbackRazon}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Mensaje reutilización" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.MensajeReutilizacion}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Tipología nombre" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.TipologiaNombre}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Tipología MGDC matrícula" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.TipologiaMgdcMatricula}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="GPT descripción" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.GptDescripcion}" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" Margin="0,0,8,0">
+                            <TextBlock Text="ClassificationOnly" FontSize="10" Foreground="#777" />
+                            <TextBlock Text="{Binding SelectedFile.ClassificationOnlyOutput}" />
+
+                            <TextBlock Text="Recorte aplicado" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.RecorteAplicado}" />
+
+                            <TextBlock Text="Páginas incluidas" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.PaginasIncluidas}" />
+
+                            <TextBlock Text="Markdown / Origen" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.MarkdownGenerado}" />
+                            <TextBlock Text="{Binding SelectedFile.OrigenMarkdown}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Modelo LLM usado" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.ModeloLlmUsado}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Fecha proceso / Páginas" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.FechaProceso}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.Paginas}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="GDC tipo / subtipo / serie" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.GdcTipoDocumento}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.GdcSubtipoDocumento}" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding SelectedFile.GdcSerie}" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="3">
+                            <TextBlock Text="Actividad actual" FontSize="10" Foreground="#777" />
+                            <TextBlock Text="{Binding SelectedFile.ActividadActual}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Actividades completadas / totales" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.ActividadesCompletadas}" />
+                            <TextBlock Text="{Binding SelectedFile.ActividadesTotales}" />
+
+                            <TextBlock Text="Duración total (ms)" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.DuracionTotalMs}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="Justificación del camino de clasificación"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="#555"
+                               Margin="0,0,0,4" />
+                    <TextBox Text="{Binding SelectedFile.JustificacionClasificacion}"
+                             IsReadOnly="True"
+                             BorderBrush="#D6D6D6"
+                             Background="#FBFBFB"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             MinHeight="90"
+                             MaxHeight="180"
+                             VerticalScrollBarVisibility="Auto" />
+
+                    <TextBlock Text="Traza de actividades"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="#555"
+                               Margin="0,8,0,4" />
+                    <TextBox Text="{Binding SelectedFile.TimelineActividades}"
+                             IsReadOnly="True"
+                             BorderBrush="#D6D6D6"
+                             Background="#FBFBFB"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             MinHeight="120"
+                             MaxHeight="220"
+                             VerticalScrollBarVisibility="Auto" />
+                </StackPanel>
+            </Border>
         </Grid>
     </Grid>
 </Window>

@@ -1,10 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
+using System.Text;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Data;
 using System.Windows.Threading;
-using DocumentIA.Batch.Markdown;
 using DocumentIA.Batch.Classification.Models;
 using DocumentIA.Batch.Classification.Services;
 using DocumentIA.Batch.Models;
@@ -21,9 +22,6 @@ public class ClassificationMainViewModel : ObservableObject
     private readonly BatchRunStorageService _runStorageService;
     private readonly ClassificationExportService _exportService;
     private readonly BatchOutputAuditExtractor _auditExtractor;
-    private readonly PdfPageLimiterService _pdfPageLimiterService;
-    private readonly QueuedDocumentPreparationService _queuedDocumentPreparationService;
-    private readonly TemporaryArtifactsCleaner _temporaryArtifactsCleaner;
 
     private string _backendUrl = string.Empty;
     private string _functionKey = string.Empty;
@@ -31,12 +29,11 @@ public class ClassificationMainViewModel : ObservableObject
     private bool _forceReprocess;
     private bool _classificationOnly;
     private bool _ejecutarIntegridad;
-    private string _classificationProvider = "auto";
-    private int _maxPagesForClassificationOnly;
-    private bool _generateMarkdownBeforeIngest;
     private bool _isProcessing;
     private string _processStatus = "Ready";
+    private ClassificationDocumentItem? _selectedFile;
     private CancellationTokenSource? _processingCts;
+    private string? _currentRunFolder;
 
     public ClassificationMainViewModel()
         : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new ClassificationExportService(), new BatchOutputAuditExtractor())
@@ -55,9 +52,6 @@ public class ClassificationMainViewModel : ObservableObject
         _runStorageService = runStorageService;
         _exportService = exportService;
         _auditExtractor = auditExtractor;
-        _pdfPageLimiterService = new PdfPageLimiterService();
-        _queuedDocumentPreparationService = new QueuedDocumentPreparationService(_pdfPageLimiterService, new PdfPigMarkdownGenerator());
-        _temporaryArtifactsCleaner = new TemporaryArtifactsCleaner();
 
         Files = new ObservableCollection<ClassificationDocumentItem>();
         FilesView = CollectionViewSource.GetDefaultView(Files);
@@ -65,13 +59,45 @@ public class ClassificationMainViewModel : ObservableObject
         PickFilesCommand = new RelayCommand(_ => PickFiles(), _ => !IsProcessing);
         StartProcessingCommand = new RelayCommand(_ => _ = StartProcessingAsync(), _ => CanProcess());
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
+        ClearBatchCommand = new RelayCommand(_ => ClearBatch(), _ => CanClearBatch());
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => Files.Count > 0 && !IsProcessing);
         ExportExcelCommand = new RelayCommand(_ => ExportExcel(), _ => Files.Count > 0 && !IsProcessing);
 
-        Files.CollectionChanged += (_, _) => RefreshCommandStates();
+        Files.CollectionChanged += Files_CollectionChanged;
 
         LoadConfig();
+    }
+
+    // Suscribe a PropertyChanged de cada item para refrescar contadores al cambiar estado
+    private void Files_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+    {
+        if (e.OldItems != null)
+        {
+            foreach (ClassificationDocumentItem item in e.OldItems)
+            {
+                item.PropertyChanged -= File_PropertyChanged;
+            }
+        }
+        if (e.NewItems != null)
+        {
+            foreach (ClassificationDocumentItem item in e.NewItems)
+            {
+                item.PropertyChanged += File_PropertyChanged;
+            }
+        }
+        RefreshCommandStates();
+    }
+
+    private void File_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        // Solo refrescar si cambia Status, RuntimeStatus o MensajeError (afectan los contadores)
+        if (e.PropertyName == nameof(ClassificationDocumentItem.Status)
+            || e.PropertyName == nameof(ClassificationDocumentItem.RuntimeStatus)
+            || e.PropertyName == nameof(ClassificationDocumentItem.MensajeError))
+        {
+            RefreshCommandStates();
+        }
     }
 
     public ObservableCollection<ClassificationDocumentItem> Files { get; }
@@ -84,22 +110,13 @@ public class ClassificationMainViewModel : ObservableObject
 
     public RelayCommand CancelProcessingCommand { get; }
 
+    public RelayCommand ClearBatchCommand { get; }
+
     public RelayCommand SaveConfigCommand { get; }
 
     public RelayCommand ExportCsvCommand { get; }
 
     public RelayCommand ExportExcelCommand { get; }
-
-    public IReadOnlyList<string> ClassificationProviders { get; } =
-    [
-        "auto",
-        "azure-document-intelligence",
-        "hybrid-tdn",
-        "hybrid",
-        "azure-openai",
-        "gpt",
-        "mock"
-    ];
 
     public string BackendUrl
     {
@@ -137,24 +154,6 @@ public class ClassificationMainViewModel : ObservableObject
         set => SetProperty(ref _ejecutarIntegridad, value);
     }
 
-    public string ClassificationProvider
-    {
-        get => _classificationProvider;
-        set => SetProperty(ref _classificationProvider, NormalizeClassificationProvider(value));
-    }
-
-    public int MaxPagesForClassificationOnly
-    {
-        get => _maxPagesForClassificationOnly;
-        set => SetProperty(ref _maxPagesForClassificationOnly, value);
-    }
-
-    public bool GenerateMarkdownBeforeIngest
-    {
-        get => _generateMarkdownBeforeIngest;
-        set => SetProperty(ref _generateMarkdownBeforeIngest, value);
-    }
-
     public bool IsProcessing
     {
         get => _isProcessing;
@@ -164,6 +163,7 @@ public class ClassificationMainViewModel : ObservableObject
             {
                 StartProcessingCommand.RaiseCanExecuteChanged();
                 CancelProcessingCommand.RaiseCanExecuteChanged();
+                ClearBatchCommand.RaiseCanExecuteChanged();
                 PickFilesCommand.RaiseCanExecuteChanged();
                 ExportCsvCommand.RaiseCanExecuteChanged();
                 ExportExcelCommand.RaiseCanExecuteChanged();
@@ -175,6 +175,12 @@ public class ClassificationMainViewModel : ObservableObject
     {
         get => _processStatus;
         private set => SetProperty(ref _processStatus, value);
+    }
+
+    public ClassificationDocumentItem? SelectedFile
+    {
+        get => _selectedFile;
+        set => SetProperty(ref _selectedFile, value);
     }
 
     public int TotalFiles => Files.Count;
@@ -194,9 +200,6 @@ public class ClassificationMainViewModel : ObservableObject
         ForceReprocess = config.ForceReprocess;
         ClassificationOnly = config.ClassificationOnly;
         EjecutarIntegridad = config.EjecutarIntegridad;
-        ClassificationProvider = config.ClassificationProvider;
-        MaxPagesForClassificationOnly = config.MaxPagesForClassificationOnly;
-        GenerateMarkdownBeforeIngest = config.GenerateMarkdownBeforeIngest;
     }
 
     private void SaveConfig()
@@ -208,15 +211,14 @@ public class ClassificationMainViewModel : ObservableObject
         config.ForceReprocess = ForceReprocess;
         config.ClassificationOnly = ClassificationOnly;
         config.EjecutarIntegridad = EjecutarIntegridad;
-        config.ClassificationProvider = NormalizeClassificationProvider(ClassificationProvider);
-        config.MaxPagesForClassificationOnly = Math.Max(0, MaxPagesForClassificationOnly);
-        config.GenerateMarkdownBeforeIngest = GenerateMarkdownBeforeIngest;
         _settingsService.Save(config);
         ProcessStatus = "Configuration saved.";
     }
 
     public void AddFiles(IEnumerable<string> paths)
     {
+        ClassificationDocumentItem? firstAdded = null;
+
         foreach (var path in paths)
         {
             if (!File.Exists(path) || !path.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase))
@@ -230,11 +232,19 @@ public class ClassificationMainViewModel : ObservableObject
             }
 
             var fileInfo = new FileInfo(path);
-            Files.Add(new ClassificationDocumentItem
+            var item = new ClassificationDocumentItem
             {
                 FileName = fileInfo.Name,
                 FullPath = fileInfo.FullName
-            });
+            };
+
+            Files.Add(item);
+            firstAdded ??= item;
+        }
+
+        if (SelectedFile is null)
+        {
+            SelectedFile = firstAdded ?? Files.FirstOrDefault();
         }
 
         RefreshCommandStates();
@@ -275,6 +285,7 @@ public class ClassificationMainViewModel : ObservableObject
         _processingCts = new CancellationTokenSource();
         var cancellationToken = _processingCts.Token;
         var runFolder = _runStorageService.CreateRunFolder();
+        _currentRunFolder = runFolder;
         var maxParallelism = Math.Clamp(NumeroColas, 1, 10);
 
         try
@@ -306,7 +317,6 @@ public class ClassificationMainViewModel : ObservableObject
         CancellationToken cancellationToken)
     {
         await semaphore.WaitAsync(cancellationToken);
-        QueuedDocumentPreparationResult? preparedDocument = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -314,23 +324,15 @@ public class ClassificationMainViewModel : ObservableObject
             file.Status = "En cola";
             file.CorrelationId = Guid.NewGuid().ToString();
             file.FechaInicio = DateTime.Now;
-            file.Status = "Preparando documento";
-
-            preparedDocument = await _queuedDocumentPreparationService.PrepareAsync(
-                file.FullPath,
-                ClassificationOnly,
-                MaxPagesForClassificationOnly,
-                GenerateMarkdownBeforeIngest,
-                cancellationToken);
-
             file.Status = "Enviando";
 
-            var request = BuildIngestRequest(file, file.CorrelationId, preparedDocument);
+            var request = BuildIngestRequest(file, file.CorrelationId);
             var ingestResponse = await _backendClient.IngestAsync(BackendUrl, FunctionKey, request, cancellationToken);
             file.InstanceId = ingestResponse.InstanceId;
             file.Status = "Processing";
 
-            var finalStatus = await WaitForFinalStatusAsync(ingestResponse.StatusQueryUri, cancellationToken);
+            file.StatusQueryUri = ingestResponse.StatusQueryUri;
+            var finalStatus = await WaitForFinalStatusAsync(file, ingestResponse.StatusQueryUri, cancellationToken);
             file.RuntimeStatus = finalStatus.RuntimeStatus;
 
             if (string.Equals(finalStatus.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase))
@@ -348,7 +350,12 @@ public class ClassificationMainViewModel : ObservableObject
                 file.IdentificacionDocumento = audit.IdentificacionTipoDocumento;
                 file.TipologiaIdentificada = audit.IdentificacionTipologiaDetectada;
                 file.ConfianzaGlobal = audit.ResultadoConfianzaGlobal;
-                file.Status = string.IsNullOrWhiteSpace(audit.ResultadoEstadoCalidad) ? "Completed" : audit.ResultadoEstadoCalidad;
+                file.Status = string.IsNullOrWhiteSpace(audit.ResultadoEstadoCalidad) ? "OK" : audit.ResultadoEstadoCalidad;
+
+                if (output.HasValue)
+                {
+                    ApplySummaryFromOutput(file, output.Value);
+                }
             }
             else
             {
@@ -368,21 +375,13 @@ public class ClassificationMainViewModel : ObservableObject
         }
         finally
         {
-            if (preparedDocument is not null)
-            {
-                _temporaryArtifactsCleaner.Cleanup(preparedDocument.TemporaryArtifacts);
-            }
-
             file.FechaFin = DateTime.Now;
             semaphore.Release();
             await RunOnUiAsync(() => FilesView.Refresh());
         }
     }
 
-    private IngestRequest BuildIngestRequest(
-        ClassificationDocumentItem file,
-        string correlationId,
-        QueuedDocumentPreparationResult preparedDocument)
+    private IngestRequest BuildIngestRequest(ClassificationDocumentItem file, string correlationId)
     {
         return new IngestRequest
         {
@@ -391,13 +390,12 @@ public class ClassificationMainViewModel : ObservableObject
                 ExpectedType = string.Empty,
                 ClassificationOnly = ClassificationOnly,
                 ExecuteIntegrarWhenClassificationOnly = ClassificationOnly ? EjecutarIntegridad : null,
-                MaxPagesForClassificationOnly = ClassificationOnly ? Math.Max(0, MaxPagesForClassificationOnly) : 0,
                 SkipDuplicateCheck = false,
                 ForceReprocess = ForceReprocess,
                 SkipGdcUpload = true,
                 Classification = new IngestIaConfig
                 {
-                    Provider = NormalizeClassificationProvider(ClassificationProvider),
+                    Provider = "auto",
                     Model = "auto"
                 },
                 Extraction = new IngestIaConfig
@@ -411,8 +409,7 @@ public class ClassificationMainViewModel : ObservableObject
                 Name = file.FileName,
                 Content = new IngestDocumentoContent
                 {
-                    Base64 = Convert.ToBase64String(preparedDocument.DocumentBytes),
-                    Markdown = string.IsNullOrWhiteSpace(preparedDocument.Markdown) ? null : preparedDocument.Markdown
+                    Base64 = Convert.ToBase64String(File.ReadAllBytes(file.FullPath))
                 }
             },
             Trazabilidad = new IngestTrazabilidad
@@ -423,11 +420,13 @@ public class ClassificationMainViewModel : ObservableObject
         };
     }
 
-    private async Task<DurableStatusResponse> WaitForFinalStatusAsync(string statusQueryUri, CancellationToken cancellationToken)
+    private async Task<DurableStatusResponse> WaitForFinalStatusAsync(ClassificationDocumentItem file, string statusQueryUri, CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < 180; attempt++)
         {
             var status = await _backendClient.GetDurableStatusAsync(statusQueryUri, FunctionKey, cancellationToken);
+
+            await RunOnUiAsync(() => ApplyLiveStatus(file, status));
 
             if (string.Equals(status.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(status.RuntimeStatus, "Failed", StringComparison.OrdinalIgnoreCase)
@@ -450,6 +449,41 @@ public class ClassificationMainViewModel : ObservableObject
         }
 
         _processingCts.Cancel();
+    }
+
+    private bool CanClearBatch()
+    {
+        return !IsProcessing && (Files.Count > 0 || !string.IsNullOrWhiteSpace(_currentRunFolder));
+    }
+
+    private void ClearBatch()
+    {
+        if (IsProcessing)
+        {
+            return;
+        }
+
+        var runFolder = _currentRunFolder;
+
+        Files.Clear();
+        SelectedFile = null;
+        _currentRunFolder = null;
+        ProcessStatus = "Ready";
+
+        if (!string.IsNullOrWhiteSpace(runFolder) && Directory.Exists(runFolder))
+        {
+            try
+            {
+                Directory.Delete(runFolder, recursive: true);
+                ProcessStatus = "Resultados y artefactos del lote eliminados. Listo para un nuevo proceso.";
+            }
+            catch (Exception ex)
+            {
+                ProcessStatus = $"Lote limpiado, pero no se pudo borrar la carpeta de artefactos: {ex.Message}";
+            }
+        }
+
+        RefreshCommandStates();
     }
 
     private void ExportCsv()
@@ -537,7 +571,9 @@ public class ClassificationMainViewModel : ObservableObject
         OnPropertyChanged(nameof(RunningFiles));
         OnPropertyChanged(nameof(CompletedFiles));
         OnPropertyChanged(nameof(ErrorFiles));
+        OnPropertyChanged(nameof(Files)); // Asegura que la vista de archivos se actualice correctamente.
         StartProcessingCommand.RaiseCanExecuteChanged();
+        ClearBatchCommand.RaiseCanExecuteChanged();
         ExportCsvCommand.RaiseCanExecuteChanged();
         ExportExcelCommand.RaiseCanExecuteChanged();
     }
@@ -546,12 +582,14 @@ public class ClassificationMainViewModel : ObservableObject
     {
         return string.Equals(file.Status, "En cola", StringComparison.OrdinalIgnoreCase)
             || string.Equals(file.Status, "Enviando", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.Status, "Processing", StringComparison.OrdinalIgnoreCase)
             || string.Equals(file.Status, "En ejecución", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsCompletedFile(ClassificationDocumentItem file)
     {
-        return string.Equals(file.Status, "Completado", StringComparison.OrdinalIgnoreCase)
+        return string.Equals(file.Status, "OK", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(file.Status, "Completado", StringComparison.OrdinalIgnoreCase)
             || string.Equals(file.Status, "REVISION", StringComparison.OrdinalIgnoreCase)
             || string.Equals(file.Status, "VALIDACION_CON_ERRORES", StringComparison.OrdinalIgnoreCase)
             || string.Equals(file.Status, "BAJA_CONFIANZA", StringComparison.OrdinalIgnoreCase);
@@ -564,19 +602,6 @@ public class ClassificationMainViewModel : ObservableObject
             || string.Equals(file.RuntimeStatus, "Terminated", StringComparison.OrdinalIgnoreCase);
     }
 
-    private string NormalizeClassificationProvider(string? provider)
-    {
-        if (string.IsNullOrWhiteSpace(provider))
-        {
-            return "auto";
-        }
-
-        var normalized = provider.Trim();
-        return ClassificationProviders.Contains(normalized, StringComparer.OrdinalIgnoreCase)
-            ? ClassificationProviders.First(x => string.Equals(x, normalized, StringComparison.OrdinalIgnoreCase))
-            : "auto";
-    }
-
     private static Task RunOnUiAsync(Action action)
     {
         var dispatcher = Application.Current?.Dispatcher;
@@ -587,5 +612,416 @@ public class ClassificationMainViewModel : ObservableObject
         }
 
         return dispatcher.InvokeAsync(action).Task;
+    }
+
+    private static void ApplySummaryFromOutput(ClassificationDocumentItem file, JsonElement output)
+    {
+        var identificacion = GetPropertyValue(output, "Identificacion", "identificacion");
+        var resultado = GetPropertyValue(output, "Resultado", "resultado");
+        var detalle = GetPropertyValue(output, "DetalleEjecucion", "detalleEjecucion");
+        var clasificacion = detalle.HasValue ? GetPropertyValue(detalle.Value, "Clasificacion", "clasificacion") : null;
+        var seguimiento = detalle.HasValue ? GetPropertyValue(detalle.Value, "Seguimiento", "seguimiento") : null;
+        var detalleProveedores = clasificacion.HasValue
+            ? GetPropertyValue(clasificacion.Value, "DetalleProveedores", "detalleProveedores")
+            : null;
+
+        file.ResultadoEstado = GetStringValue(resultado, "Estado", "estado");
+        file.IdentificacionDocumento = FirstNonEmpty(
+            file.IdentificacionDocumento,
+            GetStringValue(identificacion, "Documento", "documento"));
+        file.IdentificacionGuid = GetStringValue(identificacion, "Guid", "guid");
+        file.TipologiaIdentificada = GetStringValue(identificacion, "Tipologia", "tipologia");
+        file.TipologiaFamilia = GetStringValue(identificacion, "TipologiaFamilia", "tipologiaFamilia");
+        file.TipologiaVersion = GetStringValue(identificacion, "TipologiaVersion", "tipologiaVersion");
+        file.FechaProceso = GetStringValue(identificacion, "FechaProceso", "fechaProceso");
+        file.Paginas = GetStringValue(identificacion, "Paginas", "paginas");
+        file.Tdn1 = GetStringValue(identificacion, "Tdn1", "tdn1");
+        file.Tdn2 = GetStringValue(identificacion, "Tdn2", "tdn2");
+        file.Matricula = GetStringValue(identificacion, "Matricula", "matricula");
+        file.TipologiaNombre = GetStringValue(identificacion, "TipologiaNombre", "tipologiaNombre");
+        file.TipologiaMgdcMatricula = GetStringValue(identificacion, "TipologiaMGDCMatricula", "tipologiaMGDCMatricula");
+        file.GdcTipoDocumento = GetStringValue(identificacion, "GdcTipoDocumento", "gdcTipoDocumento");
+        file.GdcSubtipoDocumento = GetStringValue(identificacion, "GdcSubtipoDocumento", "gdcSubtipoDocumento");
+        file.GdcSerie = GetStringValue(identificacion, "GdcSerie", "gdcSerie");
+        file.GptDescripcion = GetStringValue(identificacion, "GptDescripcion", "gptDescripcion");
+        file.ClassificationOnlyOutput = GetStringValue(detalle, "ClassificationOnly", "classificationOnly");
+        file.Clasificador = GetStringValue(clasificacion, "Clasificador", "clasificador", "Modelo", "modelo");
+        file.ConfianzaGlobal = ChooseConfidence(file.ConfianzaGlobal, GetStringValue(clasificacion, "Confianza", "confianza"));
+        file.FallbackLlm = GetStringValue(clasificacion, "FallbackLLM", "fallbackLLM");
+        file.FallbackRazon = GetStringValue(clasificacion, "FallbackRazon", "fallbackRazon");
+        file.RecorteAplicado = GetStringValue(detalle, "RecorteAplicado", "recorteAplicado");
+        file.PaginasIncluidas = GetStringValue(detalle, "PaginasIncluidas", "paginasIncluidas");
+        file.MarkdownGenerado = GetStringValue(detalle, "MarkdownGenerado", "markdownGenerado");
+        file.OrigenMarkdown = GetStringValue(detalle, "OrigenMarkdown", "origenMarkdown");
+        file.ModeloLlmUsado = GetStringValue(detalle, "ModeloLLMUsado", "modeloLLMUsado");
+        file.ReutilizadaPorDuplicado = GetBooleanValue(resultado, "ReutilizadaPorDuplicado", "reutilizadaPorDuplicado");
+        file.MensajeReutilizacion = GetStringValue(resultado, "MensajeReutilizacion", "mensajeReutilizacion");
+        file.TimelineActividades = BuildTimelineText(seguimiento);
+        file.JustificacionClasificacion = BuildClassificationJustification(output, seguimiento);
+
+        file.DetalleProveedores.Clear();
+
+        if (detalleProveedores.HasValue && detalleProveedores.Value.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var proveedor in detalleProveedores.Value.EnumerateArray())
+            {
+                file.DetalleProveedores.Add(new PropuestaProveedor
+                {
+                    Proveedor = GetStringValue(proveedor, "Proveedor", "proveedor"),
+                    Tipologia = GetStringValue(proveedor, "Tipologia", "tipologia"),
+                    Confianza = GetDoubleValue(proveedor, "Confianza", "confianza"),
+                    MotivoDescarte = GetStringValue(proveedor, "MotivoDescarte", "motivoDescarte")
+                });
+            }
+        }
+
+        if (file.DetalleProveedores.Any())
+        {
+            var detalles = string.Join("; ", file.DetalleProveedores.Select(dp => $"Proveedor: {dp.Proveedor}, Tipología: {dp.Tipologia}, Confianza: {dp.Confianza:P}, Motivo: {dp.MotivoDescarte}"));
+            file.JustificacionClasificacion += $"\nDetalle de Proveedores: {detalles}";
+        }
+    }
+
+    private static void ApplyLiveStatus(ClassificationDocumentItem file, DurableStatusResponse status)
+    {
+        var customStatus = status.CustomStatus;
+        if (!customStatus.HasValue)
+        {
+            return;
+        }
+
+        file.ActividadActual = GetStringValue(customStatus, "actividadActual", "ActividadActual", "currentActivity");
+        file.ActividadesCompletadas = GetCompletedActivitiesCount(customStatus).ToString();
+        file.ActividadesTotales = GetStringValue(customStatus, "actividadesTotales", "ActividadesTotales", "totalActivities");
+        file.DuracionTotalMs = GetStringValue(customStatus, "duracionTotalMs", "DuracionTotalMs", "elapsedMs");
+        file.TimelineActividades = BuildTimelineText(customStatus);
+    }
+
+    private static string ChooseConfidence(string current, string candidate)
+    {
+        return string.IsNullOrWhiteSpace(candidate) ? current : candidate;
+    }
+
+    private static string BuildClassificationJustification(JsonElement output, JsonElement? seguimiento)
+    {
+        var detalle = GetPropertyValue(output, "DetalleEjecucion", "detalleEjecucion");
+        var clasificacion = detalle.HasValue ? GetPropertyValue(detalle.Value, "Clasificacion", "clasificacion") : null;
+        var identificacion = GetPropertyValue(output, "Identificacion", "identificacion");
+
+        var lines = new List<string>();
+
+        var tipologia = GetStringValue(identificacion, "Tipologia", "tipologia");
+        var clasificador = GetStringValue(clasificacion, "Clasificador", "clasificador", "Modelo", "modelo");
+        var proveedor = GetStringValue(clasificacion, "ProveedorClasif", "proveedorClasif");
+        var confianza = GetStringValue(clasificacion, "Confianza", "confianza");
+        var fallback = GetStringValue(clasificacion, "FallbackLLM", "fallbackLLM");
+        var fallbackReason = GetStringValue(clasificacion, "FallbackRazon", "fallbackRazon");
+        var classificationOnly = GetStringValue(detalle, "ClassificationOnly", "classificationOnly");
+        var recorteAplicado = GetStringValue(detalle, "RecorteAplicado", "recorteAplicado");
+        var paginasIncluidas = GetStringValue(detalle, "PaginasIncluidas", "paginasIncluidas");
+        var totalPaginas = GetStringValue(identificacion, "Paginas", "paginas");
+        var markdownGenerado = GetStringValue(detalle, "MarkdownGenerado", "markdownGenerado");
+        var origenMarkdown = GetStringValue(detalle, "OrigenMarkdown", "origenMarkdown");
+        var modeloLlm = GetStringValue(detalle, "ModeloLLMUsado", "modeloLLMUsado");
+
+        lines.Add($"Tipología final: {tipologia}");
+        lines.Add($"Clasificador final: {clasificador} | Proveedor final: {proveedor} | Confianza: {confianza}");
+        lines.Add($"ClassificationOnly salida: {classificationOnly}");
+
+        if (string.Equals(clasificador, "RuleBasedTDN", StringComparison.OrdinalIgnoreCase))
+        {
+            lines.Add("Decisión: heurística aceptada (reglas superaron el umbral de confianza).");
+        }
+        else if (string.Equals(clasificador, "DocumentIntelligence", StringComparison.OrdinalIgnoreCase))
+        {
+            lines.Add("Decisión: heurística insuficiente; DI resolvió la clasificación con confianza suficiente.");
+        }
+        else if (string.Equals(clasificador, "FoundryRescue", StringComparison.OrdinalIgnoreCase))
+        {
+            lines.Add("Decisión: heurística y DI no resolvieron con calidad requerida; se usó rescate LLM.");
+        }
+        else if (string.Equals(clasificador, "expectedtype-input", StringComparison.OrdinalIgnoreCase))
+        {
+            lines.Add("Decisión: clasificación forzada por ExpectedType de entrada.");
+        }
+
+        if (bool.TryParse(fallback, out var fallbackEnabled) && fallbackEnabled)
+        {
+            lines.Add("Fallback activado: SI");
+            lines.Add($"Motivo fallback: {DecodeFallbackReason(fallbackReason)}");
+        }
+        else if (!string.IsNullOrWhiteSpace(fallbackReason))
+        {
+            lines.Add("Fallback activado: NO");
+            lines.Add($"Motivo reportado por pipeline: {DecodeFallbackReason(fallbackReason)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(recorteAplicado) || !string.IsNullOrWhiteSpace(paginasIncluidas))
+        {
+            lines.Add($"Recorte clasificación: aplicado={recorteAplicado} | páginas incluidas={paginasIncluidas} | total={totalPaginas}");
+        }
+
+        if (bool.TryParse(markdownGenerado, out var markdownFlag) && markdownFlag)
+        {
+            lines.Add($"Markdown generado: SI | origen={origenMarkdown}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(modeloLlm))
+        {
+            lines.Add($"Modelo LLM usado: {modeloLlm}");
+        }
+
+        var mensajeClasificar = GetClasificarActivityMessage(seguimiento);
+        if (!string.IsNullOrWhiteSpace(mensajeClasificar))
+        {
+            lines.Add($"Mensaje actividad Clasificar: {mensajeClasificar}");
+        }
+
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string BuildTimelineText(JsonElement? seguimiento)
+    {
+        if (!seguimiento.HasValue)
+        {
+            return string.Empty;
+        }
+
+        var actividades = GetPropertyValue(seguimiento.Value, "Actividades", "actividades", "activityTimeline");
+        if (!actividades.HasValue || actividades.Value.ValueKind != JsonValueKind.Array)
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder();
+        foreach (var actividad in actividades.Value.EnumerateArray())
+        {
+            var nombre = GetStringValue(actividad, "Nombre", "nombre");
+            var estado = GetStringValue(actividad, "Estado", "estado");
+            var duracion = GetStringValue(actividad, "DuracionMs", "duracionMs");
+            var fallback = GetStringValue(actividad, "FallbackActivado", "fallbackActivado");
+            var fallbackRazon = GetStringValue(actividad, "FallbackRazon", "fallbackRazon");
+            var mensaje = GetStringValue(actividad, "Mensaje", "mensaje");
+
+            builder.Append("- ")
+                .Append(nombre)
+                .Append(" | estado=")
+                .Append(estado)
+                .Append(" | duracionMs=")
+                .Append(duracion)
+                .Append(" | fallback=")
+                .Append(fallback)
+                .AppendLine();
+
+            if (!string.IsNullOrWhiteSpace(fallbackRazon))
+            {
+                builder.Append("  razon fallback: ")
+                    .AppendLine(fallbackRazon);
+            }
+
+            if (!string.IsNullOrWhiteSpace(mensaje))
+            {
+                builder.Append("  mensaje: ")
+                    .AppendLine(mensaje);
+            }
+        }
+
+        return builder.ToString().TrimEnd();
+    }
+
+    private static int GetCompletedActivitiesCount(JsonElement? customStatus)
+    {
+        if (!customStatus.HasValue)
+        {
+            return 0;
+        }
+
+        var completed = GetPropertyValue(customStatus.Value, "actividadesCompletadas", "ActividadesCompletadas", "completedActivities");
+        if (!completed.HasValue || completed.Value.ValueKind != JsonValueKind.Array)
+        {
+            return 0;
+        }
+
+        return completed.Value.GetArrayLength();
+    }
+
+    private static string FirstNonEmpty(params string[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string GetClasificarActivityMessage(JsonElement? seguimiento)
+    {
+        if (!seguimiento.HasValue)
+        {
+            return string.Empty;
+        }
+
+        var actividades = GetPropertyValue(seguimiento.Value, "Actividades", "actividades");
+        if (!actividades.HasValue || actividades.Value.ValueKind != JsonValueKind.Array)
+        {
+            return string.Empty;
+        }
+
+        foreach (var actividad in actividades.Value.EnumerateArray())
+        {
+            var nombre = GetStringValue(actividad, "Nombre", "nombre");
+            if (!string.Equals(nombre, "Clasificar", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return GetStringValue(actividad, "Mensaje", "mensaje");
+        }
+
+        return string.Empty;
+    }
+
+    private static string DecodeFallbackReason(string fallbackReason)
+    {
+        if (string.IsNullOrWhiteSpace(fallbackReason))
+        {
+            return "Sin fallback explícito";
+        }
+
+        if (fallbackReason.StartsWith("low_confidence:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "DI devolvió baja confianza y se activó fallback al siguiente clasificador";
+        }
+
+        if (fallbackReason.StartsWith("resto_classification:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "DI clasificó como RESTO, por lo que se forzó fallback";
+        }
+
+        if (fallbackReason.StartsWith("exception:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "La clasificación principal lanzó excepción y se activó fallback";
+        }
+
+        if (fallbackReason.StartsWith("fallback_attempt_failed:", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Se intentó fallback pero falló; se mantuvo el resultado anterior";
+        }
+
+        if (string.Equals(fallbackReason, "fallback_unclassified", StringComparison.OrdinalIgnoreCase))
+        {
+            return "No se logró clasificar de forma concluyente";
+        }
+
+        return $"Fallback informado por el pipeline: {fallbackReason}";
+    }
+
+    private static JsonElement? GetPropertyValue(JsonElement source, params string[] names)
+    {
+        if (source.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        foreach (var name in names)
+        {
+            foreach (var property in source.EnumerateObject())
+            {
+                if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return property.Value;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static string GetStringValue(JsonElement? source, params string[] names)
+    {
+        if (!source.HasValue)
+        {
+            return string.Empty;
+        }
+
+        if (source.Value.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var name in names)
+            {
+                foreach (var property in source.Value.EnumerateObject())
+                {
+                    if (string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return JsonElementToString(property.Value);
+                    }
+                }
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string GetStringValue(JsonElement source, params string[] names)
+    {
+        return GetStringValue((JsonElement?)source, names);
+    }
+
+    private static bool GetBooleanValue(JsonElement? source, params string[] names)
+    {
+        if (!source.HasValue || source.Value.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var name in names)
+        {
+            foreach (var property in source.Value.EnumerateObject())
+            {
+                if (!string.Equals(property.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return property.Value.ValueKind switch
+                {
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    JsonValueKind.String when bool.TryParse(property.Value.GetString(), out var parsed) => parsed,
+                    _ => false
+                };
+            }
+        }
+
+        return false;
+    }
+
+    private static double GetDoubleValue(JsonElement element, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.Number && property.TryGetDouble(out var value))
+            {
+                return value;
+            }
+        }
+        return 0.0; // Valor predeterminado si no se encuentra
+    }
+
+    private static string JsonElementToString(JsonElement value)
+    {
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number => value.ToString(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            JsonValueKind.Null => string.Empty,
+            JsonValueKind.Undefined => string.Empty,
+            _ => value.ToString()
+        };
     }
 }
