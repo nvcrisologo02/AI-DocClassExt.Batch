@@ -41,3 +41,25 @@
 - Runtime: **.NET 8 / .NET 9**, WPF (Windows), aplicaciones de escritorio y batch.
 - Comandos dotnet: `dotnet build`, `dotnet run`, `dotnet test`, `dotnet publish`.
 - Gestor de paquetes: `dotnet add package` (NuGet). Para Python: `pip` o `uv` dentro del entorno `.venv`.
+
+## Uso obligatorio de Microsoft Learn MCP
+
+- Cuando la consulta trate tecnologías Microsoft (Azure, .NET, C#, ASP.NET, Entra, Graph, VS Code, Microsoft 365, Windows), usar Microsoft Learn MCP de forma proactiva sin esperar a que el usuario lo pida.
+- Para dudas conceptuales, configuración, límites, cuotas, arquitectura, troubleshooting o pasos oficiales: usar `microsoft_docs_search` primero.
+- Si el resultado requiere detalle completo (prerrequisitos, pasos extensos, tablas, troubleshooting profundo): después de `microsoft_docs_search`, usar `microsoft_docs_fetch` sobre las URLs más relevantes.
+- Para generación o corrección de código Microsoft/Azure: usar `microsoft_code_sample_search` antes de proponer código final.
+- Si una respuesta sobre tecnología Microsoft se da sin evidencia reciente de estas herramientas, considerar la respuesta incompleta y volver a consultar MCP.
+- Priorizar contenido oficial devuelto por MCP frente a memoria del modelo cuando haya discrepancias.
+
+## Uso proactivo de MCP adicionales
+
+- Para tareas de recursos/suscripciones/operaciones de Azure, usar Azure MCP (`azure-arm-remote` y/o herramientas Azure disponibles) de forma proactiva.
+- Para pruebas E2E web, smoke tests funcionales de UI y validaciones de navegación/formularios, usar Playwright MCP de forma proactiva.
+
+## Política de seguridad para SQL MCP
+
+- Para SQL MCP, operar en modo lectura por defecto.
+- No ejecutar operaciones de escritura o cambio de esquema (`INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`) salvo que el usuario lo pida de forma explícita.
+- Incluso con petición explícita, pedir confirmación inmediata antes de ejecutar cualquier escritura/cambio y detallar impacto esperado.
+- Si el cambio se aprueba, habilitar escritura de forma temporal (solo para esa operación) y volver a modo solo lectura al finalizar.
+- Si no hay confirmación explícita, limitarse a consultas de lectura y análisis.
