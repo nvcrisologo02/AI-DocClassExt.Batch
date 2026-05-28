@@ -29,6 +29,11 @@ public class ClassificationMainViewModel : ObservableObject
     private bool _forceReprocess;
     private bool _classificationOnly;
     private bool _ejecutarIntegridad;
+    private bool _forzarResumenPorDefecto = true;
+    private string _classificationProvider = "auto";
+    private string _classificationModel = "auto";
+    private string _classificationLevelOption = "DEFAULT";
+    private int _maxPagesForClassificationOnly = 10;
     private bool _isProcessing;
     private string _processStatus = "Ready";
     private ClassificationDocumentItem? _selectedFile;
@@ -154,6 +159,55 @@ public class ClassificationMainViewModel : ObservableObject
         set => SetProperty(ref _ejecutarIntegridad, value);
     }
 
+    public bool ForzarResumenPorDefecto
+    {
+        get => _forzarResumenPorDefecto;
+        set => SetProperty(ref _forzarResumenPorDefecto, value);
+    }
+
+    public IReadOnlyList<string> ClassificationModeOptions { get; } =
+    [
+        "auto",
+        "hybrid",
+        "hybrid-rules-gpt-di",
+        "hybrid-rules-di-gpt",
+        "hybrid-tdn",
+        "rules",
+        "gpt",
+        "di"
+    ];
+
+    public IReadOnlyList<string> ClassificationLevelOptions { get; } =
+    [
+        "DEFAULT",
+        "TDN1",
+        "TDN1_TDN2"
+    ];
+
+    public string ClassificationProvider
+    {
+        get => _classificationProvider;
+        set => SetProperty(ref _classificationProvider, string.IsNullOrWhiteSpace(value) ? "auto" : value.Trim());
+    }
+
+    public string ClassificationModel
+    {
+        get => _classificationModel;
+        set => SetProperty(ref _classificationModel, string.IsNullOrWhiteSpace(value) ? "auto" : value.Trim());
+    }
+
+    public string ClassificationLevelOption
+    {
+        get => _classificationLevelOption;
+        set => SetProperty(ref _classificationLevelOption, string.IsNullOrWhiteSpace(value) ? "DEFAULT" : value.Trim().ToUpperInvariant());
+    }
+
+    public int MaxPagesForClassificationOnly
+    {
+        get => _maxPagesForClassificationOnly;
+        set => SetProperty(ref _maxPagesForClassificationOnly, Math.Max(0, value));
+    }
+
     public bool IsProcessing
     {
         get => _isProcessing;
@@ -200,6 +254,11 @@ public class ClassificationMainViewModel : ObservableObject
         ForceReprocess = config.ForceReprocess;
         ClassificationOnly = config.ClassificationOnly;
         EjecutarIntegridad = config.EjecutarIntegridad;
+        ForzarResumenPorDefecto = config.ForzarResumenPorDefecto;
+        ClassificationProvider = string.IsNullOrWhiteSpace(config.ClassificationProvider) ? "auto" : config.ClassificationProvider;
+        ClassificationModel = string.IsNullOrWhiteSpace(config.ClassificationModel) ? "auto" : config.ClassificationModel;
+        ClassificationLevelOption = string.IsNullOrWhiteSpace(config.ClassificationLevel) ? "DEFAULT" : config.ClassificationLevel;
+        MaxPagesForClassificationOnly = config.MaxPagesForClassificationOnly;
     }
 
     private void SaveConfig()
@@ -211,6 +270,11 @@ public class ClassificationMainViewModel : ObservableObject
         config.ForceReprocess = ForceReprocess;
         config.ClassificationOnly = ClassificationOnly;
         config.EjecutarIntegridad = EjecutarIntegridad;
+        config.ForzarResumenPorDefecto = ForzarResumenPorDefecto;
+        config.ClassificationProvider = ClassificationProvider;
+        config.ClassificationModel = ClassificationModel;
+        config.ClassificationLevel = ResolveClassificationLevelForRequest() ?? string.Empty;
+        config.MaxPagesForClassificationOnly = MaxPagesForClassificationOnly;
         _settingsService.Save(config);
         ProcessStatus = "Configuration saved.";
     }
@@ -383,20 +447,25 @@ public class ClassificationMainViewModel : ObservableObject
 
     private IngestRequest BuildIngestRequest(ClassificationDocumentItem file, string correlationId)
     {
+        var effectiveClassificationOnly = ClassificationOnly || IsTdn1LevelSelected();
+
         return new IngestRequest
         {
             Instrucciones = new IngestInstrucciones
             {
                 ExpectedType = string.Empty,
-                ClassificationOnly = ClassificationOnly,
-                ExecuteIntegrarWhenClassificationOnly = ClassificationOnly ? EjecutarIntegridad : null,
+                ClassificationOnly = effectiveClassificationOnly,
+                ExecuteIntegrarWhenClassificationOnly = effectiveClassificationOnly ? EjecutarIntegridad : null,
+                MaxPagesForClassificationOnly = effectiveClassificationOnly ? MaxPagesForClassificationOnly : 0,
+                ForzarResumenPorDefecto = ForzarResumenPorDefecto,
                 SkipDuplicateCheck = false,
                 ForceReprocess = ForceReprocess,
                 SkipGdcUpload = true,
                 Classification = new IngestIaConfig
                 {
-                    Provider = "auto",
-                    Model = "auto"
+                    Provider = ClassificationProvider,
+                    Model = ClassificationModel,
+                    NivelClasificacion = ResolveClassificationLevelForRequest()
                 },
                 Extraction = new IngestIaConfig
                 {
@@ -418,6 +487,18 @@ public class ClassificationMainViewModel : ObservableObject
                 SubmittedBy = "DocumentIA.Batch.Classification"
             }
         };
+    }
+
+    private string? ResolveClassificationLevelForRequest()
+    {
+        return string.Equals(ClassificationLevelOption, "DEFAULT", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : ClassificationLevelOption;
+    }
+
+    private bool IsTdn1LevelSelected()
+    {
+        return string.Equals(ClassificationLevelOption, "TDN1", StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<DurableStatusResponse> WaitForFinalStatusAsync(ClassificationDocumentItem file, string statusQueryUri, CancellationToken cancellationToken)
@@ -620,6 +701,7 @@ public class ClassificationMainViewModel : ObservableObject
         var resultado = GetPropertyValue(output, "Resultado", "resultado");
         var detalle = GetPropertyValue(output, "DetalleEjecucion", "detalleEjecucion");
         var clasificacion = detalle.HasValue ? GetPropertyValue(detalle.Value, "Clasificacion", "clasificacion") : null;
+        var datosExtraidos = GetPropertyValue(output, "DatosExtraidos", "datosExtraidos");
         var seguimiento = detalle.HasValue ? GetPropertyValue(detalle.Value, "Seguimiento", "seguimiento") : null;
         var detalleProveedores = clasificacion.HasValue
             ? GetPropertyValue(clasificacion.Value, "DetalleProveedores", "detalleProveedores")
@@ -656,6 +738,9 @@ public class ClassificationMainViewModel : ObservableObject
         file.ModeloLlmUsado = GetStringValue(detalle, "ModeloLLMUsado", "modeloLLMUsado");
         file.ReutilizadaPorDuplicado = GetBooleanValue(resultado, "ReutilizadaPorDuplicado", "reutilizadaPorDuplicado");
         file.MensajeReutilizacion = GetStringValue(resultado, "MensajeReutilizacion", "mensajeReutilizacion");
+        file.Resumen = FirstNonEmpty(
+            GetStringValue(datosExtraidos, "Resumen", "resumen"),
+            GetStringValue(clasificacion, "ResumenCombinado", "resumenCombinado", "Resumen", "resumen"));
         file.TimelineActividades = BuildTimelineText(seguimiento);
         file.JustificacionClasificacion = BuildClassificationJustification(output, seguimiento);
 

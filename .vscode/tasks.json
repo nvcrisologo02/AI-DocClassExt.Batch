@@ -49,6 +49,36 @@
         "reveal": "always",
         "panel": "shared"
       }
+    },
+    {
+      "label": "publish single-file (DocumentIA.Batch)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "publish",
+        "${workspaceFolder}/src/DocumentIA.Batch/DocumentIA.Batch.csproj",
+        "-c",
+        "Release",
+        "-r",
+        "win-x64",
+        "--self-contained",
+        "true",
+        "-p:PublishSingleFile=true",
+        "-p:PublishTrimmed=false",
+        "-p:DebugType=None",
+        "-p:DebugSymbols=false",
+        "-o",
+        "${workspaceFolder}/artifacts/publish/batch-win-x64-single"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
     }
   ]
 }

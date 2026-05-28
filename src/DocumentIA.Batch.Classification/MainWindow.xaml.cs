@@ -83,6 +83,7 @@ public partial class MainWindow : Window
         Confidence: {{item.ConfidenceDisplay}} (raw: {{item.ConfianzaGlobal}})
         FallbackLLM: {{item.FallbackLlm}}
         FallbackRazon: {{item.FallbackRazon}}
+        Resumen: {{item.Resumen}}
         RecorteAplicado: {{item.RecorteAplicado}}
         PaginasIncluidas: {{item.PaginasIncluidas}}
         MarkdownGenerado: {{item.MarkdownGenerado}}

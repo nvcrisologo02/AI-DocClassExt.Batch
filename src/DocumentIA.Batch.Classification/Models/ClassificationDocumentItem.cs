@@ -27,6 +27,7 @@ public class ClassificationDocumentItem : INotifyPropertyChanged
     private string _clasificador = string.Empty;
     private string _fallbackLlm = string.Empty;
     private string _fallbackRazon = string.Empty;
+    private string _resumen = string.Empty;
     private string _recorteAplicado = string.Empty;
     private string _paginasIncluidas = string.Empty;
     private string _markdownGenerado = string.Empty;
@@ -145,6 +146,12 @@ public class ClassificationDocumentItem : INotifyPropertyChanged
     {
         get => _fallbackRazon;
         set => SetField(ref _fallbackRazon, value);
+    }
+
+    public string Resumen
+    {
+        get => _resumen;
+        set => SetField(ref _resumen, value);
     }
 
     public string RecorteAplicado

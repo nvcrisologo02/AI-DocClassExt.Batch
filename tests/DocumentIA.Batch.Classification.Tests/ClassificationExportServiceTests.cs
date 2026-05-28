@@ -10,7 +10,7 @@ namespace DocumentIA.Batch.Classification.Tests;
 public class ClassificationExportServiceTests
 {
     [Fact]
-    public void ExportCsv_WritesOnlyRequestedColumns()
+    public void ExportCsv_WritesCurrentContractHeadersAndValues()
     {
         var service = new ClassificationExportService();
         var path = Path.Combine(Path.GetTempPath(), $"classification-{Guid.NewGuid():N}.csv");
@@ -22,9 +22,12 @@ public class ClassificationExportServiceTests
                 new ClassificationDocumentItem
                 {
                     FileName = "doc1.pdf",
-                    IdentificacionDocumento = "ID-001",
+                    Status = "OK",
                     TipologiaIdentificada = "nota.simple.1_4",
-                    ConfianzaGlobal = "0.97"
+                    ConfianzaGlobal = "0.97",
+                    Clasificador = "RuleBasedTDN",
+                    FallbackLlm = "false",
+                    DuracionTotalMs = "1234"
                 }
             });
 
@@ -35,8 +38,23 @@ public class ClassificationExportServiceTests
             Assert.Equal(0xBF, bytes[2]);
 
             var text = File.ReadAllText(path, Encoding.UTF8);
-            Assert.Contains("FileName;Identificacion_TipoDocumento;Identificacion_TipologiaDetectada;Resultado_ConfianzaGlobal", text);
-            Assert.Contains("doc1.pdf;ID-001;nota.simple.1_4;0.97", text);
+            var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            Assert.True(lines.Length >= 2);
+
+            var header = lines[0];
+            Assert.Contains("FileName;Status;Typology;TipologiaFamilia;TipologiaVersion", header);
+            Assert.Contains("Clasificador;Confidence;FallbackLLM;DuracionTotalMs", header);
+            Assert.Contains("DetalleProveedores.Reglas.Tipologia", header);
+            Assert.Contains("ReutilizadaPorDuplicado", header);
+
+            var row = lines[1].Split(';');
+            Assert.Equal("doc1.pdf", row[0]);
+            Assert.Equal("OK", row[1]);
+            Assert.Equal("nota.simple.1_4", row[2]);
+            Assert.Equal("RuleBasedTDN", row[11]);
+            Assert.Equal("97,0 % (raw: 0.97)", row[12]);
+            Assert.Equal("false", row[13]);
+            Assert.Equal("1234", row[14]);
         }
         finally
         {
@@ -75,7 +93,8 @@ public class ClassificationExportServiceTests
             var worksheetXml = reader.ReadToEnd();
 
             Assert.Contains("FileName", worksheetXml);
-            Assert.Contains("Resultado_ConfianzaGlobal", worksheetXml);
+            Assert.Contains("Status", worksheetXml);
+            Assert.Contains("Confidence", worksheetXml);
             Assert.Contains("doc1.pdf", worksheetXml);
             Assert.Contains("0.97", worksheetXml);
         }
@@ -87,4 +106,110 @@ public class ClassificationExportServiceTests
             }
         }
     }
+
+        [Fact]
+        public void ExportCsv_PrefersOutputSnapshotAndIncludesProviderDetails()
+        {
+                var service = new ClassificationExportService();
+                var csvPath = Path.Combine(Path.GetTempPath(), $"classification-{Guid.NewGuid():N}.csv");
+                var jsonPath = Path.Combine(Path.GetTempPath(), $"classification-{Guid.NewGuid():N}.json");
+
+                try
+                {
+                        File.WriteAllText(jsonPath, """
+                        {
+                            "Identificacion": {
+                                "Tipologia": "escr.10",
+                                "TipologiaFamilia": "ESCR",
+                                "TipologiaVersion": "1.0",
+                                "FechaProceso": "2026-05-27T10:00:00Z",
+                                "Paginas": "5",
+                                "Tdn1": "ESCR",
+                                "Tdn2": "ESCR-10",
+                                "Matricula": "M-0001"
+                            },
+                            "Resultado": {
+                                "Estado": "VALIDACION_CON_ERRORES",
+                                "ReutilizadaPorDuplicado": true
+                            },
+                            "DetalleEjecucion": {
+                                "PaginasIncluidas": "1-3",
+                                "Clasificacion": {
+                                    "Clasificador": "FoundryRescue",
+                                    "Confianza": "0.62",
+                                    "FallbackLLM": "true",
+                                    "DetalleProveedores": [
+                                        {
+                                            "Proveedor": "Reglas",
+                                            "Tipologia": "escr.10",
+                                            "Confianza": "0.81",
+                                            "MotivoDescarte": "none"
+                                        },
+                                        {
+                                            "Proveedor": "DI",
+                                            "Tipologia": "escr.11",
+                                            "Confianza": "0.44",
+                                            "MotivoDescarte": "low-confidence"
+                                        }
+                                    ]
+                                },
+                                "Seguimiento": {
+                                    "DuracionTotalMs": "4567"
+                                }
+                            }
+                        }
+                        """);
+
+                        service.ExportCsv(csvPath, new[]
+                        {
+                                new ClassificationDocumentItem
+                                {
+                                        FileName = "doc-resumen.pdf",
+                                Status = string.Empty,
+                                TipologiaIdentificada = string.Empty,
+                                ConfianzaGlobal = string.Empty,
+                                        OutputJsonPath = jsonPath
+                                }
+                        });
+
+                        var text = File.ReadAllText(csvPath, Encoding.UTF8);
+                        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                        Assert.True(lines.Length >= 2);
+
+                        var row = lines[1].Split(';');
+                        Assert.Equal("doc-resumen.pdf", row[0]);
+                        Assert.Equal("VALIDACION_CON_ERRORES", row[1]);
+                        Assert.Equal("escr.10", row[2]);
+                        Assert.Equal("ESCR", row[3]);
+                        Assert.Equal("1.0", row[4]);
+                        Assert.Equal("1-3", row[6]);
+                        Assert.Equal("5", row[7]);
+                        Assert.Equal("ESCR", row[8]);
+                        Assert.Equal("ESCR-10", row[9]);
+                        Assert.Equal("M-0001", row[10]);
+                        Assert.Equal("FoundryRescue", row[11]);
+                        Assert.Equal("62,0 % (raw: 0.62)", row[12]);
+                        Assert.Equal("true", row[13]);
+                        Assert.Equal("4567", row[14]);
+                        Assert.Equal("escr.10", row[15]);
+                        Assert.Equal("0.81", row[16]);
+                        Assert.Equal("none", row[17]);
+                        Assert.Equal("escr.11", row[18]);
+                        Assert.Equal("0.44", row[19]);
+                        Assert.Equal("low-confidence", row[20]);
+                        Assert.Equal("true", row[24]);
+                }
+                finally
+                {
+                        if (File.Exists(csvPath))
+                        {
+                                File.Delete(csvPath);
+                        }
+
+                        if (File.Exists(jsonPath))
+                        {
+                                File.Delete(jsonPath);
+                        }
+                }
+        }
 }

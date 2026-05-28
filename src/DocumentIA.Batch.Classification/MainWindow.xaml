@@ -38,6 +38,30 @@
                     <TextBlock Text="Parallel Queues" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
                     <TextBox Text="{Binding NumeroColas, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Padding="6" />
 
+                    <TextBlock Text="Classification flow/provider" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <ComboBox ItemsSource="{Binding ClassificationModeOptions}"
+                              IsEditable="True"
+                              IsTextSearchEnabled="False"
+                              Text="{Binding ClassificationProvider, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              ToolTip="Admite valores directos de routing (ej.: hybrid-rules-di-gpt, hybrid-rules-gpt-di, gpt, di, rules)."
+                              Padding="4" />
+
+                    <TextBlock Text="Classification model" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <TextBox Text="{Binding ClassificationModel, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="auto por defecto."
+                             Padding="6" />
+
+                    <TextBlock Text="Classification level" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <ComboBox ItemsSource="{Binding ClassificationLevelOptions}"
+                              SelectedItem="{Binding ClassificationLevelOption, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                              ToolTip="DEFAULT usa la configuración global del backend."
+                              Padding="4" />
+
+                    <TextBlock Text="Max pages (classification-only)" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,2" />
+                    <TextBox Text="{Binding MaxPagesForClassificationOnly, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Solo aplica cuando Classification Only está activo."
+                             Padding="6" />
+
                     <CheckBox Content="Classification Only"
                               IsChecked="{Binding ClassificationOnly, Mode=TwoWay}"
                               Margin="0,10,0,0" />
@@ -48,6 +72,10 @@
                     <CheckBox Content="Ejecutar Integridad"
                               IsChecked="{Binding EjecutarIntegridad, Mode=TwoWay}"
                               ToolTip="Se aplica como executeIntegrarWhenClassificationOnly cuando Classification Only está activo."
+                              Margin="0,4,0,0" />
+                    <CheckBox Content="Forzar resumen por defecto"
+                              IsChecked="{Binding ForzarResumenPorDefecto, Mode=TwoWay}"
+                              ToolTip="Envía forzarResumenPorDefecto para cubrir casuística de resumen en clasificación." 
                               Margin="0,4,0,0" />
 
                     <Button Content="Save Configuration" Command="{Binding SaveConfigCommand}" Margin="0,12,0,0" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
@@ -208,6 +236,9 @@
 
                             <TextBlock Text="Fallback razón" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
                             <TextBlock Text="{Binding SelectedFile.FallbackRazon}" TextWrapping="Wrap" />
+
+                            <TextBlock Text="Resumen" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
+                            <TextBlock Text="{Binding SelectedFile.Resumen}" TextWrapping="Wrap" MaxHeight="90" />
 
                             <TextBlock Text="Mensaje reutilización" FontSize="10" Foreground="#777" Margin="0,6,0,0" />
                             <TextBlock Text="{Binding SelectedFile.MensajeReutilizacion}" TextWrapping="Wrap" />
