@@ -63,3 +63,12 @@
 - Incluso con petición explícita, pedir confirmación inmediata antes de ejecutar cualquier escritura/cambio y detallar impacto esperado.
 - Si el cambio se aprueba, habilitar escritura de forma temporal (solo para esa operación) y volver a modo solo lectura al finalizar.
 - Si no hay confirmación explícita, limitarse a consultas de lectura y análisis.
+
+## Generación de ficheros temporales
+
+- Cuando se generen ficheros temporales (scripts de análisis, reportes, validaciones, pruebas puntales) que **no son parte del código permanente del repositorio**, guardarlos siempre en: `docs\auxiliares\temps\<FECHA>\<archivo>`
+- Formato de fecha: `YYYY-MM-DD` (ej: `2026-06-02`)
+- Ejemplos de ficheros temporales: análisis CSV, scripts de diagnóstico puntuales, reportes de validación, logs de pruebas, ficheros de configuración de test.
+- La carpeta `docs\auxiliares\temps\` está en `.gitignore`, por lo que no se committearán ficheros ahí automáticamente.
+- Beneficios: organización clara, evita ensuciamiento del repo, trazabilidad por fecha, facilita limpieza posterior.
+- Si un fichero temporal se vuelve permanente o reutilizable, moverlo explícitamente a su ubicación definitiva en el repo.

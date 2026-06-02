@@ -24,3 +24,6 @@ Thumbs.db
 # Local config overrides
 config.local.json
 corpus_20260514_155250.json
+
+# Temporary agent-generated files (analysis, scripts, reports)
+docs/auxiliares/temps/
