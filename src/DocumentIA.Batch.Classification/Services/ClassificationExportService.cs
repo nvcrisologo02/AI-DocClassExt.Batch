@@ -68,6 +68,20 @@ public class ClassificationExportService
         WriteWorksheet(archive, rows);
     }
 
+    public void ExportSimplifiedExcel(string filePath, IEnumerable<ClassificationDocumentItem> items)
+    {
+        var rows = BuildSimplifiedRows(items).ToList();
+
+        using var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
+
+        WriteTextEntry(archive, "[Content_Types].xml", BuildContentTypesXml());
+        WriteTextEntry(archive, "_rels/.rels", BuildRootRelationshipsXml());
+        WriteTextEntry(archive, "xl/workbook.xml", BuildWorkbookXml());
+        WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", BuildWorkbookRelationshipsXml());
+        WriteSimplifiedWorksheet(archive, rows);
+    }
+
     private static IEnumerable<ClassificationExportRow> BuildRows(IEnumerable<ClassificationDocumentItem> items)
     {
         var extractor = new BatchOutputAuditExtractor();
@@ -178,6 +192,71 @@ public class ClassificationExportService
 
         var rowNumber = 1;
         WriteRow(writer, rowNumber++, Headers);
+
+        foreach (var row in rows)
+        {
+            WriteRow(writer, rowNumber++, row.ToValues());
+        }
+
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
+
+    private static IEnumerable<ClassificationSimplifiedExportRow> BuildSimplifiedRows(IEnumerable<ClassificationDocumentItem> items)
+    {
+        var extractor = new BatchOutputAuditExtractor();
+
+        foreach (var item in items)
+        {
+            var fileName = item.FileName ?? string.Empty;
+            var resumen = item.Resumen ?? string.Empty;
+            var typology = item.TipologiaIdentificada ?? string.Empty;
+            var confidenceRaw = item.ConfianzaGlobal ?? string.Empty;
+
+            // Si existe OutputJsonPath, intentar extraer datos adicionales
+            if (!string.IsNullOrWhiteSpace(item.OutputJsonPath))
+            {
+                var audit = extractor.Extract(item.OutputJsonPath);
+                typology = ChooseFirst(typology, audit.IdentificacionTipologiaDetectada);
+                confidenceRaw = ChooseFirst(confidenceRaw, audit.ResultadoConfianzaGlobal);
+
+                // Intentar obtener resumen del snapshot
+                if (TryReadOutputSnapshot(item.OutputJsonPath, out var snapshot))
+                {
+                    if (!string.IsNullOrWhiteSpace(snapshot.Resumen))
+                    {
+                        resumen = snapshot.Resumen;
+                    }
+                }
+            }
+
+            yield return new ClassificationSimplifiedExportRow(
+                fileName,
+                resumen,
+                typology,
+                FormatConfidence(confidenceRaw));
+        }
+    }
+
+    private static void WriteSimplifiedWorksheet(ZipArchive archive, IReadOnlyList<ClassificationSimplifiedExportRow> rows)
+    {
+        var simplifiedHeaders = new[] { "FileName", "Resumen", "Typology", "Confidence" };
+        
+        var entry = archive.CreateEntry("xl/worksheets/sheet1.xml", CompressionLevel.Optimal);
+        var settings = new XmlWriterSettings
+        {
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            Indent = false
+        };
+
+        using var writer = XmlWriter.Create(entry.Open(), settings);
+        writer.WriteStartDocument();
+        writer.WriteStartElement("worksheet", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        writer.WriteStartElement("sheetData");
+
+        var rowNumber = 1;
+        WriteRow(writer, rowNumber++, simplifiedHeaders);
 
         foreach (var row in rows)
         {
@@ -388,6 +467,7 @@ public class ClassificationExportService
             TryGetProperty(output, out var detalle, "DetalleEjecucion", "detalleEjecucion");
             TryGetProperty(detalle, out var clasificacion, "Clasificacion", "clasificacion");
             TryGetProperty(detalle, out var seguimiento, "Seguimiento", "seguimiento");
+            TryGetProperty(output, out var datosExtraidos, "DatosExtraidos", "datosExtraidos");
 
             snapshot.Status = GetString(resultado, "Estado", "estado");
             snapshot.Typology = GetString(identificacion, "Tipologia", "tipologia");
@@ -403,6 +483,9 @@ public class ClassificationExportService
             snapshot.ConfidenceRaw = GetString(clasificacion, "Confianza", "confianza");
             snapshot.FallbackLlm = GetString(clasificacion, "FallbackLLM", "fallbackLLM");
             snapshot.DuracionTotalMs = GetString(seguimiento, "DuracionTotalMs", "duracionTotalMs");
+            snapshot.Resumen = ChooseFirst(
+                GetString(datosExtraidos, "Resumen", "resumen"),
+                GetString(clasificacion, "ResumenCombinado", "resumenCombinado", "Resumen", "resumen"));
 
             if (TryGetProperty(resultado, out var reutilizadaElement, "ReutilizadaPorDuplicado", "reutilizadaPorDuplicado")
                 && reutilizadaElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -492,6 +575,7 @@ public class ClassificationExportService
         public string ConfidenceRaw { get; set; } = string.Empty;
         public string FallbackLlm { get; set; } = string.Empty;
         public string DuracionTotalMs { get; set; } = string.Empty;
+        public string Resumen { get; set; } = string.Empty;
         public bool? ReutilizadaPorDuplicado { get; set; }
         public List<PropuestaProveedor> ProviderDetails { get; } = [];
     }

@@ -68,6 +68,7 @@ public class ClassificationMainViewModel : ObservableObject
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
         ExportCsvCommand = new RelayCommand(_ => ExportCsv(), _ => Files.Count > 0 && !IsProcessing);
         ExportExcelCommand = new RelayCommand(_ => ExportExcel(), _ => Files.Count > 0 && !IsProcessing);
+        ExportSimplifiedExcelCommand = new RelayCommand(_ => ExportSimplifiedExcel(), _ => Files.Count > 0 && !IsProcessing);
 
         Files.CollectionChanged += Files_CollectionChanged;
 
@@ -122,6 +123,8 @@ public class ClassificationMainViewModel : ObservableObject
     public RelayCommand ExportCsvCommand { get; }
 
     public RelayCommand ExportExcelCommand { get; }
+
+    public RelayCommand ExportSimplifiedExcelCommand { get; }
 
     public string BackendUrl
     {
@@ -221,6 +224,7 @@ public class ClassificationMainViewModel : ObservableObject
                 PickFilesCommand.RaiseCanExecuteChanged();
                 ExportCsvCommand.RaiseCanExecuteChanged();
                 ExportExcelCommand.RaiseCanExecuteChanged();
+                ExportSimplifiedExcelCommand.RaiseCanExecuteChanged();
             }
         }
     }
@@ -617,6 +621,31 @@ public class ClassificationMainViewModel : ObservableObject
         ProcessStatus = $"Excel exported: {dialog.FileName}";
     }
 
+    private void ExportSimplifiedExcel()
+    {
+        if (Files.Count == 0)
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "Export Simplified Classification to Excel",
+            Filter = "Excel (*.xlsx)|*.xlsx",
+            FileName = $"DocumentIA_Classification_Simple_{DateTime.Now:yyyyMMdd-HHmmss}.xlsx",
+            AddExtension = true,
+            DefaultExt = ".xlsx"
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        _exportService.ExportSimplifiedExcel(dialog.FileName, Files.ToList());
+        ProcessStatus = $"Simplified Excel exported: {dialog.FileName}";
+    }
+
     private static BatchFileItem MapToOutputFile(ClassificationDocumentItem file)
     {
         return new BatchFileItem
@@ -657,6 +686,7 @@ public class ClassificationMainViewModel : ObservableObject
         ClearBatchCommand.RaiseCanExecuteChanged();
         ExportCsvCommand.RaiseCanExecuteChanged();
         ExportExcelCommand.RaiseCanExecuteChanged();
+        ExportSimplifiedExcelCommand.RaiseCanExecuteChanged();
     }
 
     private static bool IsRunningFile(ClassificationDocumentItem file)
