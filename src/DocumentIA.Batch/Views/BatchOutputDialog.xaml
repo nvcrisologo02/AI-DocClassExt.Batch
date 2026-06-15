@@ -38,6 +38,11 @@
             <Button Content="Copiar"
                     Click="Copy_Click"
                     DockPanel.Dock="Left" />
+            <Button Content="Abrir fichero"
+                    Click="OpenFile_Click"
+                    DockPanel.Dock="Right"
+                    Margin="8,0,0,0"
+                    Background="#059669" />
             <Button Content="Cerrar"
                     Click="Close_Click"
                     DockPanel.Dock="Right"

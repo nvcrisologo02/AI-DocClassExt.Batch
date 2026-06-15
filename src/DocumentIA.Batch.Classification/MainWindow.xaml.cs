@@ -43,7 +43,7 @@ public partial class MainWindow : Window
         }
 
         var outputText = BuildOutputText(item);
-        var dialog = new BatchOutputDialog(item.FileName, outputText)
+        var dialog = new BatchOutputDialog(item.FileName, outputText, item.FullPath)
         {
             Owner = this
         };
