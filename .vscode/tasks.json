@@ -2,20 +2,80 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "run (DocumentIA.Batch)",
+      "label": "build (DocumentIA.Batch)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/DocumentIA.Batch"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Run (build + run) Batch",
       "type": "process",
       "command": "dotnet",
       "args": [
         "run"
       ],
+      "dependsOn": "build (DocumentIA.Batch)",
+      "dependsOrder": "sequence",
       "options": {
         "cwd": "${workspaceFolder}/src/DocumentIA.Batch"
       },
       "isBackground": false,
+      "problemMatcher": "$msCompile",
       "presentation": {
         "reveal": "always",
         "panel": "shared"
       }
+    },
+    {
+      "label": "run (DocumentIA.Batch)",
+      "type": "shell",
+      "dependsOn": "Run (build + run) Batch",
+      "command": "Write-Output 'run batch alias'",
+      "problemMatcher": []
+    },
+    {
+      "label": "build (DocumentIA.Batch.Classification)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/src/DocumentIA.Batch.Classification"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Run (build + run) Batch.classification",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run"
+      ],
+      "dependsOn": "build (DocumentIA.Batch.Classification)",
+      "dependsOrder": "sequence",
+      "options": {
+        "cwd": "${workspaceFolder}/src/DocumentIA.Batch.Classification"
+      },
+      "isBackground": false,
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "run (DocumentIA.Batch.Classification)",
+      "type": "shell",
+      "dependsOn": "Run (build + run) Batch.classification",
+      "command": "Write-Output 'run batch classification alias'",
+      "problemMatcher": []
     }
   ]
 }
