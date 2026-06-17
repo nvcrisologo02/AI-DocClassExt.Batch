@@ -1,6 +1,8 @@
 using System.IO;
 using System.IO.Compression;
+using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Xml;
 using DocumentIA.Batch.Classification.Models;
 using DocumentIA.Batch.Services;
@@ -12,9 +14,30 @@ public class ClassificationExportService
     private static readonly string[] Headers =
     {
         "FileName",
-        "Identificacion_TipoDocumento",
-        "Identificacion_TipologiaDetectada",
-        "Resultado_ConfianzaGlobal"
+        "Status",
+        "Typology",
+        "TipologiaFamilia",
+        "TipologiaVersion",
+        "FechaProceso",
+        "PaginasIncluidas",
+        "Paginas",
+        "Tdn1",
+        "Tdn2",
+        "Matricula",
+        "Clasificador",
+        "Confidence",
+        "FallbackLLM",
+        "DuracionTotalMs",
+        "DetalleProveedores.Reglas.Tipologia",
+        "DetalleProveedores.Reglas.Confianza",
+        "DetalleProveedores.Reglas.MotivoDescarte",
+        "DetalleProveedores.DI.Tipologia",
+        "DetalleProveedores.DI.Confianza",
+        "DetalleProveedores.DI.MotivoDescarte",
+        "DetalleProveedores.FoundryRescue.Tipologia",
+        "DetalleProveedores.FoundryRescue.Confianza",
+        "DetalleProveedores.FoundryRescue.MotivoDescarte",
+        "ReutilizadaPorDuplicado"
     };
 
     public void ExportCsv(string filePath, IEnumerable<ClassificationDocumentItem> items)
@@ -25,7 +48,7 @@ public class ClassificationExportService
 
         foreach (var row in rows)
         {
-            builder.AppendLine(string.Join(';', new[] { row.FileName, row.IdentificacionDocumento, row.TipologiaIdentificada, row.ConfianzaGlobal }.Select(Escape)));
+            builder.AppendLine(string.Join(';', row.ToValues().Select(Escape)));
         }
 
         File.WriteAllText(filePath, builder.ToString(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
@@ -45,26 +68,111 @@ public class ClassificationExportService
         WriteWorksheet(archive, rows);
     }
 
+    public void ExportSimplifiedExcel(string filePath, IEnumerable<ClassificationDocumentItem> items)
+    {
+        var rows = BuildSimplifiedRows(items).ToList();
+
+        using var stream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Create);
+
+        WriteTextEntry(archive, "[Content_Types].xml", BuildContentTypesXml());
+        WriteTextEntry(archive, "_rels/.rels", BuildRootRelationshipsXml());
+        WriteTextEntry(archive, "xl/workbook.xml", BuildWorkbookXml());
+        WriteTextEntry(archive, "xl/_rels/workbook.xml.rels", BuildWorkbookRelationshipsXml());
+        WriteSimplifiedWorksheet(archive, rows);
+    }
+
     private static IEnumerable<ClassificationExportRow> BuildRows(IEnumerable<ClassificationDocumentItem> items)
     {
         var extractor = new BatchOutputAuditExtractor();
 
         foreach (var item in items)
         {
-            var identificacion = item.IdentificacionDocumento;
-            var tipologia = item.TipologiaIdentificada;
-            var confianza = item.ConfianzaGlobal;
+            var status = ChooseFirst(item.ResultadoEstado, item.Status);
+            var typology = item.TipologiaIdentificada;
+            var confidenceRaw = item.ConfianzaGlobal;
+            var providerDetails = item.DetalleProveedores?.ToList() ?? [];
+            var tipologiaFamilia = item.TipologiaFamilia ?? string.Empty;
+            var tipologiaVersion = item.TipologiaVersion ?? string.Empty;
+            var fechaProceso = item.FechaProceso ?? string.Empty;
+            var paginasIncluidas = item.PaginasIncluidas ?? string.Empty;
+            var paginas = item.Paginas ?? string.Empty;
+            var tdn1 = item.Tdn1 ?? string.Empty;
+            var tdn2 = item.Tdn2 ?? string.Empty;
+            var matricula = item.Matricula ?? string.Empty;
+            var clasificador = item.Clasificador ?? string.Empty;
+            var fallbackLlm = item.FallbackLlm ?? string.Empty;
+            var duracionTotalMs = item.DuracionTotalMs ?? string.Empty;
+            var reutilizadaPorDuplicado = item.ReutilizadaPorDuplicado;
 
-            if (!string.IsNullOrWhiteSpace(item.OutputJsonPath)
-                && (string.IsNullOrWhiteSpace(identificacion) || string.IsNullOrWhiteSpace(tipologia) || string.IsNullOrWhiteSpace(confianza)))
+            if (!string.IsNullOrWhiteSpace(item.OutputJsonPath))
             {
                 var audit = extractor.Extract(item.OutputJsonPath);
-                identificacion = string.IsNullOrWhiteSpace(identificacion) ? audit.IdentificacionTipoDocumento : identificacion;
-                tipologia = string.IsNullOrWhiteSpace(tipologia) ? audit.IdentificacionTipologiaDetectada : tipologia;
-                confianza = string.IsNullOrWhiteSpace(confianza) ? audit.ResultadoConfianzaGlobal : confianza;
+
+                status = ChooseFirst(status, audit.ResultadoEstadoCalidad);
+                typology = ChooseFirst(typology, audit.IdentificacionTipologiaDetectada);
+                confidenceRaw = ChooseFirst(confidenceRaw, audit.ResultadoConfianzaGlobal);
             }
 
-            yield return new ClassificationExportRow(item.FileName ?? string.Empty, identificacion ?? string.Empty, tipologia ?? string.Empty, confianza ?? string.Empty);
+            if (!string.IsNullOrWhiteSpace(item.OutputJsonPath)
+                && TryReadOutputSnapshot(item.OutputJsonPath, out var snapshot))
+            {
+                status = ChooseFirst(status, snapshot.Status);
+                typology = ChooseFirst(typology, snapshot.Typology);
+                tipologiaFamilia = ChooseFirst(tipologiaFamilia, snapshot.TipologiaFamilia);
+                tipologiaVersion = ChooseFirst(tipologiaVersion, snapshot.TipologiaVersion);
+                fechaProceso = ChooseFirst(fechaProceso, snapshot.FechaProceso);
+                paginasIncluidas = ChooseFirst(paginasIncluidas, snapshot.PaginasIncluidas);
+                paginas = ChooseFirst(paginas, snapshot.Paginas);
+                tdn1 = ChooseFirst(tdn1, snapshot.Tdn1);
+                tdn2 = ChooseFirst(tdn2, snapshot.Tdn2);
+                matricula = ChooseFirst(matricula, snapshot.Matricula);
+                clasificador = ChooseFirst(clasificador, snapshot.Clasificador);
+                confidenceRaw = ChooseFirst(confidenceRaw, snapshot.ConfidenceRaw);
+                fallbackLlm = ChooseFirst(fallbackLlm, snapshot.FallbackLlm);
+                duracionTotalMs = ChooseFirst(duracionTotalMs, snapshot.DuracionTotalMs);
+
+                if (providerDetails.Count == 0 && snapshot.ProviderDetails.Count > 0)
+                {
+                    providerDetails = snapshot.ProviderDetails;
+                }
+
+                if (snapshot.ReutilizadaPorDuplicado.HasValue)
+                {
+                    reutilizadaPorDuplicado = snapshot.ReutilizadaPorDuplicado.Value;
+                }
+            }
+
+            var reglas = GetProvider(providerDetails, "Reglas");
+            var di = GetProvider(providerDetails, "DI", "DocumentIntelligence");
+            var foundry = GetProvider(providerDetails, "FoundryRescue");
+
+            yield return new ClassificationExportRow(
+                item.FileName ?? string.Empty,
+                status,
+                typology,
+                tipologiaFamilia,
+                tipologiaVersion,
+                fechaProceso,
+                paginasIncluidas,
+                paginas,
+                tdn1,
+                tdn2,
+                matricula,
+                clasificador,
+                FormatConfidence(confidenceRaw),
+                NormalizeBooleanLike(fallbackLlm),
+                duracionTotalMs,
+                reglas?.Tipologia ?? string.Empty,
+                FormatProviderConfidence(reglas?.Confianza),
+                reglas?.MotivoDescarte ?? string.Empty,
+                di?.Tipologia ?? string.Empty,
+                FormatProviderConfidence(di?.Confianza),
+                di?.MotivoDescarte ?? string.Empty,
+                foundry?.Tipologia ?? string.Empty,
+                FormatProviderConfidence(foundry?.Confianza),
+                foundry?.MotivoDescarte ?? string.Empty,
+                reutilizadaPorDuplicado.ToString().ToLowerInvariant());
         }
     }
 
@@ -87,7 +195,72 @@ public class ClassificationExportService
 
         foreach (var row in rows)
         {
-            WriteRow(writer, rowNumber++, new[] { row.FileName, row.IdentificacionDocumento, row.TipologiaIdentificada, row.ConfianzaGlobal });
+            WriteRow(writer, rowNumber++, row.ToValues());
+        }
+
+        writer.WriteEndElement();
+        writer.WriteEndElement();
+        writer.WriteEndDocument();
+    }
+
+    private static IEnumerable<ClassificationSimplifiedExportRow> BuildSimplifiedRows(IEnumerable<ClassificationDocumentItem> items)
+    {
+        var extractor = new BatchOutputAuditExtractor();
+
+        foreach (var item in items)
+        {
+            var fileName = item.FileName ?? string.Empty;
+            var resumen = item.Resumen ?? string.Empty;
+            var typology = item.TipologiaIdentificada ?? string.Empty;
+            var confidenceRaw = item.ConfianzaGlobal ?? string.Empty;
+
+            // Si existe OutputJsonPath, intentar extraer datos adicionales
+            if (!string.IsNullOrWhiteSpace(item.OutputJsonPath))
+            {
+                var audit = extractor.Extract(item.OutputJsonPath);
+                typology = ChooseFirst(typology, audit.IdentificacionTipologiaDetectada);
+                confidenceRaw = ChooseFirst(confidenceRaw, audit.ResultadoConfianzaGlobal);
+
+                // Intentar obtener resumen del snapshot
+                if (TryReadOutputSnapshot(item.OutputJsonPath, out var snapshot))
+                {
+                    if (!string.IsNullOrWhiteSpace(snapshot.Resumen))
+                    {
+                        resumen = snapshot.Resumen;
+                    }
+                }
+            }
+
+            yield return new ClassificationSimplifiedExportRow(
+                fileName,
+                resumen,
+                typology,
+                FormatConfidence(confidenceRaw));
+        }
+    }
+
+    private static void WriteSimplifiedWorksheet(ZipArchive archive, IReadOnlyList<ClassificationSimplifiedExportRow> rows)
+    {
+        var simplifiedHeaders = new[] { "FileName", "Resumen", "Typology", "Confidence" };
+        
+        var entry = archive.CreateEntry("xl/worksheets/sheet1.xml", CompressionLevel.Optimal);
+        var settings = new XmlWriterSettings
+        {
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+            Indent = false
+        };
+
+        using var writer = XmlWriter.Create(entry.Open(), settings);
+        writer.WriteStartDocument();
+        writer.WriteStartElement("worksheet", "http://schemas.openxmlformats.org/spreadsheetml/2006/main");
+        writer.WriteStartElement("sheetData");
+
+        var rowNumber = 1;
+        WriteRow(writer, rowNumber++, simplifiedHeaders);
+
+        foreach (var row in rows)
+        {
+            WriteRow(writer, rowNumber++, row.ToValues());
         }
 
         writer.WriteEndElement();
@@ -179,4 +352,231 @@ public class ClassificationExportService
           <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
         </Relationships>
         """;
+
+    private static string ChooseFirst(params string?[] values)
+    {
+        foreach (var value in values)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                return value;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static PropuestaProveedor? GetProvider(IEnumerable<PropuestaProveedor> providers, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            var provider = providers.FirstOrDefault(p => string.Equals(p.Proveedor, name, StringComparison.OrdinalIgnoreCase));
+            if (provider is not null)
+            {
+                return provider;
+            }
+        }
+
+        return null;
+    }
+
+    private static string NormalizeBooleanLike(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        return bool.TryParse(value, out var parsed)
+            ? parsed.ToString().ToLowerInvariant()
+            : value;
+    }
+
+    private static string FormatProviderConfidence(double? confidence)
+    {
+        if (!confidence.HasValue)
+        {
+            return string.Empty;
+        }
+
+        return confidence.Value.ToString("0.####", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatConfidence(string value)
+    {
+        if (!TryParseConfidence(value, out var raw))
+        {
+            return value ?? string.Empty;
+        }
+
+        var pct = Math.Round(raw * 100, 1);
+        var pctText = pct.ToString("0.0", CultureInfo.GetCultureInfo("es-ES"));
+        var rawText = raw.ToString("0.####", CultureInfo.InvariantCulture);
+        return $"{pctText} % (raw: {rawText})";
+    }
+
+    private static bool TryParseConfidence(string? value, out double normalized)
+    {
+        normalized = 0d;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var cleaned = value.Replace("%", string.Empty, StringComparison.Ordinal).Trim();
+        if (!double.TryParse(cleaned, NumberStyles.Float, CultureInfo.InvariantCulture, out normalized)
+            && !double.TryParse(cleaned, NumberStyles.Float, CultureInfo.CurrentCulture, out normalized)
+            && !double.TryParse(cleaned, NumberStyles.Float, CultureInfo.GetCultureInfo("es-ES"), out normalized))
+        {
+            return false;
+        }
+
+        if (normalized > 1d && normalized <= 100d)
+        {
+            normalized /= 100d;
+        }
+
+        return normalized >= 0d;
+    }
+
+    private static bool TryReadOutputSnapshot(string outputJsonPath, out OutputSnapshot snapshot)
+    {
+        snapshot = new OutputSnapshot();
+
+        if (!File.Exists(outputJsonPath))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(outputJsonPath, Encoding.UTF8));
+            JsonElement output;
+            if (TryGetProperty(doc.RootElement, out var wrappedOutput, "output", "Output"))
+            {
+                output = wrappedOutput;
+            }
+            else
+            {
+                // In desktop batch runs we persist the orchestration output directly (without wrapper).
+                output = doc.RootElement;
+            }
+
+            TryGetProperty(output, out var identificacion, "Identificacion", "identificacion");
+            TryGetProperty(output, out var resultado, "Resultado", "resultado");
+            TryGetProperty(output, out var detalle, "DetalleEjecucion", "detalleEjecucion");
+            TryGetProperty(detalle, out var clasificacion, "Clasificacion", "clasificacion");
+            TryGetProperty(detalle, out var seguimiento, "Seguimiento", "seguimiento");
+            TryGetProperty(output, out var datosExtraidos, "DatosExtraidos", "datosExtraidos");
+
+            snapshot.Status = GetString(resultado, "Estado", "estado");
+            snapshot.Typology = GetString(identificacion, "Tipologia", "tipologia");
+            snapshot.TipologiaFamilia = GetString(identificacion, "TipologiaFamilia", "tipologiaFamilia");
+            snapshot.TipologiaVersion = GetString(identificacion, "TipologiaVersion", "tipologiaVersion");
+            snapshot.FechaProceso = GetString(identificacion, "FechaProceso", "fechaProceso");
+            snapshot.Paginas = GetString(identificacion, "Paginas", "paginas");
+            snapshot.Tdn1 = GetString(identificacion, "Tdn1", "tdn1");
+            snapshot.Tdn2 = GetString(identificacion, "Tdn2", "tdn2");
+            snapshot.Matricula = GetString(identificacion, "Matricula", "matricula");
+            snapshot.PaginasIncluidas = GetString(detalle, "PaginasIncluidas", "paginasIncluidas");
+            snapshot.Clasificador = GetString(clasificacion, "Clasificador", "clasificador", "Modelo", "modelo");
+            snapshot.ConfidenceRaw = GetString(clasificacion, "Confianza", "confianza");
+            snapshot.FallbackLlm = GetString(clasificacion, "FallbackLLM", "fallbackLLM");
+            snapshot.DuracionTotalMs = GetString(seguimiento, "DuracionTotalMs", "duracionTotalMs");
+            snapshot.Resumen = ChooseFirst(
+                GetString(datosExtraidos, "Resumen", "resumen"),
+                GetString(clasificacion, "ResumenCombinado", "resumenCombinado", "Resumen", "resumen"));
+
+            if (TryGetProperty(resultado, out var reutilizadaElement, "ReutilizadaPorDuplicado", "reutilizadaPorDuplicado")
+                && reutilizadaElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                snapshot.ReutilizadaPorDuplicado = reutilizadaElement.GetBoolean();
+            }
+
+            if (TryGetProperty(clasificacion, out var providers, "DetalleProveedores", "detalleProveedores")
+                && providers.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var provider in providers.EnumerateArray())
+                {
+                    var confidenceText = GetString(provider, "Confianza", "confianza");
+                    _ = double.TryParse(confidenceText, NumberStyles.Float, CultureInfo.InvariantCulture, out var confidence);
+
+                    snapshot.ProviderDetails.Add(new PropuestaProveedor
+                    {
+                        Proveedor = GetString(provider, "Proveedor", "proveedor"),
+                        Tipologia = GetString(provider, "Tipologia", "tipologia"),
+                        Confianza = confidence,
+                        MotivoDescarte = GetString(provider, "MotivoDescarte", "motivoDescarte")
+                    });
+                }
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static string GetString(JsonElement element, params string[] names)
+    {
+        if (!TryGetProperty(element, out var value, names))
+        {
+            return string.Empty;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number => value.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => string.Empty
+        };
+    }
+
+    private static bool TryGetProperty(JsonElement element, out JsonElement property, params string[] names)
+    {
+        property = default;
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        foreach (var name in names)
+        {
+            foreach (var current in element.EnumerateObject())
+            {
+                if (string.Equals(current.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    property = current.Value;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private sealed class OutputSnapshot
+    {
+        public string Status { get; set; } = string.Empty;
+        public string Typology { get; set; } = string.Empty;
+        public string TipologiaFamilia { get; set; } = string.Empty;
+        public string TipologiaVersion { get; set; } = string.Empty;
+        public string FechaProceso { get; set; } = string.Empty;
+        public string PaginasIncluidas { get; set; } = string.Empty;
+        public string Paginas { get; set; } = string.Empty;
+        public string Tdn1 { get; set; } = string.Empty;
+        public string Tdn2 { get; set; } = string.Empty;
+        public string Matricula { get; set; } = string.Empty;
+        public string Clasificador { get; set; } = string.Empty;
+        public string ConfidenceRaw { get; set; } = string.Empty;
+        public string FallbackLlm { get; set; } = string.Empty;
+        public string DuracionTotalMs { get; set; } = string.Empty;
+        public string Resumen { get; set; } = string.Empty;
+        public bool? ReutilizadaPorDuplicado { get; set; }
+        public List<PropuestaProveedor> ProviderDetails { get; } = [];
+    }
 }

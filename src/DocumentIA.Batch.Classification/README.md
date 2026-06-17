@@ -6,10 +6,9 @@ Aplicacion WPF .NET 8 para clasificacion documental por lotes basada en el batch
 
 - Carga de PDFs por lote.
 - Clasificacion contra el backend existente reutilizando el cliente HTTP del batch actual.
-- Exportacion minima a CSV y Excel.
-- Columnas de salida:
-  - Identificacion del documento.
-  - Tipologia identificada.
+- Exportacion extendida a CSV y Excel con metadatos de clasificacion, trazabilidad y proveedores.
+- Panel de resumen por documento seleccionado con estado, decision de clasificacion, justificacion y timeline de actividades.
+- Opcion de forzar resumen por defecto (`forzarResumenPorDefecto`) para pruebas de casuistica de resumen.
 
 ## Reutilizacion del batch actual
 
@@ -37,6 +36,7 @@ dotnet build DocumentIA.Batch.sln
 
 ## Notas
 
-- La exportacion esta reducida a dos campos funcionales para mantener el contrato estable.
+- La exportacion incluye estado, tipologia, familia/version, TDN1/TDN2, matricula, clasificador,
+  confianza, fallback, duracion, detalle por proveedores y marca de reutilizacion por duplicado.
 - El JSON bruto sigue guardandose por lote para trazabilidad y depuracion.
 - La app esta pensada como base limpia para evolucionar sin arrastrar la UI completa del batch original.

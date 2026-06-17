@@ -1,5 +1,7 @@
 using System.IO;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Unicode;
 using DocumentIA.Batch.Models;
 
 namespace DocumentIA.Batch.Services;
@@ -8,7 +10,8 @@ public class BatchRunStorageService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        WriteIndented = true
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
     };
 
     public string CreateRunFolder()

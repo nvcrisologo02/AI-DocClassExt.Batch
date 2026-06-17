@@ -1402,7 +1402,7 @@ public class MainViewModel : ObservableObject
         }
 
         var outputText = BuildOutputText(file);
-        var dialog = new BatchOutputDialog(file.FileName, outputText)
+        var dialog = new BatchOutputDialog(file.FileName, outputText, file.FullPath)
         {
             Owner = Application.Current.MainWindow
         };

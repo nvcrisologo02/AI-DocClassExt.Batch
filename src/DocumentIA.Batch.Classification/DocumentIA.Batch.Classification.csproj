@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DocumentIA.Batch\DocumentIA.Batch.csproj" />
+    <ProjectReference Include="..\DocumentIA.Batch.Markdown\DocumentIA.Batch.Markdown.csproj" />
   </ItemGroup>
 
 </Project>

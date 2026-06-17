@@ -94,20 +94,54 @@ public class DocumentIaBackendClient
         CancellationToken cancellationToken)
     {
         var normalizedFunctionKey = NormalizeFunctionKey(functionKey);
-        var body = JsonSerializer.Serialize(request, JsonOptions);
         var endpoints = new[]
         {
             BuildEndpoint(backendUrl, "/api/ingest", normalizedFunctionKey),
             BuildEndpoint(backendUrl, "/api/IngestDocument", normalizedFunctionKey)
         };
 
+        // Blob-first: si hay base64 → enviar como multipart/form-data (file + metadata)
+        // El servidor sube el blob y el orquestador nunca maneja base64 grande en Durable.
+        var hasBase64 = !string.IsNullOrWhiteSpace(request.Documento.Content.Base64);
+        byte[]? fileBytes = hasBase64 ? Convert.FromBase64String(request.Documento.Content.Base64) : null;
+
         HttpStatusCode lastStatusCode = HttpStatusCode.NotFound;
 
         foreach (var endpoint in endpoints)
         {
+            HttpContent httpContent;
+            if (hasBase64 && fileBytes is not null)
+            {
+                // Serializar metadata sin base64 (el servidor la ignorará de todos modos)
+                var metadataSinBase64 = new IngestRequest
+                {
+                    Instrucciones = request.Instrucciones,
+                    Trazabilidad = request.Trazabilidad,
+                    Documento = new IngestDocumento
+                    {
+                        Name = request.Documento.Name,
+                        Content = new IngestDocumentoContent { Base64 = string.Empty }
+                    }
+                };
+                var metadataJson = JsonSerializer.Serialize(metadataSinBase64, JsonOptions);
+
+                var multipart = new MultipartFormDataContent();
+                multipart.Add(new StringContent(metadataJson, Encoding.UTF8, "application/json"), "metadata");
+                var fileContent = new ByteArrayContent(fileBytes);
+                fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+                multipart.Add(fileContent, "file", request.Documento.Name);
+                httpContent = multipart;
+            }
+            else
+            {
+                // Flujo legado JSON (sin contenido de fichero: ObjectIdGDC o base64 pequeño)
+                var body = JsonSerializer.Serialize(request, JsonOptions);
+                httpContent = new StringContent(body, Encoding.UTF8, "application/json");
+            }
+
             using var httpRequest = new HttpRequestMessage(HttpMethod.Post, endpoint)
             {
-                Content = new StringContent(body, Encoding.UTF8, "application/json")
+                Content = httpContent
             };
 
             if (!string.IsNullOrWhiteSpace(normalizedFunctionKey))
@@ -346,6 +380,12 @@ public class IngestInstrucciones
     [JsonPropertyName("executeIntegrarWhenClassificationOnly")]
     public bool? ExecuteIntegrarWhenClassificationOnly { get; set; }
 
+    [JsonPropertyName("maxPagesForClassificationOnly")]
+    public int MaxPagesForClassificationOnly { get; set; }
+
+    [JsonPropertyName("forzarResumenPorDefecto")]
+    public bool? ForzarResumenPorDefecto { get; set; }
+
     [JsonPropertyName("skipDuplicateCheck")]
     public bool SkipDuplicateCheck { get; set; }
 
@@ -384,6 +424,9 @@ public class IngestIaConfig
 
     [JsonPropertyName("model")]
     public string Model { get; set; } = "auto";
+
+    [JsonPropertyName("nivelClasificacion")]
+    public string? NivelClasificacion { get; set; }
 
     [JsonPropertyName("umbral")]
     public double? Umbral { get; set; }
