@@ -107,6 +107,139 @@ public class ClassificationExportServiceTests
         }
     }
 
+    [Fact]
+    public void ExportSimplifiedExcel_WritesRequestedHeadersAndValues()
+    {
+        var service = new ClassificationExportService();
+        var path = Path.Combine(Path.GetTempPath(), $"classification-simplified-{Guid.NewGuid():N}.xlsx");
+
+        try
+        {
+            service.ExportSimplifiedExcel(path, new[]
+            {
+                new ClassificationDocumentItem
+                {
+                    FileName = "doc-simple.pdf",
+                    Status = "Completado",
+                    ResultadoEstado = "OK",
+                    TipologiaIdentificada = "nota.simple.1_4",
+                    PaginasIncluidas = "1-2",
+                    Paginas = "4",
+                    Tdn1 = "NS",
+                    Tdn2 = "NS-14",
+                    Matricula = "MAT-001",
+                    Clasificador = "RuleBasedTDN",
+                    ConfianzaGlobal = "0.93",
+                    DuracionTotalMs = "987",
+                    Resumen = "Documento con nota simple.",
+                    TipologiaNombre = "Nota Simple"
+                }
+            });
+
+            using var archive = ZipFile.OpenRead(path);
+            using var sheetStream = archive.GetEntry("xl/worksheets/sheet1.xml")!.Open();
+            using var reader = new StreamReader(sheetStream, Encoding.UTF8);
+            var worksheetXml = reader.ReadToEnd();
+
+            Assert.Contains("Filename", worksheetXml);
+            Assert.Contains("Status", worksheetXml);
+            Assert.Contains("Rsultado", worksheetXml);
+            Assert.Contains("Tipologia", worksheetXml);
+            Assert.Contains("PaginasIncluidas", worksheetXml);
+            Assert.Contains("Paginas", worksheetXml);
+            Assert.Contains("Tdn1", worksheetXml);
+            Assert.Contains("Tdn2", worksheetXml);
+            Assert.Contains("Matricula", worksheetXml);
+            Assert.Contains("Clasificador", worksheetXml);
+            Assert.Contains("Confidence", worksheetXml);
+            Assert.Contains("DuracionTotalMs", worksheetXml);
+            Assert.Contains("Resumen", worksheetXml);
+            Assert.Contains("TiplogiaVirtual", worksheetXml);
+            Assert.Contains("EsTipologiaVirtual", worksheetXml);
+
+            Assert.Contains("doc-simple.pdf", worksheetXml);
+            Assert.Contains("Completado", worksheetXml);
+            Assert.Contains("OK", worksheetXml);
+            Assert.Contains("nota.simple.1_4", worksheetXml);
+            Assert.Contains("1-2", worksheetXml);
+            Assert.Contains("4", worksheetXml);
+            Assert.Contains("NS", worksheetXml);
+            Assert.Contains("NS-14", worksheetXml);
+            Assert.Contains("MAT-001", worksheetXml);
+            Assert.Contains("RuleBasedTDN", worksheetXml);
+            Assert.Contains("93,0 % (raw: 0.93)", worksheetXml);
+            Assert.Contains("987", worksheetXml);
+            Assert.Contains("Documento con nota simple.", worksheetXml);
+            Assert.Contains("Nota Simple", worksheetXml);
+            Assert.Contains("false", worksheetXml);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+    }
+
+        [Fact]
+        public void ExportSimplifiedExcel_MarksTipologiaVirtualAsPropuesta_WhenClasificacionParcial()
+        {
+                var service = new ClassificationExportService();
+                var excelPath = Path.Combine(Path.GetTempPath(), $"classification-simplified-{Guid.NewGuid():N}.xlsx");
+                var jsonPath = Path.Combine(Path.GetTempPath(), $"classification-simplified-{Guid.NewGuid():N}.json");
+
+                try
+                {
+                        File.WriteAllText(jsonPath, """
+                        {
+                            "Identificacion": {
+                                "TipologiaNombre": "Contrato de arrendamiento",
+                                "PropuestaTipologia": "Contrato de arrendamiento"
+                            },
+                            "Resultado": {
+                                "Estado": "REVISION"
+                            },
+                            "DetalleEjecucion": {
+                                "Clasificacion": {
+                                    "ClasificacionParcial": true,
+                                    "PropuestaTipologia": "Contrato de arrendamiento"
+                                }
+                            }
+                        }
+                        """);
+
+                        service.ExportSimplifiedExcel(excelPath, new[]
+                        {
+                                new ClassificationDocumentItem
+                                {
+                                        FileName = "doc-propuesta.pdf",
+                                        OutputJsonPath = jsonPath
+                                }
+                        });
+
+                        using var archive = ZipFile.OpenRead(excelPath);
+                        using var sheetStream = archive.GetEntry("xl/worksheets/sheet1.xml")!.Open();
+                        using var reader = new StreamReader(sheetStream, Encoding.UTF8);
+                        var worksheetXml = reader.ReadToEnd();
+
+                        Assert.Contains("Contrato de arrendamiento", worksheetXml);
+                        Assert.Contains("true", worksheetXml);
+                }
+                finally
+                {
+                        if (File.Exists(excelPath))
+                        {
+                                File.Delete(excelPath);
+                        }
+
+                        if (File.Exists(jsonPath))
+                        {
+                                File.Delete(jsonPath);
+                        }
+                }
+        }
+
         [Fact]
         public void ExportCsv_PrefersOutputSnapshotAndIncludesProviderDetails()
         {

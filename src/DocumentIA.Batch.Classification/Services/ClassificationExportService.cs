@@ -210,20 +210,45 @@ public class ClassificationExportService
         foreach (var item in items)
         {
             var fileName = item.FileName ?? string.Empty;
+            var status = item.Status ?? string.Empty;
+            var resultado = item.ResultadoEstado ?? string.Empty;
+            var tipologia = item.TipologiaIdentificada ?? string.Empty;
+            var paginasIncluidas = item.PaginasIncluidas ?? string.Empty;
+            var paginas = item.Paginas ?? string.Empty;
+            var tdn1 = item.Tdn1 ?? string.Empty;
+            var tdn2 = item.Tdn2 ?? string.Empty;
+            var matricula = item.Matricula ?? string.Empty;
+            var clasificador = item.Clasificador ?? string.Empty;
+            var duracionTotalMs = item.DuracionTotalMs ?? string.Empty;
             var resumen = item.Resumen ?? string.Empty;
-            var typology = item.TipologiaIdentificada ?? string.Empty;
+            var tipologiaVirtual = item.TipologiaNombre ?? string.Empty;
+            var esTipologiaVirtual = false;
             var confidenceRaw = item.ConfianzaGlobal ?? string.Empty;
 
             // Si existe OutputJsonPath, intentar extraer datos adicionales
             if (!string.IsNullOrWhiteSpace(item.OutputJsonPath))
             {
                 var audit = extractor.Extract(item.OutputJsonPath);
-                typology = ChooseFirst(typology, audit.IdentificacionTipologiaDetectada);
+                tipologia = ChooseFirst(tipologia, audit.IdentificacionTipologiaDetectada);
                 confidenceRaw = ChooseFirst(confidenceRaw, audit.ResultadoConfianzaGlobal);
 
                 // Intentar obtener resumen del snapshot
                 if (TryReadOutputSnapshot(item.OutputJsonPath, out var snapshot))
                 {
+                    status = ChooseFirst(status, snapshot.Status);
+                    resultado = ChooseFirst(resultado, snapshot.Status);
+                    tipologia = ChooseFirst(tipologia, snapshot.Typology);
+                    paginasIncluidas = ChooseFirst(paginasIncluidas, snapshot.PaginasIncluidas);
+                    paginas = ChooseFirst(paginas, snapshot.Paginas);
+                    tdn1 = ChooseFirst(tdn1, snapshot.Tdn1);
+                    tdn2 = ChooseFirst(tdn2, snapshot.Tdn2);
+                    matricula = ChooseFirst(matricula, snapshot.Matricula);
+                    clasificador = ChooseFirst(clasificador, snapshot.Clasificador);
+                    confidenceRaw = ChooseFirst(confidenceRaw, snapshot.ConfidenceRaw);
+                    duracionTotalMs = ChooseFirst(duracionTotalMs, snapshot.DuracionTotalMs);
+                    tipologiaVirtual = ChooseFirst(tipologiaVirtual, snapshot.TipologiaNombre);
+                    esTipologiaVirtual = snapshot.EsTipologiaVirtual;
+
                     if (!string.IsNullOrWhiteSpace(snapshot.Resumen))
                     {
                         resumen = snapshot.Resumen;
@@ -233,15 +258,43 @@ public class ClassificationExportService
 
             yield return new ClassificationSimplifiedExportRow(
                 fileName,
+                status,
+                resultado,
+                tipologia,
+                paginasIncluidas,
+                paginas,
+                tdn1,
+                tdn2,
+                matricula,
+                clasificador,
+                FormatConfidence(confidenceRaw),
+                duracionTotalMs,
                 resumen,
-                typology,
-                FormatConfidence(confidenceRaw));
+                tipologiaVirtual,
+                esTipologiaVirtual.ToString().ToLowerInvariant());
         }
     }
 
     private static void WriteSimplifiedWorksheet(ZipArchive archive, IReadOnlyList<ClassificationSimplifiedExportRow> rows)
     {
-        var simplifiedHeaders = new[] { "FileName", "Resumen", "Typology", "Confidence" };
+        var simplifiedHeaders = new[]
+        {
+            "Filename",
+            "Status",
+            "Rsultado",
+            "Tipologia",
+            "PaginasIncluidas",
+            "Paginas",
+            "Tdn1",
+            "Tdn2",
+            "Matricula",
+            "Clasificador",
+            "Confidence",
+            "DuracionTotalMs",
+            "Resumen",
+            "TiplogiaVirtual",
+            "EsTipologiaVirtual"
+        };
         
         var entry = archive.CreateEntry("xl/worksheets/sheet1.xml", CompressionLevel.Optimal);
         var settings = new XmlWriterSettings
@@ -478,14 +531,26 @@ public class ClassificationExportService
             snapshot.Tdn1 = GetString(identificacion, "Tdn1", "tdn1");
             snapshot.Tdn2 = GetString(identificacion, "Tdn2", "tdn2");
             snapshot.Matricula = GetString(identificacion, "Matricula", "matricula");
+            snapshot.TipologiaNombre = GetString(identificacion, "TipologiaNombre", "tipologiaNombre");
             snapshot.PaginasIncluidas = GetString(detalle, "PaginasIncluidas", "paginasIncluidas");
             snapshot.Clasificador = GetString(clasificacion, "Clasificador", "clasificador", "Modelo", "modelo");
             snapshot.ConfidenceRaw = GetString(clasificacion, "Confianza", "confianza");
             snapshot.FallbackLlm = GetString(clasificacion, "FallbackLLM", "fallbackLLM");
             snapshot.DuracionTotalMs = GetString(seguimiento, "DuracionTotalMs", "duracionTotalMs");
+            snapshot.PropuestaTipologia = ChooseFirst(
+                GetString(identificacion, "PropuestaTipologia", "propuestaTipologia"),
+                GetString(clasificacion, "PropuestaTipologia", "propuestaTipologia"));
             snapshot.Resumen = ChooseFirst(
                 GetString(datosExtraidos, "Resumen", "resumen"),
                 GetString(clasificacion, "ResumenCombinado", "resumenCombinado", "Resumen", "resumen"));
+
+            if (TryGetProperty(clasificacion, out var clasificacionParcial, "ClasificacionParcial", "clasificacionParcial")
+                && clasificacionParcial.ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                snapshot.ClasificacionParcial = clasificacionParcial.GetBoolean();
+            }
+
+            snapshot.EsTipologiaVirtual = snapshot.ClasificacionParcial || !string.IsNullOrWhiteSpace(snapshot.PropuestaTipologia);
 
             if (TryGetProperty(resultado, out var reutilizadaElement, "ReutilizadaPorDuplicado", "reutilizadaPorDuplicado")
                 && reutilizadaElement.ValueKind is JsonValueKind.True or JsonValueKind.False)
@@ -571,6 +636,10 @@ public class ClassificationExportService
         public string Tdn1 { get; set; } = string.Empty;
         public string Tdn2 { get; set; } = string.Empty;
         public string Matricula { get; set; } = string.Empty;
+        public string TipologiaNombre { get; set; } = string.Empty;
+        public string PropuestaTipologia { get; set; } = string.Empty;
+        public bool ClasificacionParcial { get; set; }
+        public bool EsTipologiaVirtual { get; set; }
         public string Clasificador { get; set; } = string.Empty;
         public string ConfidenceRaw { get; set; } = string.Empty;
         public string FallbackLlm { get; set; } = string.Empty;
