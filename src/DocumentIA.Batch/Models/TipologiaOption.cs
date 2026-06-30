@@ -11,16 +11,14 @@ public class TipologiaOption
     /// <summary>Nombre legible del backend, ej: "Nota Simple"</summary>
     public string Nombre { get; set; } = string.Empty;
 
-    /// <summary>Texto a mostrar en el ComboBox, igual que Desktop: "Nota Simple  1.4"</summary>
+    /// <summary>Texto a mostrar en el ComboBox: nombre y código, ej. "Nota Simple (nota.simple.1_4)"</summary>
     public string Display
     {
         get
         {
             if (string.IsNullOrWhiteSpace(Nombre)) return Code;
-            var atIdx = Identificador.IndexOf('@');
-            if (atIdx >= 0 && atIdx < Identificador.Length - 1)
-                return $"{Nombre}  {Identificador[(atIdx + 1)..]}";
-            return Nombre;
+            if (string.IsNullOrWhiteSpace(Code)) return Nombre;
+            return $"{Nombre} ({Code})";
         }
     }
 

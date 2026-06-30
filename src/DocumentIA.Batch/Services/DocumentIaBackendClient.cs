@@ -34,9 +34,10 @@ public class DocumentIaBackendClient
         var tipologias = await JsonSerializer.DeserializeAsync<List<TipologiaPublicaDto>>(responseStream, JsonOptions, cancellationToken)
             ?? new List<TipologiaPublicaDto>();
 
-        // Deduplica por código (parte antes del @) preservando nombre y identificador completo
+        // Solo tipologías con extracción habilitada y deduplicadas por código (parte antes del @),
+        // preservando nombre y identificador completo
         return tipologias
-            .Where(x => !string.IsNullOrWhiteSpace(x.Identificador))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Identificador) && x.Extraction)
             .GroupBy(x => NormalizeTipologiaCode(x.Identificador), StringComparer.OrdinalIgnoreCase)
             .Select(g => g.First())
             .ToList();
@@ -499,4 +500,12 @@ public class TipologiaPublicaDto
 
     [JsonPropertyName("nombre")]
     public string Nombre { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Indica si la tipología tiene la extracción habilitada (ConfiguracionJson.Extraction.Enabled en backend).
+    /// El listado del batch solo muestra tipologías con extraction=true.
+    /// Por defecto true para compatibilidad con backends antiguos que no informan el campo.
+    /// </summary>
+    [JsonPropertyName("extraction")]
+    public bool Extraction { get; set; } = true;
 }
