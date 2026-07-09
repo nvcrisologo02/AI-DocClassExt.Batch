@@ -354,6 +354,7 @@ public class MainViewModel : ObservableObject
                 ExportExcelCommand.RaiseCanExecuteChanged();
                 CopyCorrelationIdCommand.RaiseCanExecuteChanged();
                 CopyInstanceIdCommand.RaiseCanExecuteChanged();
+                ManageEnvironmentsCommand.RaiseCanExecuteChanged();
             }
         }
     }
