@@ -282,11 +282,17 @@
 
                         <TextBlock Text="HERRAMIENTAS" Foreground="#64748B" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,10" />
 
-                        <TextBlock Text="Backend URL" Foreground="{StaticResource BrushMuted}" />
-                        <TextBox Text="{Binding BackendUrl, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,10" />
-
-                        <TextBlock Text="Function Key" Foreground="{StaticResource BrushMuted}" />
-                        <TextBox Text="{Binding FunctionKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,12" />
+                        <TextBlock Text="Entorno" Foreground="{StaticResource BrushMuted}" />
+                        <ComboBox ItemsSource="{Binding Environments}"
+                                  DisplayMemberPath="Name"
+                                  SelectedItem="{Binding SelectedEnvironment, Mode=TwoWay}"
+                                  Height="32"
+                                  Margin="0,4,0,6" />
+                        <TextBlock Text="{Binding EffectiveBackendUrl, StringFormat=Endpoint: {0}}"
+                                   Foreground="#94A3B8"
+                                   FontSize="10"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,12" />
 
                         <Button Content="Guardar configuración"
                                 Command="{Binding SaveConfigCommand}"

@@ -23,8 +23,8 @@ public class MainViewModel : ObservableObject
     private readonly BatchExcelExportService _excelExportService;
     private readonly BatchHistorialService _historialService;
 
-    private string _backendUrl = string.Empty;
-    private string _functionKey = string.Empty;
+    private EnvironmentConfig? _selectedEnvironment;
+    private bool _isLoadingConfig;
     private TipologiaOption? _selectedTipologia;
     private bool _promptingEnabled;
     private bool _sobreescribirUmbrales;
@@ -43,8 +43,6 @@ public class MainViewModel : ObservableObject
     private readonly DispatcherTimer _healthTimer;
     private bool _isRefreshingHealth;
     private Dictionary<string, PromptOverride> _promptOverrides = new(StringComparer.OrdinalIgnoreCase);
-
-    private const string DefaultBackendUrl = "https://srbappprodocai.azurewebsites.net";
 
     public MainViewModel() : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new BatchCsvExportService(), new BatchExcelExportService(), new BatchHistorialService())
     {
@@ -80,7 +78,7 @@ public class MainViewModel : ObservableObject
         PickFilesCommand = new RelayCommand(_ => PickFiles(), _ => !IsProcessing);
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
         EditPromptCommand = new RelayCommand(_ => EditPrompt(), _ => SelectedTipologia is not null);
-        RefreshTipologiasCommand = new RelayCommand(_ => _ = RefreshTipologiasAsync(), _ => !IsProcessing && !string.IsNullOrWhiteSpace(BackendUrl));
+        RefreshTipologiasCommand = new RelayCommand(_ => _ = RefreshTipologiasAsync(), _ => !IsProcessing && !string.IsNullOrWhiteSpace(EffectiveBackendUrl));
         RefreshHealthCommand = new RelayCommand(_ => _ = RefreshHealthAsync());
         StartProcessingCommand = new RelayCommand(_ => _ = StartProcessingAsync(), _ => CanProcess());
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
@@ -155,28 +153,34 @@ public class MainViewModel : ObservableObject
 
     public RelayCommand CopyInstanceIdCommand { get; }
 
-    public string BackendUrl
+    public ObservableCollection<EnvironmentConfig> Environments { get; } = new();
+
+    public EnvironmentConfig? SelectedEnvironment
     {
-        get => _backendUrl;
+        get => _selectedEnvironment;
         set
         {
-            if (SetProperty(ref _backendUrl, value))
+            if (SetProperty(ref _selectedEnvironment, value))
             {
                 OnPropertyChanged(nameof(EffectiveBackendUrl));
+                OnPropertyChanged(nameof(EffectiveFunctionKey));
                 RefreshTipologiasCommand.RaiseCanExecuteChanged();
                 StartProcessingCommand.RaiseCanExecuteChanged();
                 RetryFailedCommand.RaiseCanExecuteChanged();
+
+                if (!_isLoadingConfig && value is not null)
+                {
+                    PersistConfig();
+                    _ = RefreshTipologiasAsync();
+                    _ = RefreshHealthAsync();
+                }
             }
         }
     }
 
-    public string EffectiveBackendUrl => string.IsNullOrWhiteSpace(BackendUrl) ? DefaultBackendUrl : BackendUrl.Trim();
+    public string EffectiveBackendUrl => SelectedEnvironment?.BackendUrl?.Trim() ?? string.Empty;
 
-    public string FunctionKey
-    {
-        get => _functionKey;
-        set => SetProperty(ref _functionKey, value);
-    }
+    public string EffectiveFunctionKey => SelectedEnvironment?.FunctionKey ?? string.Empty;
 
     private bool _isSystemOnline = true;
     public bool IsSystemOnline
@@ -503,32 +507,46 @@ public class MainViewModel : ObservableObject
 
     private void LoadConfig()
     {
-        var config = _settingsService.Load();
-        BackendUrl = string.IsNullOrWhiteSpace(config.BackendUrl)
-            || string.Equals(config.BackendUrl.Trim(), "http://localhost:7071", StringComparison.OrdinalIgnoreCase)
-            ? DefaultBackendUrl
-            : config.BackendUrl;
-        FunctionKey = config.FunctionKey;
-        PromptingEnabled = config.PromptingEnabled;
-        SobreescribirUmbrales = config.SobreescribirUmbrales;
-        UmbralExtraccion = string.IsNullOrWhiteSpace(config.UmbralExtraccion) ? "0.80" : config.UmbralExtraccion;
-        UmbralExtraccionCompletitud = config.UmbralExtraccionCompletitud;
-        UmbralExtraccionConfianza = config.UmbralExtraccionConfianza;
-        NumeroColas = config.NumeroColas;
-        EjecutarConAssetResolver = config.EjecutarConAssetResolver;
-        AssetResolverCamposSolicitados = config.AssetResolverCamposSolicitados;
-        SubirAGdc = config.SubirAGdc;
-        ForceReprocess = config.ForceReprocess;
-        _promptOverrides = new Dictionary<string, PromptOverride>(config.PromptOverrides, StringComparer.OrdinalIgnoreCase);
+        _isLoadingConfig = true;
+        try
+        {
+            var config = _settingsService.Load();
 
-        SelectedTipologia = AvailableTipologias.FirstOrDefault(x =>
-            string.Equals(x.Code, config.SelectedTipologia, StringComparison.OrdinalIgnoreCase))
-            ?? AvailableTipologias.Last();
-        OnPropertyChanged(nameof(HasPromptOverride));
-        RefreshTipologiasCommand.RaiseCanExecuteChanged();
-        StartProcessingCommand.RaiseCanExecuteChanged();
-        RetryFailedCommand.RaiseCanExecuteChanged();
-        RefreshBatchKpis();
+            Environments.Clear();
+            foreach (var env in config.Environments)
+            {
+                Environments.Add(env);
+            }
+
+            SelectedEnvironment = Environments.FirstOrDefault(e =>
+                string.Equals(e.Name, config.SelectedEnvironment, StringComparison.OrdinalIgnoreCase))
+                ?? Environments.FirstOrDefault();
+
+            PromptingEnabled = config.PromptingEnabled;
+            SobreescribirUmbrales = config.SobreescribirUmbrales;
+            UmbralExtraccion = string.IsNullOrWhiteSpace(config.UmbralExtraccion) ? "0.80" : config.UmbralExtraccion;
+            UmbralExtraccionCompletitud = config.UmbralExtraccionCompletitud;
+            UmbralExtraccionConfianza = config.UmbralExtraccionConfianza;
+            NumeroColas = config.NumeroColas;
+            EjecutarConAssetResolver = config.EjecutarConAssetResolver;
+            AssetResolverCamposSolicitados = config.AssetResolverCamposSolicitados;
+            SubirAGdc = config.SubirAGdc;
+            ForceReprocess = config.ForceReprocess;
+            _promptOverrides = new Dictionary<string, PromptOverride>(config.PromptOverrides, StringComparer.OrdinalIgnoreCase);
+
+            SelectedTipologia = AvailableTipologias.FirstOrDefault(x =>
+                string.Equals(x.Code, config.SelectedTipologia, StringComparison.OrdinalIgnoreCase))
+                ?? AvailableTipologias.Last();
+            OnPropertyChanged(nameof(HasPromptOverride));
+            RefreshTipologiasCommand.RaiseCanExecuteChanged();
+            StartProcessingCommand.RaiseCanExecuteChanged();
+            RetryFailedCommand.RaiseCanExecuteChanged();
+            RefreshBatchKpis();
+        }
+        finally
+        {
+            _isLoadingConfig = false;
+        }
     }
 
     private void SaveConfig()
@@ -560,27 +578,32 @@ public class MainViewModel : ObservableObject
             return;
         }
 
-        var config = new BatchConfig
-        {
-            BackendUrl = BackendUrl,
-            FunctionKey = FunctionKey,
-            SelectedTipologia = SelectedTipologia?.Code ?? "nota.simple.1_4",
-            PromptingEnabled = PromptingEnabled,
-            SobreescribirUmbrales = SobreescribirUmbrales,
-            UmbralExtraccion = UmbralExtraccion,
-            UmbralExtraccionCompletitud = UmbralExtraccionCompletitud,
-            UmbralExtraccionConfianza = UmbralExtraccionConfianza,
-            NumeroColas = NumeroColas,
-            EjecutarConAssetResolver = EjecutarConAssetResolver,
-            AssetResolverCamposSolicitados = AssetResolverCamposSolicitados,
-            SubirAGdc = SubirAGdc,
-            ForceReprocess = ForceReprocess,
-            PromptOverrides = new Dictionary<string, PromptOverride>(_promptOverrides, StringComparer.OrdinalIgnoreCase)
-        };
-
-        _settingsService.Save(config);
+        PersistConfig();
         MessageBox.Show("Configuración guardada correctamente.", "DocumentIA.Batch", MessageBoxButton.OK, MessageBoxImage.Information);
     }
+
+    private BatchConfig BuildConfig() => new()
+    {
+        Environments = Environments.ToList(),
+        SelectedEnvironment = SelectedEnvironment?.Name ?? string.Empty,
+        // Legacy: se rellenan con el entorno activo por compatibilidad con exes anteriores.
+        BackendUrl = EffectiveBackendUrl,
+        FunctionKey = EffectiveFunctionKey,
+        SelectedTipologia = SelectedTipologia?.Code ?? "nota.simple.1_4",
+        PromptingEnabled = PromptingEnabled,
+        SobreescribirUmbrales = SobreescribirUmbrales,
+        UmbralExtraccion = UmbralExtraccion,
+        UmbralExtraccionCompletitud = UmbralExtraccionCompletitud,
+        UmbralExtraccionConfianza = UmbralExtraccionConfianza,
+        NumeroColas = NumeroColas,
+        EjecutarConAssetResolver = EjecutarConAssetResolver,
+        AssetResolverCamposSolicitados = AssetResolverCamposSolicitados,
+        SubirAGdc = SubirAGdc,
+        ForceReprocess = ForceReprocess,
+        PromptOverrides = new Dictionary<string, PromptOverride>(_promptOverrides, StringComparer.OrdinalIgnoreCase)
+    };
+
+    private void PersistConfig() => _settingsService.Save(BuildConfig());
 
     private void EditPrompt()
     {
@@ -619,20 +642,20 @@ public class MainViewModel : ObservableObject
         return !IsProcessing
             && Files.Any(IsPendingFile)
             && SelectedTipologia is not null
-            && !string.IsNullOrWhiteSpace(BackendUrl);
+            && !string.IsNullOrWhiteSpace(EffectiveBackendUrl);
     }
 
     private bool CanRetryFailed()
     {
         return !IsProcessing
             && SelectedTipologia is not null
-            && !string.IsNullOrWhiteSpace(BackendUrl)
+            && !string.IsNullOrWhiteSpace(EffectiveBackendUrl)
             && Files.Any(RetryPolicy.IsRetryable);
     }
 
     private async Task RefreshTipologiasAsync()
     {
-        if (IsProcessing || string.IsNullOrWhiteSpace(BackendUrl))
+        if (IsProcessing || string.IsNullOrWhiteSpace(EffectiveBackendUrl))
         {
             return;
         }
@@ -640,7 +663,7 @@ public class MainViewModel : ObservableObject
         try
         {
             var selectedCode = SelectedTipologia?.Code;
-            var tipologias = await _backendClient.GetTipologiasAsync(BackendUrl, CancellationToken.None);
+            var tipologias = await _backendClient.GetTipologiasAsync(EffectiveBackendUrl, CancellationToken.None);
             if (tipologias.Count == 0)
             {
                 ProcessStatus = "No se encontraron tipologías publicadas en backend.";
@@ -680,12 +703,17 @@ public class MainViewModel : ObservableObject
             return;
         }
 
+        if (string.IsNullOrWhiteSpace(EffectiveBackendUrl))
+        {
+            return;
+        }
+
         _isRefreshingHealth = true;
 
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-            var health = await _backendClient.GetHealthAsync(EffectiveBackendUrl, FunctionKey, cts.Token);
+            var health = await _backendClient.GetHealthAsync(EffectiveBackendUrl, EffectiveFunctionKey, cts.Token);
 
             await RunOnUiAsync(() =>
             {
@@ -886,7 +914,7 @@ public class MainViewModel : ObservableObject
         return !IsProcessing
             && filesToProcess.Count > 0
             && SelectedTipologia is not null
-            && !string.IsNullOrWhiteSpace(BackendUrl);
+            && !string.IsNullOrWhiteSpace(EffectiveBackendUrl);
     }
 
     private async Task ProcessFileWithSemaphoreAsync(
@@ -925,7 +953,7 @@ public class MainViewModel : ObservableObject
                 });
 
                 var request = BuildIngestRequest(file, tipologiaCode, promptOverrides, correlationId);
-                var ingestResponse = await _backendClient.IngestAsync(EffectiveBackendUrl, FunctionKey, request, cancellationToken);
+                var ingestResponse = await _backendClient.IngestAsync(EffectiveBackendUrl, EffectiveFunctionKey, request, cancellationToken);
                 await SetFileTraceAsync(file, item => item.InstanceId = ingestResponse.InstanceId);
 
                 await SetFileStatusAsync(file, "En ejecución");
@@ -1097,7 +1125,7 @@ public class MainViewModel : ObservableObject
         var maxAttempts = 180;
         for (var attempt = 0; attempt < maxAttempts; attempt++)
         {
-            var status = await _backendClient.GetDurableStatusAsync(statusQueryUri, FunctionKey, cancellationToken);
+            var status = await _backendClient.GetDurableStatusAsync(statusQueryUri, EffectiveFunctionKey, cancellationToken);
             await onStatusUpdate(status);
 
             if (string.Equals(status.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase)
