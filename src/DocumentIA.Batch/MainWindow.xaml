@@ -294,6 +294,14 @@
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,12" />
 
+                        <Button Content="Gestionar entornos"
+                                Command="{Binding ManageEnvironmentsCommand}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,0,12"
+                                Background="#EFF6FF"
+                                BorderBrush="#BFDBFE"
+                                Foreground="#2563EB" />
+
                         <Button Content="Guardar configuración"
                                 Command="{Binding SaveConfigCommand}"
                                 HorizontalAlignment="Stretch"

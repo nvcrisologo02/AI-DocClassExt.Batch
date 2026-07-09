@@ -78,6 +78,7 @@ public class MainViewModel : ObservableObject
         PickFilesCommand = new RelayCommand(_ => PickFiles(), _ => !IsProcessing);
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
         EditPromptCommand = new RelayCommand(_ => EditPrompt(), _ => SelectedTipologia is not null);
+        ManageEnvironmentsCommand = new RelayCommand(_ => ManageEnvironments(), _ => !IsProcessing);
         RefreshTipologiasCommand = new RelayCommand(_ => _ = RefreshTipologiasAsync(), _ => !IsProcessing && !string.IsNullOrWhiteSpace(EffectiveBackendUrl));
         RefreshHealthCommand = new RelayCommand(_ => _ = RefreshHealthAsync());
         StartProcessingCommand = new RelayCommand(_ => _ = StartProcessingAsync(), _ => CanProcess());
@@ -126,6 +127,8 @@ public class MainViewModel : ObservableObject
     public RelayCommand SaveConfigCommand { get; }
 
     public RelayCommand EditPromptCommand { get; }
+
+    public RelayCommand ManageEnvironmentsCommand { get; }
 
     public RelayCommand RefreshTipologiasCommand { get; }
 
@@ -635,6 +638,52 @@ public class MainViewModel : ObservableObject
 
         OnPropertyChanged(nameof(HasPromptOverride));
         SaveConfig();
+    }
+
+    private void ManageEnvironments()
+    {
+        var workingCopy = Environments
+            .Select(e => new EnvironmentConfig
+            {
+                Name = e.Name,
+                BackendUrl = e.BackendUrl,
+                FunctionKey = e.FunctionKey
+            })
+            .ToList();
+
+        var dialog = new EnvironmentEditorDialog(workingCopy)
+        {
+            Owner = Application.Current.MainWindow
+        };
+
+        if (dialog.ShowDialog() != true || dialog.Result is null)
+        {
+            return;
+        }
+
+        var previousName = SelectedEnvironment?.Name;
+
+        _isLoadingConfig = true;
+        try
+        {
+            Environments.Clear();
+            foreach (var env in dialog.Result)
+            {
+                Environments.Add(env);
+            }
+
+            SelectedEnvironment = Environments.FirstOrDefault(e =>
+                string.Equals(e.Name, previousName, StringComparison.OrdinalIgnoreCase))
+                ?? Environments.FirstOrDefault();
+        }
+        finally
+        {
+            _isLoadingConfig = false;
+        }
+
+        PersistConfig();
+        _ = RefreshTipologiasAsync();
+        _ = RefreshHealthAsync();
     }
 
     private bool CanProcess()
