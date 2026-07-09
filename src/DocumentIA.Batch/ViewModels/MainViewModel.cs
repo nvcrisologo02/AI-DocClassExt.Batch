@@ -1514,12 +1514,7 @@ public class MainViewModel : ObservableObject
             || IsRevisionQuality(file.EstadoCalidad);
     }
 
-    private static bool IsRevisionQuality(string value)
-    {
-        return string.Equals(value, "REVISION", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(value, "VALIDACION_CON_ERRORES", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(value, "BAJA_CONFIANZA", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsRevisionQuality(string value) => BatchStatusClassifier.IsRevisionQuality(value);
 
     private static bool IsErrorFile(BatchFileItem file)
     {
