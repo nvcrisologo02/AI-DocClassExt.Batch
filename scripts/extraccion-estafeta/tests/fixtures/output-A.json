@@ -1,0 +1,7 @@
+{
+  "Identificacion": { "Documento": "docA.pdf", "Guid": "11111111-1111-1111-1111-111111111111", "Tipologia": "cera.44.vado" },
+  "Integridad": { "CRC32": "AAAA", "SHA256": "hashA" },
+  "DatosExtraidos": { "Titular": "Juan", "Importe": 1250.5 },
+  "DetalleEjecucion": { "Extraccion": { "Modelo": "gpt", "ConfianzaPorCampo": { "Titular": 0.98, "Importe": 0.90 } } },
+  "Resultado": { "Estado": "OK", "ConfianzaGlobal": 0.95, "EstadoCalidad": "Aprobado" }
+}

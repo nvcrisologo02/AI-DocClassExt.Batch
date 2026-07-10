@@ -1,0 +1,7 @@
+{
+  "Identificacion": { "Documento": "docB.pdf", "Guid": "22222222-2222-2222-2222-222222222222", "Tipologia": "cera.44.vado" },
+  "Integridad": { "CRC32": "BBBB", "SHA256": "hashB" },
+  "DatosExtraidos": { "Titular": "Ana", "Referencia": "REF-9" },
+  "DetalleEjecucion": { "Extraccion": { "Modelo": "gpt", "ConfianzaPorCampo": { "Titular": 0.7, "Referencia": 0.6 } } },
+  "Resultado": { "Estado": "OK", "ConfianzaGlobal": 0.8, "EstadoCalidad": "Revision" }
+}
