@@ -18,8 +18,14 @@ function Write-EELogCsv {
     param([Parameter(Mandatory)][string]$Path, [object[]]$LogRows)
     $dir = Split-Path -Parent $Path
     if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $columns = @('Tipologia', 'Fichero', 'Estado', 'InstanceId', 'CorrelationId', 'Inicio', 'Fin', 'DuracionSeg', 'Mensaje')
+    if (-not $LogRows -or $LogRows.Count -eq 0) {
+        $header = ($columns | ForEach-Object { '"{0}"' -f $_ }) -join ','
+        Set-Content -Path $Path -Value $header -Encoding UTF8
+        return
+    }
     $LogRows | ForEach-Object { [pscustomobject]$_ } |
-        Select-Object Tipologia, Fichero, Estado, InstanceId, CorrelationId, Inicio, Fin, DuracionSeg, Mensaje |
+        Select-Object $columns |
         Export-Csv -Path $Path -NoTypeInformation -Encoding UTF8
 }
 

@@ -88,6 +88,7 @@ function Invoke-EEMain {
     $allLog = New-Object 'System.Collections.Generic.List[object]'
     $kpiRows = New-Object 'System.Collections.Generic.List[object]'
     $tipologiaTables = New-Object 'System.Collections.Generic.List[object]'
+    $tipologiasProcesadas = New-Object 'System.Collections.Generic.List[object]'
 
     foreach ($item in $items) {
         if ($item.Files.Count -eq 0) { continue }
@@ -175,6 +176,7 @@ function Invoke-EEMain {
         Write-EEWorkbook -Path $xlsxPath -Sheets @(@{ Name = 'Resumen'; Headers = $table.Headers; Rows = $table.Rows })
         $kpiRows.Add((Get-EEKpiRow -Tipologia $item.Tipologia -Results $kpiInputs.ToArray()))
         $tipologiaTables.Add(@{ Name = $item.Tipologia; Headers = $table.Headers; Rows = $table.Rows })
+        $tipologiasProcesadas.Add($item.Tipologia)
         Write-Host "  -> $xlsxPath"
     }
 
@@ -183,7 +185,7 @@ function Invoke-EEMain {
     Write-EERunJson -Path (Join-Path $resultsDir '_run.json') -Meta @{
         backendUrl = $cfg.BackendUrl; rootPath = $cfg.RootPath
         maxParallel = $cfg.MaxParallel; skipGdcUpload = $cfg.SkipGdcUpload
-        tipologias = @($items | ForEach-Object { $_.Tipologia })
+        tipologias = @($tipologiasProcesadas.ToArray())
         totalDocumentos = $allLog.Count
         completados = @($allLog | Where-Object { $_.Estado -eq 'Completado' }).Count
     }

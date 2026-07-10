@@ -30,6 +30,16 @@ Describe 'Write-EELogCsv' {
         (Get-Content $out -Raw) | Should -Match 'f.pdf'
         Remove-Item $out -Force
     }
+
+    It 'crea el fichero con cabecera aunque no haya filas' {
+        $out = Join-Path ([System.IO.Path]::GetTempPath()) ("ee-log-empty-{0}.csv" -f ([guid]::NewGuid()))
+        Write-EELogCsv -Path $out -LogRows @()
+        Test-Path $out | Should -BeTrue
+        $firstLine = @(Get-Content $out)[0]
+        $firstLine | Should -Match 'Tipologia'
+        $firstLine | Should -Match 'Mensaje'
+        Remove-Item $out -Force
+    }
 }
 
 Describe 'Write-EEResumenWorkbook' {
