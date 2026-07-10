@@ -60,3 +60,87 @@ function Get-EEOutputFromStatus {
         $doc.Dispose()
     }
 }
+
+function New-EEHttpClient {
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromMinutes(5)
+    return $client
+}
+
+function Invoke-EEIngest {
+    param(
+        [Parameter(Mandatory)][string]$BackendUrl,
+        [string]$FunctionKey,
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string]$ExpectedType,
+        [Parameter(Mandatory)][string]$CorrelationId,
+        [bool]$SkipGdcUpload = $true
+    )
+    $fileName = [System.IO.Path]::GetFileName($FilePath)
+    $metadata = New-EEIngestMetadata -FileName $fileName -ExpectedType $ExpectedType -CorrelationId $CorrelationId -SkipGdcUpload $SkipGdcUpload
+    $metadataJson = ($metadata | ConvertTo-Json -Depth 10 -Compress)
+    $fileBytes = [System.IO.File]::ReadAllBytes($FilePath)
+    $endpoints = Get-EEIngestEndpoints -BackendUrl $BackendUrl -FunctionKey $FunctionKey
+    $client = New-EEHttpClient
+    try {
+        $lastStatus = 404
+        foreach ($endpoint in $endpoints) {
+            $multipart = New-Object System.Net.Http.MultipartFormDataContent
+            $metaContent = New-Object System.Net.Http.StringContent($metadataJson, [System.Text.Encoding]::UTF8, 'application/json')
+            $multipart.Add($metaContent, 'metadata')
+            $fileContent = New-Object System.Net.Http.ByteArrayContent(,$fileBytes)
+            $fileContent.Headers.ContentType = New-Object System.Net.Http.Headers.MediaTypeHeaderValue('application/pdf')
+            $multipart.Add($fileContent, 'file', $fileName)
+
+            $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Post, $endpoint)
+            $req.Content = $multipart
+            if (-not [string]::IsNullOrWhiteSpace($FunctionKey)) {
+                [void]$req.Headers.TryAddWithoutValidation('x-functions-key', $FunctionKey)
+            }
+            $resp = $client.SendAsync($req).GetAwaiter().GetResult()
+            $lastStatus = [int]$resp.StatusCode
+            if ($lastStatus -eq 404) { continue }
+            if ($lastStatus -eq 401) { throw "401 Unauthorized: revisa la function key de PROD." }
+            $payload = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if (-not $resp.IsSuccessStatusCode) { throw "Error ingest: $lastStatus. $payload" }
+            $obj = $payload | ConvertFrom-Json
+            if ([string]::IsNullOrWhiteSpace($obj.statusQueryUri)) { throw "Respuesta de ingest sin statusQueryUri." }
+            return @{ InstanceId = [string]$obj.instanceId; StatusQueryUri = [string]$obj.statusQueryUri }
+        }
+        throw "No se encontro endpoint de ingest. Ultimo estado HTTP: $lastStatus."
+    } finally {
+        $client.Dispose()
+    }
+}
+
+function Wait-EEDurableStatus {
+    param(
+        [Parameter(Mandatory)][string]$StatusQueryUri,
+        [string]$FunctionKey,
+        [int]$TimeoutSeconds = 600,
+        [int]$PollIntervalSeconds = 5
+    )
+    $client = New-EEHttpClient
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    try {
+        while ((Get-Date) -lt $deadline) {
+            $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $StatusQueryUri)
+            if (-not [string]::IsNullOrWhiteSpace($FunctionKey)) {
+                [void]$req.Headers.TryAddWithoutValidation('x-functions-key', $FunctionKey)
+            }
+            $resp = $client.SendAsync($req).GetAwaiter().GetResult()
+            $payload = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            if ($resp.IsSuccessStatusCode) {
+                $parsed = Get-EEOutputFromStatus $payload
+                if ($parsed.RuntimeStatus -in @('Completed','Failed','Terminated')) { return $parsed }
+            } elseif ([int]$resp.StatusCode -eq 401) {
+                throw "401 Unauthorized consultando status: revisa la function key."
+            }
+            Start-Sleep -Seconds $PollIntervalSeconds
+        }
+        return @{ RuntimeStatus = 'Timeout'; OutputJson = $null }
+    } finally {
+        $client.Dispose()
+    }
+}
