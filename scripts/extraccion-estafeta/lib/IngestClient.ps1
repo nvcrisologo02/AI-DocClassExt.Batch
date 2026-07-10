@@ -123,6 +123,8 @@ function Wait-EEDurableStatus {
     )
     $client = New-EEHttpClient
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $lastError = $null
+    $sawSuccess = $false
     try {
         while ((Get-Date) -lt $deadline) {
             $req = New-Object System.Net.Http.HttpRequestMessage([System.Net.Http.HttpMethod]::Get, $StatusQueryUri)
@@ -132,12 +134,19 @@ function Wait-EEDurableStatus {
             $resp = $client.SendAsync($req).GetAwaiter().GetResult()
             $payload = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
             if ($resp.IsSuccessStatusCode) {
+                $sawSuccess = $true
                 $parsed = Get-EEOutputFromStatus $payload
                 if ($parsed.RuntimeStatus -in @('Completed','Failed','Terminated')) { return $parsed }
             } elseif ([int]$resp.StatusCode -eq 401) {
                 throw "401 Unauthorized consultando status: revisa la function key."
+            } else {
+                $truncated = if ($payload.Length -gt 300) { $payload.Substring(0, 300) } else { $payload }
+                $lastError = "HTTP $([int]$resp.StatusCode): $truncated"
             }
             Start-Sleep -Seconds $PollIntervalSeconds
+        }
+        if (-not $sawSuccess -and $lastError) {
+            return @{ RuntimeStatus = 'Error'; OutputJson = $null; Message = $lastError }
         }
         return @{ RuntimeStatus = 'Timeout'; OutputJson = $null }
     } finally {

@@ -83,4 +83,40 @@ Describe 'Invoke-EEIngest + Wait-EEDurableStatus (contra mock local)' {
             $server.Stop() | Out-Null
         }
     }
+
+    It 'reporta RuntimeStatus=Error con detalle cuando /status devuelve 500 de forma persistente' {
+        $prefix = 'http://localhost:8792/'
+        $listener = New-Object System.Net.HttpListener
+        $listener.Prefixes.Add($prefix)
+        $listener.Start()
+
+        # Servidor mock: /status siempre devuelve 500 con cuerpo de error.
+        $server = [powershell]::Create()
+        [void]$server.AddScript({
+            param($listener, $prefix)
+            while ($listener.IsListening) {
+                $ctx = $listener.GetContext()
+                $path = $ctx.Request.Url.AbsolutePath
+                $resp = $ctx.Response
+                if ($path -eq '/status') {
+                    $body = '{"error":"boom interno"}'
+                    $resp.StatusCode = 500
+                } else { $body = '{}'; $resp.StatusCode = 404 }
+                $buf = [System.Text.Encoding]::UTF8.GetBytes($body)
+                $resp.ContentType = 'application/json'
+                $resp.OutputStream.Write($buf, 0, $buf.Length)
+                $resp.OutputStream.Close()
+            }
+        }).AddArgument($listener).AddArgument($prefix)
+        $async = $server.BeginInvoke()
+
+        try {
+            $status = Wait-EEDurableStatus -StatusQueryUri "${prefix}status" -FunctionKey '' -TimeoutSeconds 3 -PollIntervalSeconds 1
+            $status.RuntimeStatus | Should -Be 'Error'
+            $status.Message       | Should -Match '500'
+        } finally {
+            $listener.Stop(); $listener.Close()
+            $server.Stop() | Out-Null
+        }
+    }
 }
