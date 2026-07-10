@@ -38,6 +38,10 @@ function Write-EERow {
     $Writer.WriteEndElement()
 }
 
+# Unwraps the single-element-array-wrapping produced when a caller builds a row using the
+# `,@(...)` comma-operator literal (as the test fixtures in ExcelWriter.Tests.ps1 do); real
+# callers (ExportTable's Build-EEExportTable) pass a plain [string[]], so this is a no-op for
+# production data.
 function ConvertTo-EERowValues {
     param([object]$Row)
     $values = $Row
