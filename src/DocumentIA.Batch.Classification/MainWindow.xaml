@@ -170,6 +170,8 @@
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="1*" />
                         <DataGridTextColumn Header="Origin" Binding="{Binding OrigenResultadoDisplay}" Width="1.2*" />
                         <DataGridTextColumn Header="Typology" Binding="{Binding TipologiaIdentificada}" Width="1.5*" />
+                        <DataGridTextColumn Header="Tdn1" Binding="{Binding Tdn1}" Width="0.8*" />
+                        <DataGridTextColumn Header="Tdn2" Binding="{Binding Tdn2}" Width="0.9*" />
                         <DataGridTextColumn Header="Confidence" Binding="{Binding ConfidenceDisplay}" Width="1*" />
                         <DataGridTextColumn Header="Error" Binding="{Binding MensajeError}" Width="1.5*" />
                         <!-- Columnas eliminadas: Provider, Discard Reason, Detalle Proveedores -->

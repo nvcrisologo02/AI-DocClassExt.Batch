@@ -748,7 +748,11 @@ public class ClassificationMainViewModel : ObservableObject
         file.FechaProceso = GetStringValue(identificacion, "FechaProceso", "fechaProceso");
         file.Paginas = GetStringValue(identificacion, "Paginas", "paginas");
         file.Tdn1 = GetStringValue(identificacion, "Tdn1", "tdn1");
-        file.Tdn2 = GetStringValue(identificacion, "Tdn2", "tdn2");
+        // Fallback a Clasificacion.Tdn2Detectado: en tipologías virtuales el backend informa
+        // ahí el TDN2 elegido en Phase 2 aunque no exista tipología publicada que lo mapee.
+        file.Tdn2 = FirstNonEmpty(
+            GetStringValue(identificacion, "Tdn2", "tdn2"),
+            GetStringValue(clasificacion, "Tdn2Detectado", "tdn2Detectado"));
         file.Matricula = GetStringValue(identificacion, "Matricula", "matricula");
         file.TipologiaNombre = GetStringValue(identificacion, "TipologiaNombre", "tipologiaNombre");
         file.TipologiaMgdcMatricula = GetStringValue(identificacion, "TipologiaMGDCMatricula", "tipologiaMGDCMatricula");
@@ -842,6 +846,17 @@ public class ClassificationMainViewModel : ObservableObject
         lines.Add($"Tipología final: {tipologia}");
         lines.Add($"Clasificador final: {clasificador} | Proveedor final: {proveedor} | Confianza: {confianza}");
         lines.Add($"ClassificationOnly salida: {classificationOnly}");
+
+        var clasificacionParcial = GetStringValue(clasificacion, "ClasificacionParcial", "clasificacionParcial");
+        if (bool.TryParse(clasificacionParcial, out var esParcial) && esParcial)
+        {
+            var tdn2Detectado = FirstNonEmpty(
+                GetStringValue(identificacion, "Tdn2", "tdn2"),
+                GetStringValue(clasificacion, "Tdn2Detectado", "tdn2Detectado"));
+            lines.Add(string.IsNullOrWhiteSpace(tdn2Detectado)
+                ? "Clasificación parcial TDN1 (tipología virtual): sin TDN2 propuesto."
+                : $"Clasificación parcial TDN1 (tipología virtual). TDN2 propuesto por Phase 2: {tdn2Detectado} (sin tipología publicada que lo mapee).");
+        }
 
         if (string.Equals(clasificador, "RuleBasedTDN", StringComparison.OrdinalIgnoreCase))
         {
@@ -1030,6 +1045,16 @@ public class ClassificationMainViewModel : ObservableObject
         if (string.Equals(fallbackReason, "fallback_unclassified", StringComparison.OrdinalIgnoreCase))
         {
             return "No se logró clasificar de forma concluyente";
+        }
+
+        if (string.Equals(fallbackReason, "Tipologia Virtual", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Tipología virtual TDN1: el TDN2 elegido no tiene tipología publicada que lo mapee";
+        }
+
+        if (string.Equals(fallbackReason, "fase2_parsing_error", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Phase 2 no devolvió un TDN2 parseable; se conservó el TDN1 como tipología virtual";
         }
 
         return $"Fallback informado por el pipeline: {fallbackReason}";
