@@ -529,7 +529,11 @@ public class ClassificationExportService
             snapshot.FechaProceso = GetString(identificacion, "FechaProceso", "fechaProceso");
             snapshot.Paginas = GetString(identificacion, "Paginas", "paginas");
             snapshot.Tdn1 = GetString(identificacion, "Tdn1", "tdn1");
-            snapshot.Tdn2 = GetString(identificacion, "Tdn2", "tdn2");
+            // Fallback a Clasificacion.Tdn2Detectado: en tipologías virtuales el backend informa
+            // ahí el TDN2 elegido en Phase 2 (outputs antiguos no lo copiaban a Identificacion.Tdn2).
+            snapshot.Tdn2 = ChooseFirst(
+                GetString(identificacion, "Tdn2", "tdn2"),
+                GetString(clasificacion, "Tdn2Detectado", "tdn2Detectado"));
             snapshot.Matricula = GetString(identificacion, "Matricula", "matricula");
             snapshot.TipologiaNombre = GetString(identificacion, "TipologiaNombre", "tipologiaNombre");
             snapshot.PaginasIncluidas = GetString(detalle, "PaginasIncluidas", "paginasIncluidas");

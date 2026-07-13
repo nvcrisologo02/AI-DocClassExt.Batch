@@ -241,6 +241,71 @@ public class ClassificationExportServiceTests
         }
 
         [Fact]
+        public void ExportCsv_TipologiaVirtual_TomaTdn2DeTdn2Detectado()
+        {
+                var service = new ClassificationExportService();
+                var csvPath = Path.Combine(Path.GetTempPath(), $"classification-{Guid.NewGuid():N}.csv");
+                var jsonPath = Path.Combine(Path.GetTempPath(), $"classification-{Guid.NewGuid():N}.json");
+
+                try
+                {
+                        // Resultado virtual TDN1: Identificacion sin Tdn2, pero la clasificación
+                        // informa el TDN2 elegido en Phase 2 via Tdn2Detectado.
+                        File.WriteAllText(jsonPath, """
+                        {
+                            "Identificacion": {
+                                "Tipologia": "ESIN",
+                                "TipologiaFamilia": "ESIN",
+                                "Tdn1": "ESIN"
+                            },
+                            "Resultado": {
+                                "Estado": "OK"
+                            },
+                            "DetalleEjecucion": {
+                                "Clasificacion": {
+                                    "Confianza": "0.9",
+                                    "ClasificacionParcial": true,
+                                    "FallbackRazon": "Tipologia Virtual",
+                                    "Tdn2Detectado": "ESIN-40"
+                                }
+                            }
+                        }
+                        """);
+
+                        service.ExportCsv(csvPath, new[]
+                        {
+                                new ClassificationDocumentItem
+                                {
+                                        FileName = "esin-40.pdf",
+                                        OutputJsonPath = jsonPath
+                                }
+                        });
+
+                        var text = File.ReadAllText(csvPath, Encoding.UTF8);
+                        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n', StringSplitOptions.RemoveEmptyEntries);
+                        Assert.True(lines.Length >= 2);
+
+                        var row = lines[1].Split(';');
+                        Assert.Equal("esin-40.pdf", row[0]);
+                        Assert.Equal("ESIN", row[2]);
+                        Assert.Equal("ESIN", row[8]);
+                        Assert.Equal("ESIN-40", row[9]);
+                }
+                finally
+                {
+                        if (File.Exists(csvPath))
+                        {
+                                File.Delete(csvPath);
+                        }
+
+                        if (File.Exists(jsonPath))
+                        {
+                                File.Delete(jsonPath);
+                        }
+                }
+        }
+
+        [Fact]
         public void ExportCsv_PrefersOutputSnapshotAndIncludesProviderDetails()
         {
                 var service = new ClassificationExportService();
