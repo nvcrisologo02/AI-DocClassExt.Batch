@@ -39,6 +39,9 @@ public class ClassificationMainViewModel : ObservableObject
     private ClassificationDocumentItem? _selectedFile;
     private CancellationTokenSource? _processingCts;
     private string? _currentRunFolder;
+    private bool _hasBatchRun;
+    private bool? _selectAllFiles = false;
+    private bool _isUpdatingSelection;
 
     public ClassificationMainViewModel()
         : this(new SettingsService(), new DocumentIaBackendClient(), new BatchRunStorageService(), new ClassificationExportService(), new BatchOutputAuditExtractor())
@@ -63,6 +66,7 @@ public class ClassificationMainViewModel : ObservableObject
 
         PickFilesCommand = new RelayCommand(_ => PickFiles(), _ => !IsProcessing);
         StartProcessingCommand = new RelayCommand(_ => _ = StartProcessingAsync(), _ => CanProcess());
+        ReprocessCommand = new RelayCommand(_ => _ = ReprocessAsync(), _ => CanReprocess());
         CancelProcessingCommand = new RelayCommand(_ => CancelProcessing(), _ => IsProcessing);
         ClearBatchCommand = new RelayCommand(_ => ClearBatch(), _ => CanClearBatch());
         SaveConfigCommand = new RelayCommand(_ => SaveConfig());
@@ -97,6 +101,12 @@ public class ClassificationMainViewModel : ObservableObject
 
     private void File_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(ClassificationDocumentItem.IsSelected))
+        {
+            RefreshSelectionState();
+            return;
+        }
+
         // Solo refrescar si cambia Status, RuntimeStatus o MensajeError (afectan los contadores)
         if (e.PropertyName == nameof(ClassificationDocumentItem.Status)
             || e.PropertyName == nameof(ClassificationDocumentItem.RuntimeStatus)
@@ -113,6 +123,8 @@ public class ClassificationMainViewModel : ObservableObject
     public RelayCommand PickFilesCommand { get; }
 
     public RelayCommand StartProcessingCommand { get; }
+
+    public RelayCommand ReprocessCommand { get; }
 
     public RelayCommand CancelProcessingCommand { get; }
 
@@ -219,6 +231,7 @@ public class ClassificationMainViewModel : ObservableObject
             if (SetProperty(ref _isProcessing, value))
             {
                 StartProcessingCommand.RaiseCanExecuteChanged();
+                ReprocessCommand.RaiseCanExecuteChanged();
                 CancelProcessingCommand.RaiseCanExecuteChanged();
                 ClearBatchCommand.RaiseCanExecuteChanged();
                 PickFilesCommand.RaiseCanExecuteChanged();
@@ -239,6 +252,74 @@ public class ClassificationMainViewModel : ObservableObject
     {
         get => _selectedFile;
         set => SetProperty(ref _selectedFile, value);
+    }
+
+    public bool? SelectAllFiles
+    {
+        get => _selectAllFiles;
+        set
+        {
+            if (_selectAllFiles == value)
+            {
+                return;
+            }
+
+            _selectAllFiles = value;
+            OnPropertyChanged();
+
+            if (_isUpdatingSelection || value is null)
+            {
+                return;
+            }
+
+            SetAllSelection(value.Value);
+        }
+    }
+
+    private void SetAllSelection(bool selected)
+    {
+        _isUpdatingSelection = true;
+        try
+        {
+            foreach (var file in Files)
+            {
+                file.IsSelected = selected;
+            }
+        }
+        finally
+        {
+            _isUpdatingSelection = false;
+        }
+
+        RefreshSelectionState();
+    }
+
+    private void RefreshSelectionState()
+    {
+        if (_isUpdatingSelection)
+        {
+            return;
+        }
+
+        var selectedCount = Files.Count(file => file.IsSelected);
+
+        _isUpdatingSelection = true;
+        try
+        {
+            SelectAllFiles = Files.Count switch
+            {
+                0 => false,
+                _ when selectedCount == 0 => false,
+                _ when selectedCount == Files.Count => true,
+                _ => null
+            };
+        }
+        finally
+        {
+            _isUpdatingSelection = false;
+        }
+
+        ReprocessCommand.RaiseCanExecuteChanged();
     }
 
     public int TotalFiles => Files.Count;
@@ -340,12 +421,77 @@ public class ClassificationMainViewModel : ObservableObject
             && !string.IsNullOrWhiteSpace(BackendUrl);
     }
 
+    private bool CanReprocess()
+    {
+        return !IsProcessing
+            && !string.IsNullOrWhiteSpace(BackendUrl)
+            && Files.Any(f => ClassificationReprocessPolicy.IsReprocessable(f, _hasBatchRun));
+    }
+
+    private IReadOnlyList<ClassificationDocumentItem> ResolveReprocessCandidates()
+    {
+        var marcados = Files.Where(f => f.IsSelected).ToList();
+        if (marcados.Count > 0)
+        {
+            return marcados
+                .Where(f => ClassificationReprocessPolicy.IsReprocessable(f, _hasBatchRun))
+                .ToList();
+        }
+
+        return Files
+            .Where(f => ClassificationReprocessPolicy.IsReprocessable(f, _hasBatchRun))
+            .ToList();
+    }
+
+    private async Task ReprocessAsync()
+    {
+        var marcados = Files.Count(f => f.IsSelected);
+        var candidatos = ResolveReprocessCandidates();
+
+        if (candidatos.Count == 0)
+        {
+            ProcessStatus = marcados > 0
+                ? "Ninguno de los documentos seleccionados es reprocesable."
+                : "No hay documentos reprocesables.";
+            return;
+        }
+
+        var omitidos = marcados > 0 ? marcados - candidatos.Count : 0;
+
+        foreach (var file in candidatos)
+        {
+            ClassificationReprocessPolicy.ResetForReprocess(file);
+        }
+
+        RefreshSelectionState();
+
+        var aviso = omitidos > 0
+            ? $" ({omitidos} omitidos por no ser reprocesables)"
+            : string.Empty;
+        ProcessStatus = $"Reprocesando {candidatos.Count} documento(s){aviso}...";
+
+        await ProcessFilesAsync(candidatos, "reproceso");
+    }
+
     private async Task StartProcessingAsync()
     {
-        var pendingFiles = Files.Where(file => string.Equals(file.Status, "Pendiente", StringComparison.OrdinalIgnoreCase)).ToList();
+        var pendingFiles = Files
+            .Where(file => string.Equals(file.Status, "Pendiente", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
         if (pendingFiles.Count == 0)
         {
             ProcessStatus = "No pending files to process.";
+            return;
+        }
+
+        await ProcessFilesAsync(pendingFiles, "procesamiento");
+    }
+
+    private async Task ProcessFilesAsync(IReadOnlyList<ClassificationDocumentItem> filesToProcess, string operationName)
+    {
+        if (filesToProcess.Count == 0 || IsProcessing || string.IsNullOrWhiteSpace(BackendUrl))
+        {
             return;
         }
 
@@ -361,7 +507,7 @@ public class ClassificationMainViewModel : ObservableObject
             ProcessStatus = $"Processing batch with {maxParallelism} queue(s)...";
             using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
 
-            var tasks = pendingFiles.Select(file => ProcessFileAsync(file, runFolder, semaphore, cancellationToken));
+            var tasks = filesToProcess.Select(file => ProcessFileAsync(file, runFolder, semaphore, cancellationToken));
             await Task.WhenAll(tasks);
             ProcessStatus = $"Batch completed. Successful: {CompletedFiles}. Errors: {ErrorFiles}.";
         }
@@ -372,6 +518,7 @@ public class ClassificationMainViewModel : ObservableObject
         finally
         {
             IsProcessing = false;
+            _hasBatchRun = true;
             _processingCts?.Dispose();
             _processingCts = null;
             RefreshCommandStates();
@@ -683,6 +830,7 @@ public class ClassificationMainViewModel : ObservableObject
         OnPropertyChanged(nameof(ErrorFiles));
         OnPropertyChanged(nameof(Files)); // Asegura que la vista de archivos se actualice correctamente.
         StartProcessingCommand.RaiseCanExecuteChanged();
+        ReprocessCommand.RaiseCanExecuteChanged();
         ClearBatchCommand.RaiseCanExecuteChanged();
         ExportCsvCommand.RaiseCanExecuteChanged();
         ExportExcelCommand.RaiseCanExecuteChanged();

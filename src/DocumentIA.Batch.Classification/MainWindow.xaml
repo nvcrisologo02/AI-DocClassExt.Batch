@@ -85,6 +85,7 @@
                     <TextBlock Text="Processing" FontSize="13" FontWeight="Bold" Foreground="#1B7C3F" Margin="0,0,0,8" />
                     <Button Content="+ Add PDFs" Command="{Binding PickFilesCommand}" Margin="0,0,0,4" Padding="8" />
                     <Button Content="▶ Start Classification" Command="{Binding StartProcessingCommand}" Margin="0,0,0,4" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
+                    <Button Content="🔁 Reprocesar" Command="{Binding ReprocessCommand}" Margin="0,0,0,4" Padding="8" />
                     <Button Content="⏹ Stop" Command="{Binding CancelProcessingCommand}" Margin="0,0,0,16" Padding="8" Background="#C41E3A" Foreground="White" FontWeight="SemiBold" />
                     <Button Content="🧹 Clear / New Batch" Command="{Binding ClearBatchCommand}" Margin="0,0,0,16" Padding="8" />
 
