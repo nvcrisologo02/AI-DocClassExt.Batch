@@ -3,6 +3,7 @@
 - **Fecha:** 2026-07-14
 - **App:** `src/DocumentIA.Batch.Classification` (WPF .NET 8, clasificación documental por lotes)
 - **Estado:** diseño validado, pendiente de plan de implementación
+- **Work items:** AB#99903 (PBI padre) — AB#99904, AB#99905, AB#99906, AB#99907 (tasks)
 
 ## Problema
 
