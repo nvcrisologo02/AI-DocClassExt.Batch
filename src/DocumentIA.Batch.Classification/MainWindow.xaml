@@ -166,6 +166,25 @@
                           MaxHeight="300"
                           MouseDoubleClick="FilesGrid_MouseDoubleClick">
                     <DataGrid.Columns>
+                        <DataGridTemplateColumn Width="40" CanUserSort="False">
+                            <DataGridTemplateColumn.HeaderTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsThreeState="True"
+                                              IsChecked="{Binding DataContext.SelectAllFiles, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Seleccionar o deseleccionar todos los documentos" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.HeaderTemplate>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Incluir este documento en el reproceso" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Filename" Binding="{Binding FileName}" Width="2.5*" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="1*" />
                         <DataGridTextColumn Header="Origin" Binding="{Binding OrigenResultadoDisplay}" Width="1.2*" />
