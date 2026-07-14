@@ -14,6 +14,16 @@ Describe 'New-EEIngestMetadata' {
         $m.documento.name                   | Should -Be 'd.pdf'
         $m.trazabilidad.submittedBy         | Should -Be 'ExtraccionEstafeta'
     }
+
+    It 'envia umbral de fallback de extraccion 0.7 por defecto' {
+        $m = New-EEIngestMetadata 'd.pdf' 'cera.44.vado' 'cid-1' $true
+        $m.instrucciones.extraction.umbral | Should -Be 0.7
+    }
+
+    It 'permite sobreescribir el umbral de fallback de extraccion' {
+        $m = New-EEIngestMetadata 'd.pdf' 'cera.44.vado' 'cid-1' $true -ExtraccionUmbralFallback 0.5
+        $m.instrucciones.extraction.umbral | Should -Be 0.5
+    }
 }
 
 Describe 'Get-EEIngestEndpoints' {

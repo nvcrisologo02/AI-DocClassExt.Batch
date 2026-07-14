@@ -5,7 +5,11 @@ function New-EEIngestMetadata {
         [Parameter(Mandatory)][string]$FileName,
         [Parameter(Mandatory)][string]$ExpectedType,
         [Parameter(Mandatory)][string]$CorrelationId,
-        [bool]$SkipGdcUpload = $true
+        [bool]$SkipGdcUpload = $true,
+        # Umbral de fallback de extracción (CU→GPT) enviado en instrucciones.extraction.umbral.
+        # El orquestador lo usa como umbral efectivo de fallback (y base de completitud/confianza
+        # cuando no se informan los específicos), con precedencia sobre la config de la tipología.
+        [double]$ExtraccionUmbralFallback = 0.7
     )
     return [ordered]@{
         instrucciones = [ordered]@{
@@ -15,7 +19,7 @@ function New-EEIngestMetadata {
             forceReprocess     = $true
             skipGDCUpload      = $SkipGdcUpload
             classification     = [ordered]@{ provider = 'auto'; model = 'auto' }
-            extraction         = [ordered]@{ provider = 'auto'; model = 'auto' }
+            extraction         = [ordered]@{ provider = 'auto'; model = 'auto'; umbral = $ExtraccionUmbralFallback }
         }
         documento = [ordered]@{
             name    = $FileName
