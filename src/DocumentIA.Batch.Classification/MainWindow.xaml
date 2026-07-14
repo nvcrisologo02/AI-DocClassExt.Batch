@@ -85,6 +85,7 @@
                     <TextBlock Text="Processing" FontSize="13" FontWeight="Bold" Foreground="#1B7C3F" Margin="0,0,0,8" />
                     <Button Content="+ Add PDFs" Command="{Binding PickFilesCommand}" Margin="0,0,0,4" Padding="8" />
                     <Button Content="▶ Start Classification" Command="{Binding StartProcessingCommand}" Margin="0,0,0,4" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
+                    <Button Content="🔁 Reprocesar" Command="{Binding ReprocessCommand}" Margin="0,0,0,4" Padding="8" />
                     <Button Content="⏹ Stop" Command="{Binding CancelProcessingCommand}" Margin="0,0,0,16" Padding="8" Background="#C41E3A" Foreground="White" FontWeight="SemiBold" />
                     <Button Content="🧹 Clear / New Batch" Command="{Binding ClearBatchCommand}" Margin="0,0,0,16" Padding="8" />
 
@@ -166,6 +167,25 @@
                           MaxHeight="300"
                           MouseDoubleClick="FilesGrid_MouseDoubleClick">
                     <DataGrid.Columns>
+                        <DataGridTemplateColumn Width="40" CanUserSort="False">
+                            <DataGridTemplateColumn.HeaderTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsThreeState="True"
+                                              IsChecked="{Binding DataContext.SelectAllFiles, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Seleccionar o deseleccionar todos los documentos" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.HeaderTemplate>
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsSelected, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              ToolTip="Incluir este documento en el reproceso" />
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
                         <DataGridTextColumn Header="Filename" Binding="{Binding FileName}" Width="2.5*" />
                         <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="1*" />
                         <DataGridTextColumn Header="Origin" Binding="{Binding OrigenResultadoDisplay}" Width="1.2*" />

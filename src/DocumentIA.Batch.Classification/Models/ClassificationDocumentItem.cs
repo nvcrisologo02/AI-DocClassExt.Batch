@@ -15,6 +15,7 @@ public class ClassificationDocumentItem : INotifyPropertyChanged
     }
 
     private string _status = "Pendiente";
+    private bool _isSelected;
     private string _identificacionDocumento = string.Empty;
     private string _tipologiaIdentificada = string.Empty;
     private string _confianzaGlobal = string.Empty;
@@ -68,6 +69,12 @@ public class ClassificationDocumentItem : INotifyPropertyChanged
     {
         get => _status;
         set => SetField(ref _status, value);
+    }
+
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetField(ref _isSelected, value);
     }
 
     public string IdentificacionDocumento
