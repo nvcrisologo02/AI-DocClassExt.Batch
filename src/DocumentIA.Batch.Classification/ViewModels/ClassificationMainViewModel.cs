@@ -465,12 +465,12 @@ public class ClassificationMainViewModel : ObservableObject
 
         RefreshSelectionState();
 
-        var aviso = omitidos > 0
-            ? $" ({omitidos} omitidos por no ser reprocesables)"
-            : string.Empty;
-        ProcessStatus = $"Reprocesando {candidatos.Count} documento(s){aviso}...";
-
         await ProcessFilesAsync(candidatos, "reproceso");
+
+        if (omitidos > 0)
+        {
+            ProcessStatus += $" ({omitidos} omitidos por no ser reprocesables)";
+        }
     }
 
     private async Task StartProcessingAsync()
@@ -504,16 +504,16 @@ public class ClassificationMainViewModel : ObservableObject
 
         try
         {
-            ProcessStatus = $"Processing batch with {maxParallelism} queue(s)...";
+            ProcessStatus = $"Ejecutando {operationName} de {filesToProcess.Count} documento(s) con {maxParallelism} cola(s)...";
             using var semaphore = new SemaphoreSlim(maxParallelism, maxParallelism);
 
             var tasks = filesToProcess.Select(file => ProcessFileAsync(file, runFolder, semaphore, cancellationToken));
             await Task.WhenAll(tasks);
-            ProcessStatus = $"Batch completed. Successful: {CompletedFiles}. Errors: {ErrorFiles}.";
+            ProcessStatus = $"Lote de {operationName} finalizado. Correctos: {CompletedFiles}. Errores: {ErrorFiles}.";
         }
         catch (OperationCanceledException)
         {
-            ProcessStatus = "Processing cancelled by user.";
+            ProcessStatus = $"{operationName} cancelado por el usuario.";
         }
         finally
         {
@@ -700,6 +700,7 @@ public class ClassificationMainViewModel : ObservableObject
         Files.Clear();
         SelectedFile = null;
         _currentRunFolder = null;
+        _hasBatchRun = false;
         ProcessStatus = "Ready";
 
         if (!string.IsNullOrWhiteSpace(runFolder) && Directory.Exists(runFolder))
