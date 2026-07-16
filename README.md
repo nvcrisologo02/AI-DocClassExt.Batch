@@ -16,6 +16,7 @@ Completado:
 - Persistencia local de configuracion en `config.json` mediante `SettingsService`.
 - Editor de prompts por tipologia con override local de `SystemPrompt` y `UserPromptTemplate`.
 - Cliente HTTP contra backend DocumentIA para tipologias, ingest y polling Durable.
+- Listado de tipologias filtrado a las que tienen extraccion habilitada: solo se muestran las que el backend devuelve con `extraction: true` en `GET /api/tipologias` (deriva de `ConfiguracionJson.Extraction.Enabled`). El desplegable muestra cada tipologia como `nombre (codigo)`.
 - Ejecucion paralela controlada por `NumeroColas`.
 - Cancelacion de ejecucion en curso y resumen final del lote.
 - Trazabilidad por fichero con `CorrelationId`, `InstanceId`, estado Durable, calidad, confianza, duracion y error.
