@@ -241,4 +241,12 @@ public class LiteRepository
             WHERE ExecutionId = @executionId;
             """, new { executionId });
     }
+
+    public LiteExecution? GetExecution(string executionId)
+    {
+        using var connection = Open();
+        return connection.QueryFirstOrDefault<LiteExecution>(
+            "SELECT * FROM Executions WHERE ExecutionId = @executionId;",
+            new { executionId });
+    }
 }

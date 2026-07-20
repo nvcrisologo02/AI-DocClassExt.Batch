@@ -69,6 +69,11 @@ public class LiteEngineBatchTests : IDisposable
         Assert.Equal(5, docs.Count);
         Assert.All(docs, d => Assert.Equal(LiteDocumentStatus.Succeeded, d.Status));
         Assert.Null(_repository.GetIncompleteExecution());
+
+        var stored = _repository.GetExecution(execution.ExecutionId);
+        Assert.NotNull(stored);
+        Assert.Equal(LiteExecutionStatus.Completed, stored!.Status);
+        Assert.NotNull(stored.CompletedAt);
     }
 
     [Fact]
@@ -147,7 +152,63 @@ public class LiteEngineBatchTests : IDisposable
 
         await NewEngine().RunAsync(execution.ExecutionId, cts.Token);
 
-        var stored = _repository.GetIncompleteExecution();
-        Assert.Null(stored);
+        Assert.Null(_repository.GetIncompleteExecution());
+
+        var stored = _repository.GetExecution(execution.ExecutionId);
+        Assert.NotNull(stored);
+        Assert.Equal(LiteExecutionStatus.Cancelled, stored!.Status);
+        Assert.NotNull(stored.CompletedAt);
+    }
+
+    [Fact]
+    public async Task RunAsync_FalloNoRecuperable_MarcaEjecucionAborted()
+    {
+        // No hay una via limpia para forzar un fallo no relacionado con cancelacion en la
+        // lectura/escritura de la BD sin corromper el fichero SQLite (fragil y no determinista).
+        // En su lugar, se aprovecha que RunAsync invoca ProgressChanged al final de cada lote
+        // (dentro del propio try) y se hace fallar esa suscripcion. Para que sea la UNICA
+        // invocacion durante la ejecucion (y no una de las varias que dispara el procesado de
+        // documentos por lote), el documento se siembra ya en estado Error con MaxRetries = 0:
+        // asi no hay lote pendiente que procesar ni reintentos, solo el marcado a
+        // DefinitiveError y el ProgressChanged de cierre de lote.
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var name = "b1-d1.pdf";
+        var path = Path.Combine(_docsDir, name);
+        File.WriteAllText(path, "pdf");
+        var info = new FileInfo(path);
+        _repository.InsertDocuments(new[]
+        {
+            new LiteDocument
+            {
+                ExecutionId = execution.ExecutionId,
+                FileName = name,
+                FullPath = path,
+                FileSize = info.Length,
+                LastModifiedUtc = info.LastWriteTimeUtc.ToString("O"),
+                Status = LiteDocumentStatus.Error,
+                BatchNumber = 1
+            }
+        });
+
+        var engine = NewEngine(new LiteConfig { MaxRetries = 0 });
+        var thrown = false;
+        engine.ProgressChanged += () =>
+        {
+            if (thrown)
+            {
+                return;
+            }
+
+            thrown = true;
+            throw new InvalidOperationException("fallo no recuperable en ProgressChanged");
+        };
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => engine.RunAsync(execution.ExecutionId, CancellationToken.None));
+
+        var stored = _repository.GetExecution(execution.ExecutionId);
+        Assert.NotNull(stored);
+        Assert.Equal(LiteExecutionStatus.Aborted, stored!.Status);
+        Assert.NotNull(stored.CompletedAt);
     }
 }

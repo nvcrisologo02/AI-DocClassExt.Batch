@@ -90,7 +90,7 @@ public class LiteEngine
                     {
                         error.RetryCount = retry;
                         error.Status = LiteDocumentStatus.Pending;
-                        _repository.UpdateDocument(error);
+                        TryPersist(error);
                     }
 
                     await ProcessDocumentsAsync(errors, ct);
@@ -99,7 +99,7 @@ public class LiteEngine
                 foreach (var definitive in _repository.GetErrorsInBatch(executionId, batchNumber))
                 {
                     definitive.Status = LiteDocumentStatus.DefinitiveError;
-                    _repository.UpdateDocument(definitive);
+                    TryPersist(definitive);
                 }
 
                 ProgressChanged?.Invoke();
@@ -110,6 +110,19 @@ public class LiteEngine
         catch (OperationCanceledException)
         {
             _repository.UpdateExecutionStatus(executionId, LiteExecutionStatus.Cancelled, setCompletedAt: true);
+        }
+        catch (Exception)
+        {
+            try
+            {
+                _repository.UpdateExecutionStatus(executionId, LiteExecutionStatus.Aborted, setCompletedAt: true);
+            }
+            catch (Exception)
+            {
+                // No enmascarar el fallo original si tambien falla la actualizacion de estado.
+            }
+
+            throw;
         }
         finally
         {
