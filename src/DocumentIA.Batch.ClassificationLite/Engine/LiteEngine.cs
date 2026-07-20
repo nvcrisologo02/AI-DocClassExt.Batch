@@ -82,7 +82,7 @@ public class LiteEngine
         catch (OperationCanceledException)
         {
             document.Status = LiteDocumentStatus.Cancelled;
-            _repository.UpdateDocument(document);
+            TryPersist(document);
             ProgressChanged?.Invoke();
         }
         catch (Exception ex)
@@ -142,8 +142,25 @@ public class LiteEngine
     {
         document.Status = LiteDocumentStatus.Error;
         document.ErrorMessage = message;
-        _repository.UpdateDocument(document);
+        TryPersist(document);
         ProgressChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Persiste el estado terminal de un documento sin dejar escapar fallos de la BD:
+    /// un error al escribir no debe abortar el resto del lote.
+    /// </summary>
+    private void TryPersist(LiteDocument document)
+    {
+        try
+        {
+            _repository.UpdateDocument(document);
+        }
+        catch (Exception)
+        {
+            // El estado en memoria ya refleja el resultado; la recuperacion posterior
+            // relee desde SQLite y reintentara este documento.
+        }
     }
 
     private async Task WaitWhilePausedAsync(CancellationToken ct)

@@ -154,6 +154,16 @@ public class FolderScannerTests : IDisposable
         Assert.Equal(1, result.Enqueued);
     }
 
+    // Nota de cobertura: el backstop real del defecto Critical (el try/catch alrededor del
+    // avance del enumerador, EnumeratePdfFiles lineas 172-190 en FolderScanner.cs) protege
+    // contra un IOException/UnauthorizedAccessException lanzado por MoveNext() DESPUES de
+    // que Directory.EnumerateFiles ya ha empezado a iterar (p.ej. una carpeta de red que se
+    // desconecta a mitad de enumeracion). El escenario de ACL denegada de abajo, en cambio,
+    // queda cubierto por EnumerationOptions.IgnoreInaccessible=true, que evita que la
+    // excepcion llegue siquiera a nuestro propio try/catch. Directory.EnumerateFiles se
+    // invoca directamente (no hay una seam de inyeccion), asi que no es viable, sin tocar
+    // el codigo de produccion, forzar un enumerador que lance en MoveNext(); por eso ese
+    // camino queda sin test dedicado.
     [Fact]
     public void Scan_SubcarpetaInaccesible_NoAbortaElEscaneo()
     {
@@ -163,27 +173,29 @@ public class FolderScannerTests : IDisposable
         Directory.CreateDirectory(subDir);
         CreatePdf(Path.Combine("restringida", "oculto.pdf"));
 
+        var aclApplied = false;
+        FileSystemAccessRule? denyRule = null;
         var identity = WindowsIdentity.GetCurrent().User;
-        if (identity is null)
-        {
-            return;
-        }
 
-        var directoryInfo = new DirectoryInfo(subDir);
-        var security = directoryInfo.GetAccessControl();
-        var denyRule = new FileSystemAccessRule(
-            identity,
-            FileSystemRights.ListDirectory,
-            AccessControlType.Deny);
-
-        try
+        if (identity is not null)
         {
-            security.AddAccessRule(denyRule);
-            directoryInfo.SetAccessControl(security);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or SystemException)
-        {
-            return;
+            var directoryInfo = new DirectoryInfo(subDir);
+            try
+            {
+                var security = directoryInfo.GetAccessControl();
+                denyRule = new FileSystemAccessRule(
+                    identity,
+                    FileSystemRights.ListDirectory,
+                    AccessControlType.Deny);
+                security.AddAccessRule(denyRule);
+                directoryInfo.SetAccessControl(security);
+                aclApplied = true;
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or SystemException)
+            {
+                // Sin privilegios para aplicar ACLs en este entorno: se ejecuta igualmente
+                // la parte valida del test (raiz accesible), sin subcarpeta restringida.
+            }
         }
 
         try
@@ -200,32 +212,56 @@ public class FolderScannerTests : IDisposable
         }
         finally
         {
-            try
+            if (aclApplied && denyRule is not null)
             {
-                var cleanupInfo = new DirectoryInfo(subDir);
-                var cleanupSecurity = cleanupInfo.GetAccessControl();
-                cleanupSecurity.RemoveAccessRule(denyRule);
-                cleanupInfo.SetAccessControl(cleanupSecurity);
+                try
+                {
+                    var cleanupInfo = new DirectoryInfo(subDir);
+                    var cleanupSecurity = cleanupInfo.GetAccessControl();
+                    cleanupSecurity.RemoveAccessRule(denyRule);
+                    cleanupInfo.SetAccessControl(cleanupSecurity);
+                }
+                catch { }
             }
-            catch { }
         }
     }
 
     [Fact]
     public void Scan_CancelacionAMitad_NoPierdeDocumentosYaBufferizados()
     {
-        CreatePdf("uno.pdf");
-        CreatePdf("dos.pdf");
-        CreatePdf("tres.pdf");
+        // 600 PDFs garantizan que el primer bloque de InsertChunkSize (500) se inserte y
+        // dispare Progress ANTES de terminar el escaneo (quedan 100 en el segundo bloque).
+        // Cancelamos desde ese handler para que la cancelacion ocurra DESPUES de haber
+        // bufferizado e insertado documentos (a diferencia del test original, que cancelaba
+        // el token antes de procesar ningun fichero y pasaba aunque se quitara el flush).
+        // Nota: al cancelar justo cuando Progress se dispara, el buffer ya esta vacio (se
+        // limpia antes de invocar el evento), por lo que esta prueba concreta ejercita el
+        // flush intermedio dentro del try, no el flush de cola en el finally; ese ultimo
+        // camino (buffer parcial < 500 pendiente de insertar) ya esta cubierto por el resto
+        // de tests de este fichero, que terminan con menos de 500 ficheros sin cancelacion.
+        for (var i = 0; i < 600; i++)
+        {
+            CreatePdf($"doc{i:D4}.pdf");
+        }
+
         var execution = _repository.CreateExecution(_docsDir, false, "{}");
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        var progressCalls = 0;
+        _scanner.Progress += _ =>
+        {
+            progressCalls++;
+            if (progressCalls == 1)
+            {
+                cts.Cancel();
+            }
+        };
 
         Assert.Throws<OperationCanceledException>(() =>
             _scanner.Scan(execution.ExecutionId, new[] { _docsDir }, includeSubfolders: false,
                 skipAlreadyProcessed: true, forceReprocess: false, internalBatchSize: 1000, cts.Token));
 
+        Assert.Equal(1, progressCalls);
         var docs = _repository.GetDocuments(execution.ExecutionId);
-        Assert.True(docs.Count is 0 or 1 or 2 or 3);
+        Assert.Equal(500, docs.Count);
     }
 }

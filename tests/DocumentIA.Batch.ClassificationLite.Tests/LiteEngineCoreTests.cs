@@ -163,4 +163,44 @@ public class LiteEngineCoreTests : IDisposable
         Assert.Equal(3, calls);
         Assert.Equal(LiteDocumentStatus.Succeeded, _repository.GetDocuments(execution.ExecutionId).Single().Status);
     }
+
+    [Fact]
+    public async Task ProcessDocument_Cancelado_MarcaCancelled()
+    {
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var doc = SeedDoc(execution.ExecutionId, "cancelado.pdf");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await NewEngine().ProcessDocumentAsync(doc, cts.Token);
+
+        var stored = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.Cancelled, stored.Status);
+    }
+
+    [Fact]
+    public async Task ProcessDocument_CompletedSinOutput_MarcaError()
+    {
+        _backend.OnStatus = _ => new DocumentIA.Batch.Services.DurableStatusResponse
+        {
+            RuntimeStatus = "Completed",
+            Output = null
+        };
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var doc = SeedDoc(execution.ExecutionId, "sinoutput.pdf");
+
+        await NewEngine().ProcessDocumentAsync(doc, CancellationToken.None);
+
+        var stored = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.Error, stored.Status);
+        Assert.Contains("output", stored.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ProcessDocument_Timeout_MarcaError: el timeout real de AdaptivePollingStrategy es de
+    // 30 minutos de tiempo real (Stopwatch), y el delay inyectado en NewEngine() es un no-op,
+    // por lo que no hay forma deterministica de forzar ese camino en LiteEngine sin un
+    // Thread.Sleep largo o sin tocar el motor de produccion; el camino de timeout del motor
+    // (MarkError en PollUntilTerminalAsync) queda cubierto indirectamente por
+    // AdaptivePollingStrategyTests.IsTimedOut_RespetaElLimite, que verifica el limite exacto
+    // (29/30/31 minutos) del que depende esa rama.
 }

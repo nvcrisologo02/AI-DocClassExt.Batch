@@ -160,7 +160,7 @@ public class FolderScanner
                     {
                         RecurseSubdirectories = includeSubfolders,
                         IgnoreInaccessible = true,
-                        AttributesToSkip = FileAttributes.System
+                        AttributesToSkip = FileAttributes.Hidden | FileAttributes.System
                     });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
