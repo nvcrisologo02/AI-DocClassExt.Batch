@@ -71,7 +71,7 @@ public class LiteMainViewModelTests : IDisposable
     public void FilterText_FiltraPorNombre()
     {
         _viewModel.ReloadRows();
-        _viewModel.FilterText = "amm";
+        _viewModel.FilterText = "AMM";
 
         var visible = _viewModel.RowsView.Cast<LiteDocumentRow>().ToList();
 
@@ -102,5 +102,64 @@ public class LiteMainViewModelTests : IDisposable
         var lines = File.ReadAllLines(path);
         Assert.Equal(2, lines.Length);
         Assert.Contains("alfa.pdf", lines[1]);
+    }
+
+    [Fact]
+    public void ReloadRows_DosVeces_ReutilizaLasInstanciasDeFila()
+    {
+        _viewModel.ReloadRows();
+        var betaRow = _viewModel.Rows.Single(r => r.FileName == "beta.pdf");
+
+        var beta = _repository.GetDocuments(_executionId).Single(d => d.FileName == "beta.pdf");
+        beta.Status = LiteDocumentStatus.Succeeded;
+        beta.Tdn1 = "T05";
+        _repository.UpdateDocument(beta);
+
+        _viewModel.ReloadRows();
+        var betaRowAfter = _viewModel.Rows.Single(r => r.FileName == "beta.pdf");
+
+        Assert.Same(betaRow, betaRowAfter);
+        Assert.Equal("Succeeded", betaRowAfter.Status);
+        Assert.Equal("T05", betaRowAfter.Tdn1);
+    }
+
+    [Fact]
+    public void ReloadRows_DocumentoNuevo_SeAnadeALaColeccion()
+    {
+        _viewModel.ReloadRows();
+        var originalRows = _viewModel.Rows.ToDictionary(r => r.Id, r => r);
+        Assert.Equal(4, _viewModel.Rows.Count);
+
+        _repository.InsertDocuments(new[]
+        {
+            new LiteDocument { ExecutionId = _executionId, FileName = "epsilon.pdf", FullPath = @"c:\docs\epsilon.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.Pending }
+        });
+
+        _viewModel.ReloadRows();
+
+        Assert.Equal(5, _viewModel.Rows.Count);
+        Assert.Contains(_viewModel.Rows, r => r.FileName == "epsilon.pdf");
+        foreach (var (id, row) in originalRows)
+        {
+            Assert.Same(row, _viewModel.Rows.Single(r => r.Id == id));
+        }
+    }
+
+    [Fact]
+    public void ExportCsv_ConFiltroDeEstado_UsaElEstadoActualDeLaBaseDeDatos()
+    {
+        _viewModel.ReloadRows();
+        _viewModel.StatusFilter = LiteDocumentStatus.Pending;
+        Assert.Single(_viewModel.RowsView.Cast<LiteDocumentRow>());
+
+        var beta = _repository.GetDocuments(_executionId).Single(d => d.FileName == "beta.pdf");
+        beta.Status = LiteDocumentStatus.Succeeded;
+        _repository.UpdateDocument(beta);
+
+        var path = Path.Combine(_tempDir, "export-filtro.csv");
+        _viewModel.ExportCsv(path);
+
+        var lines = File.ReadAllLines(path);
+        Assert.DoesNotContain(lines, l => l.Contains("beta.pdf"));
     }
 }

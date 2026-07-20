@@ -12,6 +12,8 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
 {
     private readonly LiteRepository _repository;
     private readonly LiteConfigService _configService;
+    private readonly Dictionary<long, LiteDocumentRow> _rowsById = new();
+    private string? _loadedExecutionId;
 
     private string _filterText = string.Empty;
     private string _statusFilter = "Todos";
@@ -77,10 +79,40 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
             return;
         }
 
-        Rows.Clear();
-        foreach (var document in _repository.GetDocuments(CurrentExecutionId))
+        if (!string.Equals(_loadedExecutionId, CurrentExecutionId, StringComparison.Ordinal))
         {
-            Rows.Add(LiteDocumentRow.From(document));
+            Rows.Clear();
+            _rowsById.Clear();
+            _loadedExecutionId = CurrentExecutionId;
+        }
+
+        var documents = _repository.GetDocuments(CurrentExecutionId);
+        var seenIds = new HashSet<long>();
+
+        foreach (var document in documents)
+        {
+            seenIds.Add(document.Id);
+
+            if (_rowsById.TryGetValue(document.Id, out var existingRow))
+            {
+                existingRow.UpdateFrom(document);
+            }
+            else
+            {
+                var row = LiteDocumentRow.From(document);
+                _rowsById[document.Id] = row;
+                Rows.Add(row);
+            }
+        }
+
+        for (var i = Rows.Count - 1; i >= 0; i--)
+        {
+            var id = Rows[i].Id;
+            if (!seenIds.Contains(id))
+            {
+                Rows.RemoveAt(i);
+                _rowsById.Remove(id);
+            }
         }
 
         RowsView.Refresh();
@@ -122,8 +154,7 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
             return all;
         }
 
-        var visibleIds = RowsView.Cast<LiteDocumentRow>().Select(r => r.Id).ToHashSet();
-        return all.Where(d => visibleIds.Contains(d.Id)).ToList();
+        return all.Where(d => MatchesFilter(d.FileName, d.Status)).ToList();
     }
 
     private bool FilterRow(object item)
@@ -133,14 +164,19 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
             return false;
         }
 
+        return MatchesFilter(row.FileName, row.Status);
+    }
+
+    private bool MatchesFilter(string fileName, string status)
+    {
         if (!string.IsNullOrWhiteSpace(FilterText)
-            && row.FileName.IndexOf(FilterText, StringComparison.OrdinalIgnoreCase) < 0)
+            && fileName.IndexOf(FilterText, StringComparison.OrdinalIgnoreCase) < 0)
         {
             return false;
         }
 
         return string.Equals(StatusFilter, "Todos", StringComparison.OrdinalIgnoreCase)
-            || string.Equals(row.Status, StatusFilter, StringComparison.OrdinalIgnoreCase);
+            || string.Equals(status, StatusFilter, StringComparison.OrdinalIgnoreCase);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
