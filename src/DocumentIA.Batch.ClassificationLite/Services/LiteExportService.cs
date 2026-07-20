@@ -3,6 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Security;
 using System.Text;
+using System.Xml;
 using DocumentIA.Batch.ClassificationLite.Models;
 
 namespace DocumentIA.Batch.ClassificationLite.Services;
@@ -95,7 +96,7 @@ public static class LiteExportService
             {
                 var reference = $"{ColumnName(columnIndex)}{rowIndex + 1}";
                 builder.Append($"<c r=\"{reference}\" t=\"inlineStr\"><is><t xml:space=\"preserve\">");
-                builder.Append(SecurityElement.Escape(cells[columnIndex]) ?? string.Empty);
+                builder.Append(SecurityElement.Escape(RemoveInvalidXmlChars(cells[columnIndex])) ?? string.Empty);
                 builder.Append("</t></is></c>");
             }
 
@@ -103,6 +104,29 @@ public static class LiteExportService
         }
 
         builder.Append("</sheetData></worksheet>");
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Elimina los caracteres de control no validos en XML 1.0 (Excel rechaza el fichero si aparecen).
+    /// Conserva tabulador, salto de linea y retorno de carro, que si son validos.
+    /// </summary>
+    private static string RemoveInvalidXmlChars(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (var character in value)
+        {
+            if (XmlConvert.IsXmlChar(character))
+            {
+                builder.Append(character);
+            }
+        }
+
         return builder.ToString();
     }
 
@@ -129,11 +153,20 @@ public static class LiteExportService
 
     private static string EscapeCsv(string value)
     {
-        if (!value.Contains(';') && !value.Contains('"') && !value.Contains('\n') && !value.Contains('\r'))
+        // Los valores que empiezan por = + - @ podrian ser interpretados como formulas por Excel al
+        // abrir el CSV. Se neutralizan con un apostrofo inicial, salvo que sean numeros validos
+        // (por ejemplo duraciones negativas), que se generan internamente y nunca son formulas.
+        var needsFormulaGuard = value.Length > 0
+            && (value[0] == '=' || value[0] == '+' || value[0] == '-' || value[0] == '@')
+            && !double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out _);
+
+        var effectiveValue = needsFormulaGuard ? "'" + value : value;
+
+        if (!needsFormulaGuard && !effectiveValue.Contains(';') && !effectiveValue.Contains('"') && !effectiveValue.Contains('\n') && !effectiveValue.Contains('\r'))
         {
-            return value;
+            return effectiveValue;
         }
 
-        return '"' + value.Replace("\"", "\"\"") + '"';
+        return '"' + effectiveValue.Replace("\"", "\"\"") + '"';
     }
 }

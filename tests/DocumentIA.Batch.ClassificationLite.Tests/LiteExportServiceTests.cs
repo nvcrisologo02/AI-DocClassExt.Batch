@@ -1,6 +1,7 @@
 using System.IO;
 using System.IO.Compression;
 using System.Text;
+using System.Xml.Linq;
 using DocumentIA.Batch.ClassificationLite.Models;
 using DocumentIA.Batch.ClassificationLite.Services;
 using Xunit;
@@ -103,5 +104,52 @@ public class LiteExportServiceTests : IDisposable
         Assert.Contains("FileName", xml);
         Assert.Contains("informe.pdf", xml);
         Assert.Contains("T01.02", xml);
+    }
+
+    [Fact]
+    public void ExportExcel_ConCaracteresEspeciales_GeneraXmlValido()
+    {
+        var path = Path.Combine(_tempDir, "especiales.xlsx");
+        var doc = SampleDoc();
+        doc.FileName = "informe & anexo <final>.pdf" + (char)1;
+
+        LiteExportService.ExportExcel(new[] { doc }, path);
+
+        using var archive = ZipFile.OpenRead(path);
+        var sheet = archive.GetEntry("xl/worksheets/sheet1.xml");
+        Assert.NotNull(sheet);
+        using var stream = sheet!.Open();
+        var xdoc = XDocument.Load(stream);
+
+        var cellText = xdoc.Descendants().First(e => e.Name.LocalName == "t" && (e.Value.Contains("informe") || e.Value.Contains("anexo"))).Value;
+        Assert.Contains("informe & anexo", cellText);
+        Assert.DoesNotContain((char)1, cellText);
+    }
+
+    [Fact]
+    public void ExportCsv_ValorQueEmpiezaPorIgual_SeNeutraliza()
+    {
+        var path = Path.Combine(_tempDir, "formula.csv");
+        var doc = SampleDoc();
+        doc.FileName = "=1+1";
+
+        LiteExportService.ExportCsv(new[] { doc }, path);
+
+        var lines = File.ReadAllLines(path, Encoding.UTF8);
+        Assert.False(lines[1].StartsWith("="));
+        Assert.StartsWith("\"'=1+1\"", lines[1]);
+    }
+
+    [Fact]
+    public void ExportCsv_NumerosNegativos_NoSeNeutralizan()
+    {
+        var path = Path.Combine(_tempDir, "negativo.csv");
+        var doc = SampleDoc();
+        doc.DurationMs = -5;
+
+        LiteExportService.ExportCsv(new[] { doc }, path);
+
+        var lines = File.ReadAllLines(path, Encoding.UTF8);
+        Assert.EndsWith(";-5", lines[1]);
     }
 }
