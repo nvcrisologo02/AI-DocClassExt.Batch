@@ -56,6 +56,61 @@ public class LiteEngine
         await Task.WhenAll(tasks);
     }
 
+    public async Task RunAsync(string executionId, CancellationToken ct)
+    {
+        try
+        {
+            foreach (var batchNumber in _repository.GetBatchNumbers(executionId))
+            {
+                ct.ThrowIfCancellationRequested();
+
+                var pending = _repository.GetPendingBatch(executionId, batchNumber);
+                if (pending.Count > 0)
+                {
+                    await ProcessDocumentsAsync(pending, ct);
+                }
+
+                for (var retry = 1; retry <= _config.MaxRetries; retry++)
+                {
+                    ct.ThrowIfCancellationRequested();
+
+                    var errors = _repository.GetErrorsInBatch(executionId, batchNumber);
+                    if (errors.Count == 0)
+                    {
+                        break;
+                    }
+
+                    foreach (var error in errors)
+                    {
+                        error.RetryCount = retry;
+                        error.Status = LiteDocumentStatus.Pending;
+                        _repository.UpdateDocument(error);
+                    }
+
+                    await ProcessDocumentsAsync(errors, ct);
+                }
+
+                foreach (var definitive in _repository.GetErrorsInBatch(executionId, batchNumber))
+                {
+                    definitive.Status = LiteDocumentStatus.DefinitiveError;
+                    _repository.UpdateDocument(definitive);
+                }
+
+                ProgressChanged?.Invoke();
+            }
+
+            _repository.UpdateExecutionStatus(executionId, LiteExecutionStatus.Completed, setCompletedAt: true);
+        }
+        catch (OperationCanceledException)
+        {
+            _repository.UpdateExecutionStatus(executionId, LiteExecutionStatus.Cancelled, setCompletedAt: true);
+        }
+        finally
+        {
+            ProgressChanged?.Invoke();
+        }
+    }
+
     internal async Task ProcessDocumentAsync(LiteDocument document, CancellationToken ct)
     {
         var stopwatch = Stopwatch.StartNew();
