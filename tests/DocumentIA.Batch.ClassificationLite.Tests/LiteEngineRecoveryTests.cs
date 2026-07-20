@@ -143,4 +143,75 @@ public class LiteEngineRecoveryTests : IDisposable
 
         Assert.False(engine.IsPaused);
     }
+
+    [Fact]
+    public async Task Errores401Concurrentes_NotificanLaAutoPausaUnaSolaVez()
+    {
+        _backend.OnIngest = _ => throw new InvalidOperationException(
+            "Error 401: La Function Key no es valida o ha expirado.");
+
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var docs = new List<LiteDocument>();
+        for (var i = 1; i <= 12; i++)
+        {
+            docs.Add(SeedDoc(execution.ExecutionId, $"c{i}.pdf", LiteDocumentStatus.Pending, null));
+        }
+
+        // Delay que respeta la cancelacion: si algun documento se quedase esperando en
+        // WaitWhilePausedAsync (auto-pausa disparada antes de que le tocase su turno), el
+        // CancellationTokenSource de mas abajo lo liberara sin colgar el test.
+        var engine = new LiteEngine(
+            _repository,
+            _backend,
+            new LiteConfig { ParallelQueries = 4 },
+            delay: (_, ct) => Task.Delay(TimeSpan.FromMilliseconds(20), ct));
+
+        var autoPausedCount = 0;
+        engine.AutoPaused += _ => Interlocked.Increment(ref autoPausedCount);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        try
+        {
+            await engine.ProcessDocumentsAsync(docs, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // Esperado si algun documento quedo esperando la auto-pausa: para entonces el
+            // evento ya se habra disparado (o no) y las aserciones de abajo son concluyentes.
+        }
+
+        Assert.Equal(1, autoPausedCount);
+        Assert.True(engine.IsPaused);
+    }
+
+    [Fact]
+    public async Task FalloDeFicheroCon401EnElNombre_NoCuentaComo401()
+    {
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var docs = new List<LiteDocument>();
+        for (var i = 1; i <= 6; i++)
+        {
+            var doc = SeedDoc(execution.ExecutionId, $"expediente_401_{i}.pdf", LiteDocumentStatus.Pending, null);
+            File.Delete(doc.FullPath);
+            docs.Add(doc);
+        }
+
+        var engine = NewEngine();
+        var autoPausedCount = 0;
+        engine.AutoPaused += _ => Interlocked.Increment(ref autoPausedCount);
+
+        foreach (var doc in docs)
+        {
+            await engine.ProcessDocumentAsync(doc, CancellationToken.None);
+        }
+
+        foreach (var doc in docs)
+        {
+            var persisted = _repository.GetDocuments(execution.ExecutionId).Single(d => d.FileName == doc.FileName);
+            Assert.Equal(LiteDocumentStatus.Error, persisted.Status);
+        }
+
+        Assert.False(engine.IsPaused);
+        Assert.Equal(0, autoPausedCount);
+    }
 }

@@ -18,6 +18,7 @@ public class LiteEngine
     private const int ConsecutiveUnauthorizedLimit = 5;
 
     private int _consecutiveUnauthorized;
+    private int _autoPauseSignaled;
 
     public event Action<string>? AutoPaused;
 
@@ -249,6 +250,7 @@ public class LiteEngine
                 document.ErrorMessage = null;
                 document.Status = LiteDocumentStatus.Succeeded;
                 Interlocked.Exchange(ref _consecutiveUnauthorized, 0);
+                Interlocked.Exchange(ref _autoPauseSignaled, 0);
                 _repository.UpdateDocument(document);
                 ProgressChanged?.Invoke();
                 return;
@@ -269,10 +271,11 @@ public class LiteEngine
         document.ErrorMessage = message;
         TryPersist(document);
 
-        if (message.Contains("401", StringComparison.Ordinal))
+        if (IsUnauthorizedMessage(message))
         {
             var consecutive = Interlocked.Increment(ref _consecutiveUnauthorized);
-            if (consecutive >= ConsecutiveUnauthorizedLimit && !_paused)
+            if (consecutive >= ConsecutiveUnauthorizedLimit
+                && Interlocked.CompareExchange(ref _autoPauseSignaled, 1, 0) == 0)
             {
                 Pause();
                 AutoPaused?.Invoke(
@@ -282,6 +285,16 @@ public class LiteEngine
         }
 
         ProgressChanged?.Invoke();
+    }
+
+    /// <summary>
+    /// Reconoce solo los mensajes que indican un 401 real del backend. Buscar "401" suelto
+    /// daria falsos positivos con rutas y nombres de fichero (los documentos se nombran por expediente).
+    /// </summary>
+    private static bool IsUnauthorizedMessage(string message)
+    {
+        return message.Contains("Error 401", StringComparison.OrdinalIgnoreCase)
+            || message.Contains(": 401 ", StringComparison.Ordinal);
     }
 
     /// <summary>
