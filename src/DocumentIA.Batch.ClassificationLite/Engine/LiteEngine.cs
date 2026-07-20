@@ -15,6 +15,12 @@ public class LiteEngine
 
     private volatile bool _paused;
 
+    private const int ConsecutiveUnauthorizedLimit = 5;
+
+    private int _consecutiveUnauthorized;
+
+    public event Action<string>? AutoPaused;
+
     public LiteEngine(
         LiteRepository repository,
         IIngestBackend backend,
@@ -111,6 +117,56 @@ public class LiteEngine
         }
     }
 
+    public async Task ReattachInFlightAsync(string executionId, CancellationToken ct)
+    {
+        var inFlight = _repository.GetInFlight(executionId);
+        var reattachable = new List<LiteDocument>();
+
+        foreach (var document in inFlight)
+        {
+            if (string.IsNullOrWhiteSpace(document.StatusQueryUri))
+            {
+                document.Status = LiteDocumentStatus.Pending;
+                _repository.UpdateDocument(document);
+                continue;
+            }
+
+            reattachable.Add(document);
+        }
+
+        if (reattachable.Count == 0)
+        {
+            ProgressChanged?.Invoke();
+            return;
+        }
+
+        using var semaphore = new SemaphoreSlim(_config.ParallelQueries);
+        await Task.WhenAll(reattachable.Select(async document =>
+        {
+            await semaphore.WaitAsync(ct);
+            try
+            {
+                var stopwatch = Stopwatch.StartNew();
+                await PollUntilTerminalAsync(document, stopwatch, ct);
+            }
+            catch (OperationCanceledException)
+            {
+                document.Status = LiteDocumentStatus.Cancelled;
+                _repository.UpdateDocument(document);
+            }
+            catch (Exception ex)
+            {
+                MarkError(document, ex.Message);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        }));
+
+        ProgressChanged?.Invoke();
+    }
+
     internal async Task ProcessDocumentAsync(LiteDocument document, CancellationToken ct)
     {
         var stopwatch = Stopwatch.StartNew();
@@ -179,6 +235,7 @@ public class LiteEngine
                 document.ResponseJson = status.Output.Value.GetRawText();
                 document.ErrorMessage = null;
                 document.Status = LiteDocumentStatus.Succeeded;
+                Interlocked.Exchange(ref _consecutiveUnauthorized, 0);
                 _repository.UpdateDocument(document);
                 ProgressChanged?.Invoke();
                 return;
@@ -198,6 +255,19 @@ public class LiteEngine
         document.Status = LiteDocumentStatus.Error;
         document.ErrorMessage = message;
         TryPersist(document);
+
+        if (message.Contains("401", StringComparison.Ordinal))
+        {
+            var consecutive = Interlocked.Increment(ref _consecutiveUnauthorized);
+            if (consecutive >= ConsecutiveUnauthorizedLimit && !_paused)
+            {
+                Pause();
+                AutoPaused?.Invoke(
+                    $"Ejecucion pausada automaticamente tras {consecutive} errores 401 consecutivos. " +
+                    "Revisa la Function Key del entorno en Configuracion y pulsa Reanudar.");
+            }
+        }
+
         ProgressChanged?.Invoke();
     }
 
