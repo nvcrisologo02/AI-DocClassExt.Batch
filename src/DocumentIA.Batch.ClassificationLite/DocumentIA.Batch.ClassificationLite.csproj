@@ -22,4 +22,8 @@
     <ProjectReference Include="..\DocumentIA.Batch\DocumentIA.Batch.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="DocumentIA.Batch.ClassificationLite.Tests" />
+  </ItemGroup>
+
 </Project>
