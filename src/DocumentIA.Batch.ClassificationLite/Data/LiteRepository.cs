@@ -171,4 +171,74 @@ public class LiteRepository
             "SELECT * FROM Documents WHERE ExecutionId = @executionId ORDER BY Id;",
             new { executionId }).ToList();
     }
+
+    public LiteDocument? FindLastSucceeded(string fileName, long fileSize, string lastModifiedUtc)
+    {
+        using var connection = Open();
+        return connection.QueryFirstOrDefault<LiteDocument>("""
+            SELECT * FROM Documents
+            WHERE FileName = @fileName AND FileSize = @fileSize AND LastModifiedUtc = @lastModifiedUtc
+              AND Status = 'Succeeded'
+            ORDER BY Id DESC
+            LIMIT 1;
+            """, new { fileName, fileSize, lastModifiedUtc });
+    }
+
+    public List<int> GetBatchNumbers(string executionId)
+    {
+        using var connection = Open();
+        return connection.Query<int>("""
+            SELECT DISTINCT BatchNumber FROM Documents
+            WHERE ExecutionId = @executionId AND Status IN ('Pending', 'Error', 'InFlight')
+            ORDER BY BatchNumber;
+            """, new { executionId }).ToList();
+    }
+
+    public List<LiteDocument> GetPendingBatch(string executionId, int batchNumber)
+    {
+        using var connection = Open();
+        return connection.Query<LiteDocument>("""
+            SELECT * FROM Documents
+            WHERE ExecutionId = @executionId AND BatchNumber = @batchNumber AND Status = 'Pending'
+            ORDER BY Id;
+            """, new { executionId, batchNumber }).ToList();
+    }
+
+    public List<LiteDocument> GetErrorsInBatch(string executionId, int batchNumber)
+    {
+        using var connection = Open();
+        return connection.Query<LiteDocument>("""
+            SELECT * FROM Documents
+            WHERE ExecutionId = @executionId AND BatchNumber = @batchNumber AND Status = 'Error'
+            ORDER BY Id;
+            """, new { executionId, batchNumber }).ToList();
+    }
+
+    public List<LiteDocument> GetInFlight(string executionId)
+    {
+        using var connection = Open();
+        return connection.Query<LiteDocument>("""
+            SELECT * FROM Documents
+            WHERE ExecutionId = @executionId AND Status = 'InFlight'
+            ORDER BY Id;
+            """, new { executionId }).ToList();
+    }
+
+    public LiteCounters GetCounters(string executionId)
+    {
+        using var connection = Open();
+        return connection.QuerySingle<LiteCounters>("""
+            SELECT
+                COUNT(*) AS Total,
+                COALESCE(SUM(CASE WHEN Status = 'Pending' THEN 1 ELSE 0 END), 0) AS Pending,
+                COALESCE(SUM(CASE WHEN Status = 'InFlight' THEN 1 ELSE 0 END), 0) AS InFlight,
+                COALESCE(SUM(CASE WHEN Status = 'Succeeded' THEN 1 ELSE 0 END), 0) AS Succeeded,
+                COALESCE(SUM(CASE WHEN Status = 'Error' THEN 1 ELSE 0 END), 0) AS Error,
+                COALESCE(SUM(CASE WHEN Status = 'DefinitiveError' THEN 1 ELSE 0 END), 0) AS DefinitiveError,
+                COALESCE(SUM(CASE WHEN Status = 'SkippedHistory' THEN 1 ELSE 0 END), 0) AS SkippedHistory,
+                COALESCE(SUM(CASE WHEN Status = 'Cancelled' THEN 1 ELSE 0 END), 0) AS Cancelled
+            FROM Documents
+            WHERE ExecutionId = @executionId;
+            """, new { executionId });
+    }
 }
