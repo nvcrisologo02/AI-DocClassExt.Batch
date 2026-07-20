@@ -38,89 +38,94 @@ public class FolderScanner
         var buffer = new List<LiteDocument>(InsertChunkSize);
         var enqueued = 0;
 
-        foreach (var fullPath in EnumeratePdfFiles(paths, includeSubfolders))
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            result.TotalFound++;
-
-            LiteDocument document;
-            try
+            foreach (var fullPath in EnumeratePdfFiles(paths, includeSubfolders))
             {
-                var info = new FileInfo(fullPath);
-                var fileSize = info.Length;
-                var lastModifiedUtc = info.LastWriteTimeUtc.ToString("O");
+                cancellationToken.ThrowIfCancellationRequested();
+                result.TotalFound++;
 
-                var historical = skipAlreadyProcessed && !forceReprocess
-                    ? _repository.FindLastSucceeded(info.Name, fileSize, lastModifiedUtc)
-                    : null;
-
-                if (historical is not null)
+                LiteDocument document;
+                try
                 {
-                    result.Skipped++;
-                    document = new LiteDocument
+                    var info = new FileInfo(fullPath);
+                    var fileSize = info.Length;
+                    var lastModifiedUtc = info.LastWriteTimeUtc.ToString("O");
+
+                    var historical = skipAlreadyProcessed && !forceReprocess
+                        ? _repository.FindLastSucceeded(info.Name, fileSize, lastModifiedUtc)
+                        : null;
+
+                    if (historical is not null)
                     {
-                        ExecutionId = executionId,
-                        FileName = info.Name,
-                        FullPath = fullPath,
-                        FileSize = fileSize,
-                        LastModifiedUtc = lastModifiedUtc,
-                        Status = LiteDocumentStatus.SkippedHistory,
-                        BatchNumber = 0,
-                        Tdn1 = historical.Tdn1,
-                        Tdn2 = historical.Tdn2,
-                        Confidence = historical.Confidence,
-                        Pages = historical.Pages,
-                        PagesIncluded = historical.PagesIncluded,
-                        ProcessDate = historical.ProcessDate,
-                        DurationMs = historical.DurationMs
-                    };
+                        result.Skipped++;
+                        document = new LiteDocument
+                        {
+                            ExecutionId = executionId,
+                            FileName = info.Name,
+                            FullPath = fullPath,
+                            FileSize = fileSize,
+                            LastModifiedUtc = lastModifiedUtc,
+                            Status = LiteDocumentStatus.SkippedHistory,
+                            BatchNumber = 0,
+                            Tdn1 = historical.Tdn1,
+                            Tdn2 = historical.Tdn2,
+                            Confidence = historical.Confidence,
+                            Pages = historical.Pages,
+                            PagesIncluded = historical.PagesIncluded,
+                            ProcessDate = historical.ProcessDate,
+                            DurationMs = historical.DurationMs
+                        };
+                    }
+                    else
+                    {
+                        document = new LiteDocument
+                        {
+                            ExecutionId = executionId,
+                            FileName = info.Name,
+                            FullPath = fullPath,
+                            FileSize = fileSize,
+                            LastModifiedUtc = lastModifiedUtc,
+                            Status = LiteDocumentStatus.Pending,
+                            BatchNumber = (enqueued / internalBatchSize) + 1
+                        };
+                        enqueued++;
+                        result.Enqueued++;
+                    }
                 }
-                else
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
+                    result.Failed++;
                     document = new LiteDocument
                     {
                         ExecutionId = executionId,
-                        FileName = info.Name,
+                        FileName = Path.GetFileName(fullPath),
                         FullPath = fullPath,
-                        FileSize = fileSize,
-                        LastModifiedUtc = lastModifiedUtc,
-                        Status = LiteDocumentStatus.Pending,
+                        FileSize = 0,
+                        LastModifiedUtc = string.Empty,
+                        Status = LiteDocumentStatus.Error,
+                        ErrorMessage = "No se pudo leer el fichero: " + ex.Message,
                         BatchNumber = (enqueued / internalBatchSize) + 1
                     };
                     enqueued++;
-                    result.Enqueued++;
+                }
+
+                buffer.Add(document);
+                if (buffer.Count >= InsertChunkSize)
+                {
+                    _repository.InsertDocuments(buffer);
+                    buffer.Clear();
+                    Progress?.Invoke(result);
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                result.Failed++;
-                document = new LiteDocument
-                {
-                    ExecutionId = executionId,
-                    FileName = Path.GetFileName(fullPath),
-                    FullPath = fullPath,
-                    FileSize = 0,
-                    LastModifiedUtc = string.Empty,
-                    Status = LiteDocumentStatus.Error,
-                    ErrorMessage = "No se pudo leer el fichero: " + ex.Message,
-                    BatchNumber = (enqueued / internalBatchSize) + 1
-                };
-                enqueued++;
-            }
-
-            buffer.Add(document);
-            if (buffer.Count >= InsertChunkSize)
+        }
+        finally
+        {
+            if (buffer.Count > 0)
             {
                 _repository.InsertDocuments(buffer);
-                buffer.Clear();
                 Progress?.Invoke(result);
             }
-        }
-
-        if (buffer.Count > 0)
-        {
-            _repository.InsertDocuments(buffer);
-            Progress?.Invoke(result);
         }
 
         return result;
@@ -151,16 +156,37 @@ public class FolderScanner
                 files = Directory.EnumerateFiles(
                     path,
                     "*.pdf",
-                    includeSubfolders ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly);
+                    new EnumerationOptions
+                    {
+                        RecurseSubdirectories = includeSubfolders,
+                        IgnoreInaccessible = true,
+                        AttributesToSkip = FileAttributes.System
+                    });
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 continue;
             }
 
-            foreach (var file in files)
+            using var enumerator = files.GetEnumerator();
+            while (true)
             {
-                yield return file;
+                string current;
+                try
+                {
+                    if (!enumerator.MoveNext())
+                    {
+                        break;
+                    }
+
+                    current = enumerator.Current;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    break;
+                }
+
+                yield return current;
             }
         }
     }

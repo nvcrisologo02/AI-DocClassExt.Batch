@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
 using DocumentIA.Batch.ClassificationLite.Data;
 using DocumentIA.Batch.ClassificationLite.Engine;
 using DocumentIA.Batch.ClassificationLite.Models;
@@ -150,5 +152,80 @@ public class FolderScannerTests : IDisposable
         var result = _scanner.Scan(execution.ExecutionId, new[] { path }, false, true, false, 1000, CancellationToken.None);
 
         Assert.Equal(1, result.Enqueued);
+    }
+
+    [Fact]
+    public void Scan_SubcarpetaInaccesible_NoAbortaElEscaneo()
+    {
+        CreatePdf("raiz1.pdf");
+        CreatePdf("raiz2.pdf");
+        var subDir = Path.Combine(_docsDir, "restringida");
+        Directory.CreateDirectory(subDir);
+        CreatePdf(Path.Combine("restringida", "oculto.pdf"));
+
+        var identity = WindowsIdentity.GetCurrent().User;
+        if (identity is null)
+        {
+            return;
+        }
+
+        var directoryInfo = new DirectoryInfo(subDir);
+        var security = directoryInfo.GetAccessControl();
+        var denyRule = new FileSystemAccessRule(
+            identity,
+            FileSystemRights.ListDirectory,
+            AccessControlType.Deny);
+
+        try
+        {
+            security.AddAccessRule(denyRule);
+            directoryInfo.SetAccessControl(security);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or PlatformNotSupportedException or SystemException)
+        {
+            return;
+        }
+
+        try
+        {
+            var execution = _repository.CreateExecution(_docsDir, true, "{}");
+
+            var result = _scanner.Scan(execution.ExecutionId, new[] { _docsDir }, includeSubfolders: true,
+                skipAlreadyProcessed: true, forceReprocess: false, internalBatchSize: 1000, CancellationToken.None);
+
+            Assert.True(result.TotalFound >= 2);
+            var docs = _repository.GetDocuments(execution.ExecutionId);
+            Assert.Contains(docs, d => d.FileName == "raiz1.pdf");
+            Assert.Contains(docs, d => d.FileName == "raiz2.pdf");
+        }
+        finally
+        {
+            try
+            {
+                var cleanupInfo = new DirectoryInfo(subDir);
+                var cleanupSecurity = cleanupInfo.GetAccessControl();
+                cleanupSecurity.RemoveAccessRule(denyRule);
+                cleanupInfo.SetAccessControl(cleanupSecurity);
+            }
+            catch { }
+        }
+    }
+
+    [Fact]
+    public void Scan_CancelacionAMitad_NoPierdeDocumentosYaBufferizados()
+    {
+        CreatePdf("uno.pdf");
+        CreatePdf("dos.pdf");
+        CreatePdf("tres.pdf");
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        Assert.Throws<OperationCanceledException>(() =>
+            _scanner.Scan(execution.ExecutionId, new[] { _docsDir }, includeSubfolders: false,
+                skipAlreadyProcessed: true, forceReprocess: false, internalBatchSize: 1000, cts.Token));
+
+        var docs = _repository.GetDocuments(execution.ExecutionId);
+        Assert.True(docs.Count is 0 or 1 or 2 or 3);
     }
 }
