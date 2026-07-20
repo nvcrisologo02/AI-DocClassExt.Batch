@@ -92,4 +92,25 @@ public class LiteConfigServiceTests : IDisposable
         Assert.Contains(normalized.Environments, e => e.Name == "PRO");
         Assert.Equal("PRO", normalized.SelectedEnvironment);
     }
+
+    [Fact]
+    public void Normalize_SeleccionInexistenteConEntornos_CaeAlPrimero()
+    {
+        var config = new LiteConfig
+        {
+            SelectedEnvironment = "NO_EXISTE"
+        };
+        config.Environments.Clear();
+        config.Environments.Add(new DocumentIA.Batch.Models.EnvironmentConfig
+        {
+            Name = "DEV",
+            BackendUrl = "https://dev.example.com",
+            FunctionKey = "k"
+        });
+
+        var normalized = LiteConfigService.Normalize(config);
+
+        Assert.Equal("DEV", normalized.SelectedEnvironment);
+        Assert.Single(normalized.Environments);
+    }
 }
