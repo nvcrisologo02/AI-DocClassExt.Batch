@@ -123,6 +123,35 @@ public class LiteMainViewModelOrchestrationTests : IDisposable
     }
 
     [Fact]
+    public async Task PauseExecution_SinEjecucionEnCurso_NoAlteraLaUltimaEjecucion()
+    {
+        CreatePdfs(2);
+        _viewModel.SelectedPaths = new[] { _docsDir };
+
+        await _viewModel.StartAsync();
+
+        var executionId = _viewModel.CurrentExecutionId!;
+        Assert.Equal(LiteExecutionStatus.Completed, _repository.GetExecution(executionId)!.Status);
+
+        _viewModel.PauseExecution();
+        _viewModel.ResumeExecution();
+
+        Assert.Equal(LiteExecutionStatus.Completed, _repository.GetExecution(executionId)!.Status);
+        Assert.Null(_repository.GetIncompleteExecution());
+    }
+
+    [Fact]
+    public async Task EjecucionExitosaTrasAutoPausa_TerminaConMensajeDeFinalizacion()
+    {
+        CreatePdfs(2);
+        _viewModel.SelectedPaths = new[] { _docsDir };
+
+        await _viewModel.StartAsync();
+
+        Assert.Equal("Ejecucion finalizada.", _viewModel.StatusMessage);
+    }
+
+    [Fact]
     public async Task CancelExecution_DetieneLaEjecucion()
     {
         CreatePdfs(20);

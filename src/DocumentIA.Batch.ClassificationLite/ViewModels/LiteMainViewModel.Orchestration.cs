@@ -19,6 +19,7 @@ public partial class LiteMainViewModel
     /// </summary>
     private readonly System.Windows.Threading.Dispatcher _uiDispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
 
+    private readonly object _ctsGate = new();
     private CancellationTokenSource? _cts;
     private LiteEngine? _engine;
     private bool _isRunning;
@@ -125,7 +126,13 @@ public partial class LiteMainViewModel
         CancellationToken externalToken,
         Func<LiteEngine, CancellationToken, Task> body)
     {
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
+        CancellationTokenSource cts;
+        lock (_ctsGate)
+        {
+            cts = CancellationTokenSource.CreateLinkedTokenSource(externalToken);
+            _cts = cts;
+        }
+
         var backend = (BackendFactory ?? CreateDefaultBackend)();
         _engine = new LiteEngine(_repository, backend, Config);
         _engine.AutoPaused += message =>
@@ -143,19 +150,23 @@ public partial class LiteMainViewModel
             null,
             TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
+        var preserveStatusMessage = false;
+
         try
         {
-            await body(_engine, _cts.Token);
+            await body(_engine, cts.Token);
         }
         catch (OperationCanceledException)
         {
             StatusMessage = "Ejecucion cancelada.";
+            preserveStatusMessage = true;
         }
         catch (Exception ex)
         {
             // LiteEngine.RunAsync ya marco la ejecucion como Aborted y relanza el fallo original:
             // se captura aqui para no tumbar la UI, reflejando el error en el mensaje de estado.
             StatusMessage = "Ejecucion fallida: " + ex.Message;
+            preserveStatusMessage = true;
         }
         finally
         {
@@ -164,19 +175,28 @@ public partial class LiteMainViewModel
             IsPaused = false;
             SafeReloadRows();
             RefreshCounters();
-            if (string.IsNullOrEmpty(StatusMessage) || StatusMessage.StartsWith("Procesando", StringComparison.Ordinal))
+            if (!preserveStatusMessage)
             {
                 StatusMessage = "Ejecucion finalizada.";
             }
 
-            _cts?.Dispose();
-            _cts = null;
+            lock (_ctsGate)
+            {
+                _cts?.Dispose();
+                _cts = null;
+            }
+
             _engine = null;
         }
     }
 
     public void PauseExecution()
     {
+        if (!IsRunning || string.IsNullOrWhiteSpace(CurrentExecutionId))
+        {
+            return;
+        }
+
         _engine?.Pause();
         IsPaused = true;
         _repository.UpdateExecutionStatus(CurrentExecutionId!, LiteExecutionStatus.Paused);
@@ -185,6 +205,11 @@ public partial class LiteMainViewModel
 
     public void ResumeExecution()
     {
+        if (!IsRunning || string.IsNullOrWhiteSpace(CurrentExecutionId))
+        {
+            return;
+        }
+
         _engine?.Resume();
         IsPaused = false;
         _repository.UpdateExecutionStatus(CurrentExecutionId!, LiteExecutionStatus.Running);
@@ -193,8 +218,27 @@ public partial class LiteMainViewModel
 
     public void CancelExecution()
     {
+        if (!IsRunning || string.IsNullOrWhiteSpace(CurrentExecutionId))
+        {
+            return;
+        }
+
         _engine?.Resume();
-        _cts?.Cancel();
+
+        CancellationTokenSource? cts;
+        lock (_ctsGate)
+        {
+            cts = _cts;
+        }
+
+        try
+        {
+            cts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+
         StatusMessage = "Cancelando...";
     }
 
