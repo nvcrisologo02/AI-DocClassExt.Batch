@@ -27,8 +27,14 @@
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Environment" VerticalAlignment="Center" Margin="0,4"/>
-                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="EnvironmentCombo" Margin="0,4"
-                                  DisplayMemberPath="Name" SelectionChanged="EnvironmentCombo_SelectionChanged"/>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                            <ComboBox x:Name="EnvironmentCombo" Width="220"
+                                      DisplayMemberPath="Name" SelectionChanged="EnvironmentCombo_SelectionChanged"/>
+                            <Button x:Name="AddEnvironmentButton" Content="Añadir" Width="70" Margin="8,0,0,0"
+                                    Click="AddEnvironment_Click"/>
+                            <Button x:Name="RemoveEnvironmentButton" Content="Eliminar" Width="70" Margin="6,0,0,0"
+                                    Click="RemoveEnvironment_Click"/>
+                        </StackPanel>
 
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Backend URL" VerticalAlignment="Center" Margin="0,4"/>
                         <TextBox Grid.Row="1" Grid.Column="1" x:Name="BackendUrlBox" Margin="0,4"/>

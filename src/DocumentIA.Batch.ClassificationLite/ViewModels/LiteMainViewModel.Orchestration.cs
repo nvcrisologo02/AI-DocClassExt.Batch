@@ -42,20 +42,30 @@ public partial class LiteMainViewModel
     public LiteExecution? GetPendingRecovery() => _repository.GetIncompleteExecution();
 
     /// <summary>
-    /// Envoltorio de ReloadRows() seguro para cualquier hilo. RefreshCounters() no necesita esto:
-    /// solo actualiza propiedades simples, sin tocar el ObservableCollection ligado a RowsView.
+    /// Marshaliza ReloadRows() y RefreshCounters() juntos en una unica operacion del
+    /// despachador (en vez de dos BeginInvoke separados). Las propiedades que toca
+    /// RefreshCounters (TotalFound, PendingCount, etc.) estan ligadas a TextBlock de la
+    /// ventana igual que Rows/RowsView: son objetos de interfaz con afinidad de hilo, y
+    /// notificarlas desde un hilo distinto del que las creo lanza una excepcion no
+    /// controlada fuera de cualquier try/catch de la aplicacion.
     /// </summary>
-    private void SafeReloadRows()
+    private void SafeRefreshRowsAndCounters() => MarshalToUiThread(() =>
+    {
+        ReloadRows();
+        RefreshCounters();
+    });
+
+    private void MarshalToUiThread(Action action)
     {
         if (_uiDispatcher.CheckAccess())
         {
-            ReloadRows();
+            action();
             return;
         }
 
         try
         {
-            _uiDispatcher.BeginInvoke(new Action(ReloadRows));
+            _uiDispatcher.BeginInvoke(action);
         }
         catch
         {
@@ -93,8 +103,7 @@ public partial class LiteMainViewModel
                 execution.ExecutionId, paths, includeSubfolders,
                 config.SkipAlreadyProcessed, config.ForceReprocess, config.InternalBatchSize, ct), ct);
 
-            SafeReloadRows();
-            RefreshCounters();
+            SafeRefreshRowsAndCounters();
 
             StatusMessage = "Procesando...";
             await engine.RunAsync(execution.ExecutionId, ct);
@@ -146,7 +155,7 @@ public partial class LiteMainViewModel
         SleepBlocker.PreventSleep();
 
         using var refreshTimer = new System.Threading.Timer(
-            _ => { SafeReloadRows(); RefreshCounters(); },
+            _ => SafeRefreshRowsAndCounters(),
             null,
             TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
@@ -173,8 +182,7 @@ public partial class LiteMainViewModel
             SleepBlocker.AllowSleep();
             IsRunning = false;
             IsPaused = false;
-            SafeReloadRows();
-            RefreshCounters();
+            SafeRefreshRowsAndCounters();
             if (!preserveStatusMessage)
             {
                 StatusMessage = "Ejecucion finalizada.";

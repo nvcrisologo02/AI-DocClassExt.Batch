@@ -145,6 +145,16 @@ public partial class MainWindow : Window
     {
         if (ResultsGrid.SelectedItem is LiteDocumentRow row)
         {
+            // La rejilla se carga con GetDocumentsForGrid (sin RequestJson/ResponseJson, ver
+            // arreglo del refresco ligero): el detalle los pide bajo demanda aqui, solo al
+            // abrir el dialogo por doble clic.
+            var full = _viewModel.GetDocument(row.Id);
+            if (full is not null)
+            {
+                row.RequestJson = full.RequestJson;
+                row.ResponseJson = full.ResponseJson;
+            }
+
             new DetailDialog(row) { Owner = this }.ShowDialog();
         }
     }

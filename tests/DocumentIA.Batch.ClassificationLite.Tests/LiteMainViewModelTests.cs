@@ -146,6 +146,31 @@ public class LiteMainViewModelTests : IDisposable
     }
 
     [Fact]
+    public void ReloadRows_NoCargaLosJsonPesados()
+    {
+        _repository.InsertDocuments(new[]
+        {
+            new LiteDocument
+            {
+                ExecutionId = _executionId,
+                FileName = "pesado.pdf",
+                FullPath = @"c:\docs\pesado.pdf",
+                FileSize = 1,
+                LastModifiedUtc = "x",
+                Status = LiteDocumentStatus.Succeeded,
+                RequestJson = "{\"request\":\"" + new string('x', 500) + "\"}",
+                ResponseJson = "{\"response\":\"" + new string('y', 500) + "\"}"
+            }
+        });
+
+        _viewModel.ReloadRows();
+
+        var row = _viewModel.Rows.Single(r => r.FileName == "pesado.pdf");
+        Assert.True(string.IsNullOrEmpty(row.RequestJson));
+        Assert.True(string.IsNullOrEmpty(row.ResponseJson));
+    }
+
+    [Fact]
     public void ExportCsv_ConFiltroDeEstado_UsaElEstadoActualDeLaBaseDeDatos()
     {
         _viewModel.ReloadRows();

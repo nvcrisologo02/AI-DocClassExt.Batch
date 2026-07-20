@@ -86,7 +86,7 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
             _loadedExecutionId = CurrentExecutionId;
         }
 
-        var documents = _repository.GetDocuments(CurrentExecutionId);
+        var documents = _repository.GetDocumentsForGrid(CurrentExecutionId);
         var seenIds = new HashSet<long>();
 
         foreach (var document in documents)
@@ -133,6 +133,12 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
         DefinitiveErrorCount = counters.DefinitiveError;
         SkippedCount = counters.SkippedHistory;
     }
+
+    /// <summary>
+    /// Documento completo (incluyendo RequestJson/ResponseJson) para el dialogo de detalle,
+    /// que la rejilla ya no lleva desde el refresco ligero. Ver GetDocumentsForGrid.
+    /// </summary>
+    public LiteDocument? GetDocument(long id) => _repository.GetDocument(id);
 
     public void SaveConfig() => _configService.Save(Config);
 

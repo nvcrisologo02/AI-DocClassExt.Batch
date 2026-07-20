@@ -101,4 +101,22 @@ public class LiteRepositoryTests : IDisposable
         Assert.Equal(4200, reloaded.DurationMs);
         Assert.Equal("{\"b\":2}", reloaded.ResponseJson);
     }
+
+    [Fact]
+    public void GetDocument_DevuelveElDocumentoCompletoConAmbosJson()
+    {
+        var execution = _repository.CreateExecution(@"c:\docs", false, "{}");
+        var seed = NewDoc(execution.ExecutionId, "a.pdf");
+        seed.RequestJson = "{\"request\":true}";
+        seed.ResponseJson = "{\"response\":true}";
+        _repository.InsertDocuments(new[] { seed });
+        var id = _repository.GetDocuments(execution.ExecutionId).Single().Id;
+
+        var full = _repository.GetDocument(id);
+
+        Assert.NotNull(full);
+        Assert.Equal("a.pdf", full!.FileName);
+        Assert.Equal("{\"request\":true}", full.RequestJson);
+        Assert.Equal("{\"response\":true}", full.ResponseJson);
+    }
 }

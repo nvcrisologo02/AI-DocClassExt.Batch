@@ -172,6 +172,35 @@ public class LiteRepository
             new { executionId }).ToList();
     }
 
+    /// <summary>
+    /// Lectura ligera para la rejilla: excluye RequestJson y ResponseJson (varios KB por
+    /// documento). Pensada para el refresco periodico de la ventana, que puede recorrer hasta
+    /// 100.000 filas por ejecucion: cargar los JSON completos en cada refresco bloquearia el
+    /// hilo de interfaz. El detalle bajo demanda usa <see cref="GetDocument"/>.
+    /// </summary>
+    public List<LiteDocument> GetDocumentsForGrid(string executionId)
+    {
+        using var connection = Open();
+        return connection.Query<LiteDocument>("""
+            SELECT
+                Id, ExecutionId, FileName, FullPath, FileSize, LastModifiedUtc, Status, BatchNumber,
+                RetryCount, InstanceId, StatusQueryUri, Tdn1, Tdn2, Confidence, Pages, PagesIncluded,
+                ProcessDate, DurationMs, ErrorMessage
+            FROM Documents
+            WHERE ExecutionId = @executionId
+            ORDER BY Id;
+            """, new { executionId }).ToList();
+    }
+
+    /// <summary>Documento completo por Id, incluyendo RequestJson/ResponseJson, para el dialogo de detalle.</summary>
+    public LiteDocument? GetDocument(long id)
+    {
+        using var connection = Open();
+        return connection.QueryFirstOrDefault<LiteDocument>(
+            "SELECT * FROM Documents WHERE Id = @id;",
+            new { id });
+    }
+
     public LiteDocument? FindLastSucceeded(string fileName, long fileSize, string lastModifiedUtc)
     {
         using var connection = Open();

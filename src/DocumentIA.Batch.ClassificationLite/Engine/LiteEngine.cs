@@ -77,24 +77,35 @@ public class LiteEngine
                     await ProcessDocumentsAsync(pending, ct);
                 }
 
-                for (var retry = 1; retry <= _config.MaxRetries; retry++)
+                // Cota de vueltas defensiva: en el camino normal el bucle termina antes (cuando
+                // ya no quedan documentos reintentables), pero esto evita un bucle indefinido si
+                // algo deja el estado inconsistente (p. ej. RetryCount manipulado externamente).
+                var maxPasses = _config.MaxRetries + 1;
+                for (var pass = 0; pass < maxPasses; pass++)
                 {
                     ct.ThrowIfCancellationRequested();
 
                     var errors = _repository.GetErrorsInBatch(executionId, batchNumber);
-                    if (errors.Count == 0)
+
+                    // Los que ya agotaron su presupuesto de reintentos (persistido en BD, no el
+                    // numero de vuelta de este bucle) no son reintentables: si la app cayo a
+                    // mitad de los reintentos y se reanuda la ejecucion, no deben recibir
+                    // reintentos extra. Se dejan en Error y el barrido final de mas abajo los
+                    // pasa a DefinitiveError sin volver a llamar al backend.
+                    var retryable = errors.Where(e => e.RetryCount < _config.MaxRetries).ToList();
+                    if (retryable.Count == 0)
                     {
                         break;
                     }
 
-                    foreach (var error in errors)
+                    foreach (var error in retryable)
                     {
-                        error.RetryCount = retry;
+                        error.RetryCount += 1;
                         error.Status = LiteDocumentStatus.Pending;
                         TryPersist(error);
                     }
 
-                    await ProcessDocumentsAsync(errors, ct);
+                    await ProcessDocumentsAsync(retryable, ct);
                 }
 
                 foreach (var definitive in _repository.GetErrorsInBatch(executionId, batchNumber))

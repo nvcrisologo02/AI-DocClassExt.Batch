@@ -12,12 +12,13 @@
 
         <StackPanel Grid.Row="0" Margin="0,0,0,10">
             <TextBlock Text="{Binding FileName}" FontSize="16" FontWeight="Bold" Margin="0,0,0,6"/>
-            <UniformGrid Columns="5">
+            <UniformGrid Columns="6">
                 <StackPanel><TextBlock Text="Status" FontSize="11" Foreground="#666"/><TextBlock Text="{Binding Status}"/></StackPanel>
                 <StackPanel><TextBlock Text="TDN1" FontSize="11" Foreground="#666"/><TextBlock Text="{Binding Tdn1}"/></StackPanel>
                 <StackPanel><TextBlock Text="TDN2" FontSize="11" Foreground="#666"/><TextBlock Text="{Binding Tdn2}"/></StackPanel>
                 <StackPanel><TextBlock Text="Confidence" FontSize="11" Foreground="#666"/><TextBlock Text="{Binding Confidence}"/></StackPanel>
-                <StackPanel><TextBlock Text="TotalDurationMs" FontSize="11" Foreground="#666"/><TextBlock Text="{Binding TotalDurationMs}"/></StackPanel>
+                <StackPanel><TextBlock Text="ProcessDate" FontSize="11" Foreground="#666"/><TextBlock Text="{Binding ProcessDate}"/></StackPanel>
+                <StackPanel><TextBlock Text="DurationMs" FontSize="11" Foreground="#666"/><TextBlock Text="{Binding TotalDurationMs}"/></StackPanel>
             </UniformGrid>
             <TextBlock Margin="0,6,0,0" Foreground="#B3261E" Text="{Binding ErrorMessage}"
                        TextWrapping="Wrap"/>

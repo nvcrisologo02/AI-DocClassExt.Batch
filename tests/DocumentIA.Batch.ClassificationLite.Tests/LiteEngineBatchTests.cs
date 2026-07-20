@@ -143,6 +143,78 @@ public class LiteEngineBatchTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_TrasReinicio_NoConcedeReintentosExtra()
+    {
+        // Simula una caida tras agotar los intentos: el documento ya esta en Error con
+        // RetryCount == MaxRetries en la BD (no en el estado en memoria del motor, que se
+        // perdio con la caida). Al reanudar, el bucle de reintentos no debe darle ninguna
+        // oportunidad mas.
+        _backend.OnIngest = _ => throw new InvalidOperationException("no deberia llamarse");
+
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var name = "b1-d1.pdf";
+        var path = Path.Combine(_docsDir, name);
+        File.WriteAllText(path, "pdf");
+        var info = new FileInfo(path);
+        _repository.InsertDocuments(new[]
+        {
+            new LiteDocument
+            {
+                ExecutionId = execution.ExecutionId,
+                FileName = name,
+                FullPath = path,
+                FileSize = info.Length,
+                LastModifiedUtc = info.LastWriteTimeUtc.ToString("O"),
+                Status = LiteDocumentStatus.Error,
+                RetryCount = 3,
+                BatchNumber = 1
+            }
+        });
+
+        await NewEngine(new LiteConfig { MaxRetries = 3 }).RunAsync(execution.ExecutionId, CancellationToken.None);
+
+        var doc = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.DefinitiveError, doc.Status);
+        Assert.Equal(3, doc.RetryCount);
+        Assert.Equal(0, _backend.IngestCalls);
+    }
+
+    [Fact]
+    public async Task RunAsync_TrasReinicioParcial_SoloConsumeLosReintentosRestantes()
+    {
+        // El documento ya llevaba 1 reintento consumido antes de la caida (RetryCount = 1 en
+        // BD, MaxRetries = 3): a la reanudacion solo le quedan 2 intentos, no 3.
+        _backend.OnIngest = _ => throw new InvalidOperationException("fallo permanente");
+
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var name = "b1-d1.pdf";
+        var path = Path.Combine(_docsDir, name);
+        File.WriteAllText(path, "pdf");
+        var info = new FileInfo(path);
+        _repository.InsertDocuments(new[]
+        {
+            new LiteDocument
+            {
+                ExecutionId = execution.ExecutionId,
+                FileName = name,
+                FullPath = path,
+                FileSize = info.Length,
+                LastModifiedUtc = info.LastWriteTimeUtc.ToString("O"),
+                Status = LiteDocumentStatus.Error,
+                RetryCount = 1,
+                BatchNumber = 1
+            }
+        });
+
+        await NewEngine(new LiteConfig { MaxRetries = 3 }).RunAsync(execution.ExecutionId, CancellationToken.None);
+
+        var doc = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.DefinitiveError, doc.Status);
+        Assert.Equal(3, doc.RetryCount);
+        Assert.Equal(2, _backend.IngestCalls);
+    }
+
+    [Fact]
     public async Task RunAsync_Cancelado_MarcaEjecucionCancelled()
     {
         var execution = _repository.CreateExecution(_docsDir, false, "{}");

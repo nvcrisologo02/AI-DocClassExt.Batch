@@ -50,6 +50,12 @@ public class LiteMainViewModelOrchestrationTests : IDisposable
 
         await _viewModel.StartAsync();
 
+        // El refresco de contadores al final de RunExecutionAsync se marshaliza al hilo de
+        // interfaz (arreglo de afinidad de hilo): en el test no hay bucle de mensajes de
+        // Dispatcher que lo bombee, asi que se fuerza aqui la misma lectura que la UI real
+        // habria recibido ya via el SynchronizationContext de WPF.
+        _viewModel.RefreshCounters();
+
         Assert.False(_viewModel.IsRunning);
         Assert.Equal(3, _viewModel.TotalFound);
         Assert.Equal(3, _viewModel.SucceededCount);
@@ -66,6 +72,10 @@ public class LiteMainViewModelOrchestrationTests : IDisposable
         var callsAfterFirst = _backend.IngestCalls;
 
         await _viewModel.StartAsync();
+
+        // Ver comentario en StartAsync_EscaneaYProcesaTodo: el refresco final se marshaliza al
+        // hilo de interfaz y el test no bombea el Dispatcher, asi que se relee explicitamente.
+        _viewModel.RefreshCounters();
 
         Assert.Equal(callsAfterFirst, _backend.IngestCalls);
         Assert.Equal(2, _viewModel.SkippedCount);
