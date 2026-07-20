@@ -134,6 +134,8 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
         SkippedCount = counters.SkippedHistory;
     }
 
+    public void SaveConfig() => _configService.Save(Config);
+
     public void ExportCsv(string path) => LiteExportService.ExportCsv(GetExportDocuments(), path);
 
     public void ExportExcel(string path) => LiteExportService.ExportExcel(GetExportDocuments(), path);
