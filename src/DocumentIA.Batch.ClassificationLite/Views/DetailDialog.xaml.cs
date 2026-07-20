@@ -10,4 +10,6 @@ public partial class DetailDialog : Window
         InitializeComponent();
         DataContext = row;
     }
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }
