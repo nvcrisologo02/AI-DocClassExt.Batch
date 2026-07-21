@@ -61,22 +61,24 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SelectFolder_Click(object sender, RoutedEventArgs e)
+    private async void SelectFolder_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFolderDialog { Title = "Selecciona la carpeta con los documentos" };
         if (dialog.ShowDialog() == true)
         {
-            SetPaths(new[] { dialog.FolderName });
+            await SetPaths(new[] { dialog.FolderName });
         }
     }
 
-    private void SetPaths(IReadOnlyList<string> paths)
+    private async Task SetPaths(IReadOnlyList<string> paths)
     {
-        _viewModel.SelectedPaths = paths;
-        _viewModel.IncludeSubfolders = IncludeSubfoldersCheck.IsChecked == true;
         SelectedPathText.Text = paths.Count == 1
             ? paths[0]
             : $"{paths.Count} elementos seleccionados";
+
+        // Escanear y previsualizar en el grid inmediatamente para que se vea qué se va a
+        // procesar; el motor solo arranca al pulsar Ejecutar.
+        await _viewModel.PreviewAsync(paths, IncludeSubfoldersCheck.IsChecked == true);
     }
 
     private void Window_DragOver(object sender, DragEventArgs e)
@@ -85,11 +87,11 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
-    private void Window_Drop(object sender, DragEventArgs e)
+    private async void Window_Drop(object sender, DragEventArgs e)
     {
         if (e.Data.GetData(DataFormats.FileDrop) is string[] dropped && dropped.Length > 0)
         {
-            SetPaths(dropped);
+            await SetPaths(dropped);
         }
     }
 

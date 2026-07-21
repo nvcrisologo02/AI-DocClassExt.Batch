@@ -61,6 +61,57 @@ public class LiteResultParserTests
     }
 
     [Fact]
+    public void Parse_SinTdn1_DerivaTdn1DelPrefijoDeTdn2()
+    {
+        var output = Parse("""
+            {
+              "Identificacion": { "Tdn2": "COMU-69", "Paginas": 2 },
+              "Resultado": { "Estado": "OK", "ConfianzaGlobal": 0.95 }
+            }
+            """);
+
+        var result = LiteResultParser.Parse(output);
+
+        Assert.Equal("COMU", result.Tdn1);
+        Assert.Equal("COMU-69", result.Tdn2);
+    }
+
+    [Fact]
+    public void Parse_SinTdn1_DerivaTdn1DesdeTdn2Detectado()
+    {
+        var output = Parse("""
+            {
+              "Identificacion": { "Paginas": 5 },
+              "Resultado": { "Estado": "OK" },
+              "DetalleEjecucion": {
+                "Clasificacion": { "Tdn2Detectado": "DECL-06" }
+              }
+            }
+            """);
+
+        var result = LiteResultParser.Parse(output);
+
+        Assert.Equal("DECL", result.Tdn1);
+        Assert.Equal("DECL-06", result.Tdn2);
+    }
+
+    [Fact]
+    public void Parse_ConTdn1Explicito_NoLoDerivaDelTdn2()
+    {
+        var output = Parse("""
+            {
+              "Identificacion": { "Tdn1": "COMU", "Tdn2": "COMU-51" },
+              "Resultado": { "Estado": "OK" }
+            }
+            """);
+
+        var result = LiteResultParser.Parse(output);
+
+        Assert.Equal("COMU", result.Tdn1);
+        Assert.Equal("COMU-51", result.Tdn2);
+    }
+
+    [Fact]
     public void Parse_OutputVacio_DevuelveNulos()
     {
         var result = LiteResultParser.Parse(Parse("{}"));

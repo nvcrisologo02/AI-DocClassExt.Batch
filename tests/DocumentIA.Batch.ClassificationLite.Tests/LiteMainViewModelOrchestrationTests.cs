@@ -83,6 +83,67 @@ public class LiteMainViewModelOrchestrationTests : IDisposable
     }
 
     [Fact]
+    public async Task PreviewAsync_EscaneaYPueblaElGridSinProcesar()
+    {
+        CreatePdfs(3);
+
+        await _viewModel.PreviewAsync(new[] { _docsDir }, includeSubfolders: false);
+
+        // Se asserta contra el repositorio (no contra Rows/RowsView): tras el await la
+        // continuación corre en un hilo del pool y el CollectionView tiene afinidad de hilo.
+        // La proyección al grid la cubren los tests de ReloadRows.
+        var docs = _repository.GetDocumentsForGrid(_viewModel.CurrentExecutionId!);
+        var counters = _repository.GetCounters(_viewModel.CurrentExecutionId!);
+
+        Assert.False(_viewModel.IsRunning);
+        Assert.Equal(3, docs.Count);
+        Assert.All(docs, d => Assert.Equal(LiteDocumentStatus.Pending, d.Status));
+        Assert.Equal(3, counters.Pending);
+        // No se ha llamado al backend: solo se escaneó.
+        Assert.Equal(0, _backend.IngestCalls);
+        // La ejecución queda como Scanned y NO se ofrece como recuperación pendiente.
+        Assert.Equal(LiteExecutionStatus.Scanned, _repository.GetExecution(_viewModel.CurrentExecutionId!)!.Status);
+        Assert.Null(_repository.GetIncompleteExecution());
+    }
+
+    [Fact]
+    public async Task StartAsync_TrasPreview_ProcesaSinVolverAEscanear()
+    {
+        CreatePdfs(2);
+
+        await _viewModel.PreviewAsync(new[] { _docsDir }, includeSubfolders: false);
+        var previewExecutionId = _viewModel.CurrentExecutionId;
+
+        await _viewModel.StartAsync();
+
+        // Misma ejecución (no se creó una nueva) y las 2 filas se procesaron una sola vez.
+        Assert.Equal(previewExecutionId, _viewModel.CurrentExecutionId);
+        Assert.Equal(2, _backend.IngestCalls);
+        Assert.Equal(2, _repository.GetCounters(previewExecutionId!).Succeeded);
+        Assert.Equal(LiteExecutionStatus.Completed, _repository.GetExecution(previewExecutionId!)!.Status);
+        Assert.Null(_repository.GetIncompleteExecution());
+    }
+
+    [Fact]
+    public async Task PreviewAsync_SegundoDrop_DescartaElPreviewAnterior()
+    {
+        CreatePdfs(2);
+        await _viewModel.PreviewAsync(new[] { _docsDir }, includeSubfolders: false);
+        var primerPreview = _viewModel.CurrentExecutionId!;
+
+        var otraCarpeta = Path.Combine(_tempDir, "docs2");
+        Directory.CreateDirectory(otraCarpeta);
+        File.WriteAllText(Path.Combine(otraCarpeta, "otro.pdf"), "pdf");
+
+        await _viewModel.PreviewAsync(new[] { otraCarpeta }, includeSubfolders: false);
+        var segundoPreview = _viewModel.CurrentExecutionId!;
+
+        Assert.NotEqual(primerPreview, segundoPreview);
+        Assert.Equal(LiteExecutionStatus.Aborted, _repository.GetExecution(primerPreview)!.Status);
+        Assert.Equal(LiteExecutionStatus.Scanned, _repository.GetExecution(segundoPreview)!.Status);
+    }
+
+    [Fact]
     public void GetPendingRecovery_DevuelveEjecucionIncompleta_YDiscardLaAborta()
     {
         var execution = _repository.CreateExecution(_docsDir, false, "{}");

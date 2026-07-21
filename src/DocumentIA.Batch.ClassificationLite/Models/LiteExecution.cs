@@ -13,6 +13,12 @@ public class LiteExecution
 
 public static class LiteExecutionStatus
 {
+    /// <summary>
+    /// Ejecución escaneada como previsualización pero aún no procesada. No la recupera
+    /// <see cref="Data.LiteRepository.GetIncompleteExecution"/> (solo Running/Paused), así que
+    /// arrastrar ficheros y cerrar la app no dispara el aviso de "ejecución incompleta".
+    /// </summary>
+    public const string Scanned = "Scanned";
     public const string Running = "Running";
     public const string Paused = "Paused";
     public const string Completed = "Completed";

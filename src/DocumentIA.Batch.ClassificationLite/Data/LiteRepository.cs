@@ -81,14 +81,18 @@ public class LiteRepository
         connection.Execute("PRAGMA user_version=1;");
     }
 
-    public LiteExecution CreateExecution(string rootPath, bool includeSubfolders, string configSnapshotJson)
+    public LiteExecution CreateExecution(
+        string rootPath,
+        bool includeSubfolders,
+        string configSnapshotJson,
+        string status = LiteExecutionStatus.Running)
     {
         var execution = new LiteExecution
         {
             ExecutionId = Guid.NewGuid().ToString(),
             RootPath = rootPath,
             IncludeSubfolders = includeSubfolders,
-            Status = LiteExecutionStatus.Running,
+            Status = status,
             StartedAt = DateTime.UtcNow.ToString("O"),
             ConfigSnapshotJson = configSnapshotJson
         };
