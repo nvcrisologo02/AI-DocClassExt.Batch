@@ -27,7 +27,13 @@ public class LiteConfigService
         {
             var json = File.ReadAllText(_configPath);
             var config = JsonSerializer.Deserialize<LiteConfig>(json) ?? new LiteConfig();
-            return Normalize(config);
+            var normalized = Normalize(config);
+            foreach (var environment in normalized.Environments)
+            {
+                environment.FunctionKey = KeyObfuscator.Unprotect(environment.FunctionKey);
+            }
+
+            return normalized;
         }
         catch (JsonException)
         {
@@ -39,7 +45,51 @@ public class LiteConfigService
     public void Save(LiteConfig config)
     {
         var normalized = Normalize(config);
-        File.WriteAllText(_configPath, JsonSerializer.Serialize(normalized, JsonOptions));
+        var toSerialize = CloneWithEnvironments(normalized, env => new EnvironmentConfig
+        {
+            Name = env.Name,
+            BackendUrl = env.BackendUrl,
+            FunctionKey = KeyObfuscator.Protect(env.FunctionKey)
+        });
+
+        File.WriteAllText(_configPath, JsonSerializer.Serialize(toSerialize, JsonOptions));
+    }
+
+    /// <summary>
+    /// Serializa una copia de <paramref name="config"/> con la Function Key de cada entorno
+    /// redactada (vacia), para guardar como snapshot en la BD sin filtrar keys en claro. No
+    /// muta la config original.
+    /// </summary>
+    public static string SerializeRedacted(LiteConfig config)
+    {
+        var redacted = CloneWithEnvironments(config, env => new EnvironmentConfig
+        {
+            Name = env.Name,
+            BackendUrl = env.BackendUrl,
+            FunctionKey = string.Empty
+        });
+
+        return JsonSerializer.Serialize(redacted);
+    }
+
+    private static LiteConfig CloneWithEnvironments(LiteConfig config, Func<EnvironmentConfig, EnvironmentConfig> mapEnvironment)
+    {
+        return new LiteConfig
+        {
+            SelectedEnvironment = config.SelectedEnvironment,
+            Environments = config.Environments.Select(mapEnvironment).ToList(),
+            ParallelQueries = config.ParallelQueries,
+            InternalBatchSize = config.InternalBatchSize,
+            PollingIntervalSeconds = config.PollingIntervalSeconds,
+            ClassificationLevel = config.ClassificationLevel,
+            Provider = config.Provider,
+            Model = config.Model,
+            OnlyClassification = config.OnlyClassification,
+            ForceReprocess = config.ForceReprocess,
+            MaxRetries = config.MaxRetries,
+            SkipAlreadyProcessed = config.SkipAlreadyProcessed,
+            GenerateSummary = config.GenerateSummary
+        };
     }
 
     public static LiteConfig Normalize(LiteConfig config)

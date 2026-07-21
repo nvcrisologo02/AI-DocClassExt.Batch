@@ -113,4 +113,78 @@ public class LiteConfigServiceTests : IDisposable
         Assert.Equal("DEV", normalized.SelectedEnvironment);
         Assert.Single(normalized.Environments);
     }
+
+    [Fact]
+    public void Save_EscribeLaKeyCifradaEnDisco()
+    {
+        var service = new LiteConfigService(ConfigPath);
+        var config = service.Load();
+        config.Environments[0].FunctionKey = "SECRETO";
+
+        service.Save(config);
+        var raw = File.ReadAllText(ConfigPath);
+
+        Assert.Contains("enc:", raw);
+        Assert.DoesNotContain("SECRETO", raw);
+    }
+
+    [Fact]
+    public void Load_DevuelveLaKeyEnClaro()
+    {
+        var service = new LiteConfigService(ConfigPath);
+        var config = service.Load();
+        config.Environments[0].FunctionKey = "SECRETO";
+        service.Save(config);
+
+        var reloaded = new LiteConfigService(ConfigPath).Load();
+
+        Assert.Equal("SECRETO", reloaded.Environments[0].FunctionKey);
+    }
+
+    [Fact]
+    public void Save_NoMutaLaConfigEnMemoria()
+    {
+        var service = new LiteConfigService(ConfigPath);
+        var config = service.Load();
+        config.Environments[0].FunctionKey = "SECRETO";
+
+        service.Save(config);
+
+        Assert.Equal("SECRETO", config.Environments[0].FunctionKey);
+    }
+
+    [Fact]
+    public void Load_DeConfigConKeyEnClaro_LaLeeYAlGuardarLaCifra()
+    {
+        File.WriteAllText(ConfigPath, """
+        {
+          "SelectedEnvironment": "PRO",
+          "Environments": [
+            { "Name": "PRO", "BackendUrl": "https://srbappprodocai.azurewebsites.net", "FunctionKey": "SECRETO" }
+          ]
+        }
+        """);
+        var service = new LiteConfigService(ConfigPath);
+
+        var config = service.Load();
+        Assert.Equal("SECRETO", config.Environments[0].FunctionKey);
+
+        service.Save(config);
+        var raw = File.ReadAllText(ConfigPath);
+
+        Assert.Contains("enc:", raw);
+        Assert.DoesNotContain("SECRETO", raw);
+    }
+
+    [Fact]
+    public void SerializeRedacted_NoIncluyeLaKey()
+    {
+        var config = new LiteConfig();
+        config.Environments[0].FunctionKey = "SECRETO";
+
+        var json = LiteConfigService.SerializeRedacted(config);
+
+        Assert.DoesNotContain("SECRETO", json);
+        Assert.Equal("SECRETO", config.Environments[0].FunctionKey);
+    }
 }

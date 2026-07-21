@@ -40,7 +40,10 @@
                         <TextBox Grid.Row="1" Grid.Column="1" x:Name="BackendUrlBox" Margin="0,4"/>
 
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Function Key" VerticalAlignment="Center" Margin="0,4"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="FunctionKeyBox" Margin="0,4"/>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,4">
+                            <PasswordBox x:Name="FunctionKeyBox"/>
+                            <TextBlock x:Name="FunctionKeyStatus" Foreground="#666" Margin="0,2,0,0" FontSize="11"/>
+                        </StackPanel>
 
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Parallel Queries (1-10)" VerticalAlignment="Center" Margin="0,4"/>
                         <TextBox Grid.Row="3" Grid.Column="1" x:Name="ParallelBox" Margin="0,4"/>
