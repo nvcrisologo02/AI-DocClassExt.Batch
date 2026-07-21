@@ -1,0 +1,136 @@
+using DocumentIA.Batch.ClassificationLite.Models;
+using DocumentIA.Batch.Evaluation.Engine;
+using DocumentIA.Batch.Evaluation.Models;
+using DocumentIA.Batch.Evaluation.Tests.Fakes;
+using Xunit;
+
+namespace DocumentIA.Batch.Evaluation.Tests;
+
+public class EvaluationClassifierTests : IDisposable
+{
+    private readonly string _tempDir = Path.Combine(Path.GetTempPath(), "eval-classifier-tests-" + Guid.NewGuid().ToString("N"));
+
+    public EvaluationClassifierTests()
+    {
+        Directory.CreateDirectory(_tempDir);
+    }
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_tempDir, recursive: true); } catch { }
+    }
+
+    private ManifestRow SeedDoc(string relPath, string expectedTdn1 = "ACTE", string expectedTdn2 = "ACTE-01")
+    {
+        var fullPath = Path.Combine(_tempDir, relPath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, "pdf-fake");
+        return new ManifestRow
+        {
+            FileName = Path.GetFileName(relPath),
+            RelPath = relPath,
+            ExpectedTdn1 = expectedTdn1,
+            ExpectedTdn2 = expectedTdn2
+        };
+    }
+
+    private static EvaluationClassifier NewClassifier(FakeIngestBackend backend, LiteConfig? config = null)
+        => new(backend, config ?? new LiteConfig(), delay: (_, _) => Task.CompletedTask);
+
+    [Fact]
+    public async Task ClassifyAsync_Completado_RellenaPrediccionYProveedor()
+    {
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => FakeIngestBackend.CompletedStatus("ACTE", "ACTE-01", 0.93, provider: "gpt-4.1", fallback: false)
+        };
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        var result = await NewClassifier(backend).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal(EvaluationEstado.Ok, result.Estado);
+        Assert.Equal("ACTE", result.PredictedTdn1);
+        Assert.Equal("ACTE-01", result.PredictedTdn2);
+        Assert.Equal(0.93, result.Confianza);
+        Assert.Equal("gpt-4.1", result.Proveedor);
+        Assert.False(result.Fallback);
+        Assert.Null(result.Error);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_DetectaFallbackActivado()
+    {
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => FakeIngestBackend.CompletedStatus("ACTE", "ACTE-01", 0.5, provider: "azure-di", fallback: true)
+        };
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        var result = await NewClassifier(backend).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.True(result.Fallback);
+        Assert.Equal("azure-di", result.Proveedor);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_FalloTransitorio_ReintentaYAcabaOk()
+    {
+        var calls = 0;
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => ++calls == 1
+                ? FakeIngestBackend.FailedStatus()
+                : FakeIngestBackend.CompletedStatus("ACTE", "ACTE-01", 0.8)
+        };
+        var doc = SeedDoc("ACTE/a.pdf");
+        var config = new LiteConfig { MaxRetries = 2 };
+
+        var result = await NewClassifier(backend, config).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal(EvaluationEstado.Ok, result.Estado);
+        Assert.Equal(2, calls);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_AgotaReintentos_DevuelveError()
+    {
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.FailedStatus() };
+        var doc = SeedDoc("ACTE/a.pdf");
+        var config = new LiteConfig { MaxRetries = 2 };
+
+        var result = await NewClassifier(backend, config).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal(EvaluationEstado.Error, result.Estado);
+        Assert.Contains("Failed", result.Error);
+        Assert.Null(result.PredictedTdn1);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_FicheroInexistente_DevuelveError()
+    {
+        var backend = new FakeIngestBackend();
+        var doc = new ManifestRow { FileName = "no-existe.pdf", RelPath = "X/no-existe.pdf", ExpectedTdn1 = "X", ExpectedTdn2 = "X-01" };
+        var config = new LiteConfig { MaxRetries = 0 };
+
+        var result = await NewClassifier(backend, config).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal(EvaluationEstado.Error, result.Estado);
+        Assert.NotNull(result.Error);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_CompletadoSinOutput_DevuelveError()
+    {
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => new DocumentIA.Batch.Services.DurableStatusResponse { RuntimeStatus = "Completed", Output = null }
+        };
+        var doc = SeedDoc("ACTE/a.pdf");
+        var config = new LiteConfig { MaxRetries = 0 };
+
+        var result = await NewClassifier(backend, config).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal(EvaluationEstado.Error, result.Estado);
+        Assert.Contains("output", result.Error, StringComparison.OrdinalIgnoreCase);
+    }
+}

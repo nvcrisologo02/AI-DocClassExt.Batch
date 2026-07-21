@@ -1,0 +1,26 @@
+{
+  "SelectedEnvironment": "DEV",
+  "Environments": [
+    {
+      "Name": "DEV",
+      "BackendUrl": "https://srbappdevdocai.azurewebsites.net",
+      "FunctionKey": ""
+    },
+    {
+      "Name": "PRO",
+      "BackendUrl": "https://srbappprodocai.azurewebsites.net",
+      "FunctionKey": ""
+    }
+  ],
+  "ParallelQueries": 2,
+  "InternalBatchSize": 1000,
+  "PollingIntervalSeconds": 60,
+  "ClassificationLevel": "TDN1_TDN2",
+  "Provider": "auto",
+  "Model": "auto",
+  "OnlyClassification": true,
+  "ForceReprocess": true,
+  "MaxRetries": 3,
+  "SkipAlreadyProcessed": true,
+  "GenerateSummary": false
+}
