@@ -123,6 +123,22 @@ public partial class MainWindow : Window
         }
     }
 
+    private void Manual_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            ManualLauncher.Open();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "No se pudo abrir el manual de usuario:\n\n" + ex.Message,
+                "Batch Classification Lite",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
     private void ExportExcel_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new SaveFileDialog { Filter = "Excel (*.xlsx)|*.xlsx", FileName = "clasificacion.xlsx" };

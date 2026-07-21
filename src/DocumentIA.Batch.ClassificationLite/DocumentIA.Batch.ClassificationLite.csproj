@@ -11,6 +11,7 @@
     <Version>1.0.0</Version>
     <Authors>GDC SAREB</Authors>
     <Description>Batch Classification Lite: clasificacion masiva simplificada de documentos.</Description>
+    <ApplicationIcon>Resources\DocumentIA.ClassificationLite.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +25,11 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="DocumentIA.Batch.ClassificationLite.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\DocumentIA.ClassificationLite.ico" />
+    <EmbeddedResource Include="Resources\MANUAL-USUARIO.html" />
   </ItemGroup>
 
 </Project>
