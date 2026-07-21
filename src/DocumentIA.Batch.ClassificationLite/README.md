@@ -23,6 +23,20 @@ pwsh ./scripts/publish-classification-lite.ps1
 Genera `artifacts/publish/classification-lite-win-x64/` con el ejecutable autocontenido
 y un `config.json`. Rellenar la Function Key del entorno PRO antes de distribuir.
 
+## Function Key ofuscada
+
+La Function Key de cada entorno se guarda ofuscada (`enc:...`) dentro de `config.json`, no
+en texto plano: se cifra al Guardar y se descifra al Cargar, y el dialogo de Configuracion
+nunca muestra la key ya guardada (solo indica "configurada" / "sin configurar"; dejar el
+campo en blanco al guardar conserva la key actual).
+
+Para preparar un `config.json` distribuible con la Function Key ya puesta: arranca la app
+una vez, abre Configuracion, introduce la key del entorno y pulsa Guardar; el `config.json`
+resultante queda con la key ofuscada y se puede distribuir tal cual junto al ejecutable.
+
+Aviso: esto es ofuscacion portable para evitar texto plano en disco, **no** es proteccion
+criptografica fuerte (la clave de cifrado esta embebida en la propia app).
+
 ## Ficheros de estado
 
 | Fichero | Ubicacion | Contenido |

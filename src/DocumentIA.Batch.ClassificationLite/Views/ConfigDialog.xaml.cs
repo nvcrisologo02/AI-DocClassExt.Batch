@@ -32,6 +32,7 @@ public partial class ConfigDialog : Window
             string.Equals(e.Name, _config.SelectedEnvironment, StringComparison.OrdinalIgnoreCase))
             ?? _environments.FirstOrDefault();
         RefreshEnvironmentCombo(initialSelection);
+        LoadEnvironmentFields(initialSelection);
 
         ParallelBox.Text = _config.ParallelQueries.ToString(CultureInfo.InvariantCulture);
         BatchSizeBox.Text = _config.InternalBatchSize.ToString(CultureInfo.InvariantCulture);
@@ -48,11 +49,33 @@ public partial class ConfigDialog : Window
 
     private void EnvironmentCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Antes de cambiar de entorno, si el usuario tecleo algo en la Function Key, se
+        // cómmitea sobre el entorno que se estaba editando (el que sale de la seleccion).
+        // Un PasswordBox vacio significa "mantener la key actual", nunca "borrarla".
+        var previous = e.RemovedItems.OfType<EnvironmentConfig>().FirstOrDefault();
+        if (previous is not null && !string.IsNullOrEmpty(FunctionKeyBox.Password))
+        {
+            previous.FunctionKey = FunctionKeyBox.Password.Trim();
+        }
+
         if (EnvironmentCombo.SelectedItem is EnvironmentConfig environment)
         {
-            BackendUrlBox.Text = environment.BackendUrl;
-            FunctionKeyBox.Text = environment.FunctionKey;
+            LoadEnvironmentFields(environment);
         }
+    }
+
+    /// <summary>
+    /// Vuelca BackendUrl en su caja y actualiza el estado de la Function Key sin mostrarla
+    /// nunca: el PasswordBox siempre queda vacio (en blanco = mantener la key actual al
+    /// guardar) y un TextBlock indica si el entorno tiene o no una key configurada.
+    /// </summary>
+    private void LoadEnvironmentFields(EnvironmentConfig? environment)
+    {
+        BackendUrlBox.Text = environment?.BackendUrl ?? string.Empty;
+        FunctionKeyBox.Password = string.Empty;
+        FunctionKeyStatus.Text = string.IsNullOrEmpty(environment?.FunctionKey)
+            ? "sin configurar"
+            : "configurada";
     }
 
     private void AddEnvironment_Click(object sender, RoutedEventArgs e)
@@ -62,7 +85,10 @@ public partial class ConfigDialog : Window
         if (EnvironmentCombo.SelectedItem is EnvironmentConfig current)
         {
             current.BackendUrl = BackendUrlBox.Text.Trim();
-            current.FunctionKey = FunctionKeyBox.Text.Trim();
+            if (!string.IsNullOrEmpty(FunctionKeyBox.Password))
+            {
+                current.FunctionKey = FunctionKeyBox.Password.Trim();
+            }
         }
 
         var dialog = new InputBoxDialog("Nuevo entorno", "Nombre del entorno (por ejemplo DEV o PRE):") { Owner = this };
@@ -136,7 +162,11 @@ public partial class ConfigDialog : Window
         if (EnvironmentCombo.SelectedItem is EnvironmentConfig environment)
         {
             environment.BackendUrl = BackendUrlBox.Text.Trim();
-            environment.FunctionKey = FunctionKeyBox.Text.Trim();
+            if (!string.IsNullOrEmpty(FunctionKeyBox.Password))
+            {
+                environment.FunctionKey = FunctionKeyBox.Password.Trim();
+            }
+
             _config.SelectedEnvironment = environment.Name;
         }
 

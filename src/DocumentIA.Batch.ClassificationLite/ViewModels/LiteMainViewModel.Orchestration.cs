@@ -111,7 +111,7 @@ public partial class LiteMainViewModel
         SelectedPaths = paths;
         IncludeSubfolders = includeSubfolders;
 
-        var configSnapshot = System.Text.Json.JsonSerializer.Serialize(Config);
+        var configSnapshot = LiteConfigService.SerializeRedacted(Config);
         var execution = _repository.CreateExecution(
             paths[0], includeSubfolders, configSnapshot, LiteExecutionStatus.Scanned);
         CurrentExecutionId = execution.ExecutionId;
@@ -170,7 +170,7 @@ public partial class LiteMainViewModel
             }
         }
 
-        var configSnapshot = System.Text.Json.JsonSerializer.Serialize(Config);
+        var configSnapshot = LiteConfigService.SerializeRedacted(Config);
         var execution = _repository.CreateExecution(SelectedPaths[0], IncludeSubfolders, configSnapshot);
         CurrentExecutionId = execution.ExecutionId;
 
