@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc 3.10" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Manual de usuario — Batch Classification Lite</title>
+  <style>
+
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+</style>
+  <style type="text/css">:root{--blue:#1a56dc;--ink:#1f2733;--muted:#5a6472;--line:#e3e8ef;--bg:#ffffff;--code:#f4f6fa}
+*{box-sizing:border-box}
+body{font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);max-width:920px;margin:0 auto;padding:32px 28px 80px;line-height:1.55;background:var(--bg)}
+h1{color:var(--blue);font-size:2rem;border-bottom:3px solid var(--blue);padding-bottom:10px;margin-top:0}
+h2{color:var(--blue);font-size:1.4rem;margin-top:2.2rem;border-bottom:1px solid var(--line);padding-bottom:6px}
+h3{font-size:1.12rem;margin-top:1.6rem}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+table{border-collapse:collapse;width:100%;margin:1rem 0;font-size:.94rem}
+th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+th{background:#eef3fc;color:var(--ink)}
+tr:nth-child(even) td{background:#fafbfd}
+code{background:var(--code);padding:2px 6px;border-radius:4px;font-family:Consolas,"Courier New",monospace;font-size:.9em}
+pre{background:var(--code);padding:14px 16px;border-radius:8px;overflow:auto;border:1px solid var(--line)}
+pre code{background:none;padding:0}
+blockquote{border-left:4px solid var(--blue);background:#f3f7ff;margin:1rem 0;padding:10px 16px;color:var(--muted);border-radius:0 6px 6px 0}
+hr{border:none;border-top:1px solid var(--line);margin:2rem 0}
+#TOC{background:#f7f9fc;border:1px solid var(--line);border-radius:8px;padding:14px 22px;margin:1.5rem 0}
+#TOC ul{margin:.3rem 0}
+</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Manual de usuario — Batch Classification Lite</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#manual-de-usuario--batch-classification-lite" id="toc-manual-de-usuario--batch-classification-lite">Manual de usuario
+— Batch Classification Lite</a>
+<ul>
+<li><a href="#índice" id="toc-índice">Índice</a></li>
+<li><a href="#1-requisitos-e-instalación" id="toc-1-requisitos-e-instalación">1. Requisitos e instalación</a></li>
+<li><a href="#2-primer-arranque-y-configuración-inicial" id="toc-2-primer-arranque-y-configuración-inicial">2. Primer arranque y
+configuración inicial</a></li>
+<li><a href="#3-la-ventana-principal-de-un-vistazo" id="toc-3-la-ventana-principal-de-un-vistazo">3. La ventana principal de
+un vistazo</a></li>
+<li><a href="#4-flujo-de-trabajo-paso-a-paso" id="toc-4-flujo-de-trabajo-paso-a-paso">4. Flujo de trabajo paso a
+paso</a></li>
+<li><a href="#5-configuración-detallada" id="toc-5-configuración-detallada">5. Configuración detallada</a></li>
+<li><a href="#6-estados-de-un-documento" id="toc-6-estados-de-un-documento">6. Estados de un documento</a></li>
+<li><a href="#7-columnas-del-grid" id="toc-7-columnas-del-grid">7.
+Columnas del grid</a></li>
+<li><a href="#8-filtros-y-búsqueda" id="toc-8-filtros-y-búsqueda">8.
+Filtros y búsqueda</a></li>
+<li><a href="#9-detalle-de-un-documento" id="toc-9-detalle-de-un-documento">9. Detalle de un documento</a></li>
+<li><a href="#10-exportación-excel--csv" id="toc-10-exportación-excel--csv">10. Exportación (Excel /
+CSV)</a></li>
+<li><a href="#11-ficheros-de-estado-y-dónde-se-guardan" id="toc-11-ficheros-de-estado-y-dónde-se-guardan">11. Ficheros de estado
+y dónde se guardan</a></li>
+<li><a href="#12-reanudar-una-ejecución-interrumpida" id="toc-12-reanudar-una-ejecución-interrumpida">12. Reanudar una
+ejecución interrumpida</a></li>
+<li><a href="#13-omisión-de-documentos-ya-procesados-históricos" id="toc-13-omisión-de-documentos-ya-procesados-históricos">13. Omisión
+de documentos ya procesados (históricos)</a></li>
+<li><a href="#14-recomendaciones-operativas" id="toc-14-recomendaciones-operativas">14. Recomendaciones
+operativas</a></li>
+<li><a href="#15-resolución-de-problemas" id="toc-15-resolución-de-problemas">15. Resolución de problemas</a></li>
+<li><a href="#16-glosario" id="toc-16-glosario">16. Glosario</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="manual-de-usuario--batch-classification-lite">Manual de usuario
+— Batch Classification Lite</h1>
+<p>Aplicación de escritorio (Windows) para <strong>clasificar documentos
+PDF de forma masiva</strong> contra DocumentIA. Recorre una carpeta
+(local o de red), envía cada PDF al backend, recupera la tipología
+detectada (<strong>TDN1 / TDN2</strong>) y guarda todo en una base de
+datos local para consulta, exportación y reanudación.</p>
+<blockquote>
+<p>Capacidad orientativa: hasta ~100.000 documentos por ejecución.</p>
+</blockquote>
+<hr />
+<h2 id="índice">Índice</h2>
+<ol type="1">
+<li><a href="#1-requisitos-e-instalación">Requisitos e
+instalación</a></li>
+<li><a href="#2-primer-arranque-y-configuración-inicial">Primer arranque
+y configuración inicial</a></li>
+<li><a href="#3-la-ventana-principal-de-un-vistazo">La ventana principal
+de un vistazo</a></li>
+<li><a href="#4-flujo-de-trabajo-paso-a-paso">Flujo de trabajo paso a
+paso</a></li>
+<li><a href="#5-configuración-detallada">Configuración
+detallada</a></li>
+<li><a href="#6-estados-de-un-documento">Estados de un
+documento</a></li>
+<li><a href="#7-columnas-del-grid">Columnas del grid</a></li>
+<li><a href="#8-filtros-y-búsqueda">Filtros y búsqueda</a></li>
+<li><a href="#9-detalle-de-un-documento">Detalle de un
+documento</a></li>
+<li><a href="#10-exportación-excel--csv">Exportación (Excel /
+CSV)</a></li>
+<li><a href="#11-ficheros-de-estado-y-dónde-se-guardan">Ficheros de
+estado y dónde se guardan</a></li>
+<li><a href="#12-reanudar-una-ejecución-interrumpida">Reanudar una
+ejecución interrumpida</a></li>
+<li><a href="#13-omisión-de-documentos-ya-procesados-históricos">Omisión
+de documentos ya procesados (históricos)</a></li>
+<li><a href="#14-recomendaciones-operativas">Recomendaciones
+operativas</a></li>
+<li><a href="#15-resolución-de-problemas">Resolución de
+problemas</a></li>
+<li><a href="#16-glosario">Glosario</a></li>
+</ol>
+<hr />
+<h2 id="1-requisitos-e-instalación">1. Requisitos e instalación</h2>
+<p><strong>Sistema:</strong> Windows 10/11 de 64 bits (x64).</p>
+<p>Existen dos formatos de entrega. Usa el que te hayan
+proporcionado:</p>
+<table>
+<thead>
+<tr>
+<th>Formato</th>
+<th>Qué es</th>
+<th>Requisitos</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Autónomo (un solo <code>.exe</code>)</strong></td>
+<td>Un único fichero
+<code>DocumentIA.Batch.ClassificationLite.exe</code> (~160 MB) que
+incluye el runtime dentro.</td>
+<td>Ninguno. Se ejecuta tal cual.</td>
+</tr>
+<tr>
+<td><strong>Dependiente del framework</strong></td>
+<td>Una carpeta con el <code>.exe</code> (~150 KB) y sus librerías.</td>
+<td>Requiere <strong>.NET 8 Desktop Runtime (x64)</strong> instalado. Si
+falta, Windows mostrará un aviso con el enlace de descarga.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Instalación:</strong> no requiere instalador. Copia el
+ejecutable (o la carpeta completa, en el formato dependiente) a una
+ubicación con permisos de escritura, por ejemplo
+<code>C:\Apps\BatchClassificationLite\</code>, y haz doble clic para
+abrirlo.</p>
+<blockquote>
+<p>Al primer arranque, si tu antivirus corporativo bloquea el ejecutable
+descargado, puede que tengas que autorizarlo (clic derecho → Propiedades
+→ <em>Desbloquear</em>).</p>
+</blockquote>
+<hr />
+<h2 id="2-primer-arranque-y-configuración-inicial">2. Primer arranque y
+configuración inicial</h2>
+<p>La aplicación funciona contra un <strong>entorno</strong> de
+DocumentIA. Por defecto viene preconfigurada apuntando a
+<strong>PRO</strong>, pero <strong>sin la clave de acceso</strong>, así
+que lo primero es rellenarla:</p>
+<ol type="1">
+<li>Abre la aplicación.</li>
+<li>Pulsa <strong>Configuracion</strong>.</li>
+<li>En el grupo <strong>Procesamiento</strong>, con el entorno
+<strong>PRO</strong> seleccionado, pega la <strong>Function Key</strong>
+que te haya facilitado el equipo de la plataforma.</li>
+<li>(Opcional) Revisa <strong>Backend URL</strong> si te han indicado
+una distinta.</li>
+<li>Pulsa <strong>Guardar</strong>.</li>
+</ol>
+<p>La configuración se guarda en un fichero <code>config.json</code>
+<strong>junto al ejecutable</strong>, de modo que no hay que volver a
+introducirla en cada arranque. La Function Key se guarda
+<strong>ofuscada</strong> (nunca en texto plano). Ver <a href="#11-ficheros-de-estado-y-dónde-se-guardan">Ficheros de
+estado</a>.</p>
+<blockquote>
+<p><strong>Preparar un paquete con la clave ya puesta:</strong> si
+distribuyes la aplicación a varios equipos, monta la app una vez,
+introduce la Function Key en Configuracion, pulsa
+<strong>Guardar</strong> y reparte ese <code>config.json</code> (con la
+clave ya ofuscada) junto al ejecutable. La ofuscación es portable:
+funciona en cualquier equipo sin tener que reintroducir la clave.
+<em>(Es ofuscación para evitar el texto plano, no cifrado de grado
+criptográfico.)</em></p>
+</blockquote>
+<blockquote>
+<p><strong>Importante:</strong> sin una Function Key válida, el backend
+rechazará las peticiones con un error de autorización (401) y los
+documentos terminarán en error. Ver <a href="#15-resolución-de-problemas">Resolución de problemas</a>.</p>
+</blockquote>
+<hr />
+<h2 id="3-la-ventana-principal-de-un-vistazo">3. La ventana principal de
+un vistazo</h2>
+<p>La ventana se divide, de arriba abajo, en cinco zonas:</p>
+<pre><code>┌─────────────────────────────────────────────────────────────────────────────┐
+│ [Seleccionar carpeta] ☑Incluir subcarpetas [Configuracion] [Ejecutar]        │ ← Barra de acciones
+│ [Pausar] [Reanudar] [Cancelar]   [Exportar Excel] [Exportar CSV]             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Arrastra ficheros o carpetas aqui, o pulsa Seleccionar carpeta.              │ ← Ruta / selección
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Total encontrados  Pendientes  En ejecucion  Procesados OK  Errores  Omitidos│ ← Indicadores
+│        6                0            0             6            0        0     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Filtro: [______]   Estado: [Todos ▼]                                         │
+│ ┌───────────┬────────┬───────┬─────┬──────┬────────┬──────────┬───────────┐  │ ← Grid de resultados
+│ │ FileName  │ Status │ Pages…│Pages│ TDN1 │ TDN2   │Confidence│ProcessDate│  │
+│ └───────────┴────────┴───────┴─────┴──────┴────────┴──────────┴───────────┘  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Ejecucion finalizada.                                                        │ ← Barra de estado
+└─────────────────────────────────────────────────────────────────────────────┘</code></pre>
+<ul>
+<li><strong>Barra de acciones:</strong> todos los botones de control
+(selección, configuración, ejecución, exportación). Pausar / Reanudar /
+Cancelar solo se activan mientras hay un proceso en curso.</li>
+<li><strong>Ruta / selección:</strong> muestra la carpeta o ficheros
+seleccionados actualmente.</li>
+<li><strong>Indicadores:</strong> seis contadores en vivo del progreso
+(ver <a href="#6-estados-de-un-documento">Estados de un
+documento</a>).</li>
+<li><strong>Grid de resultados:</strong> una fila por documento, con su
+estado y clasificación.</li>
+<li><strong>Barra de estado:</strong> mensaje de la operación actual
+(&quot;Escaneando…&quot;, &quot;Procesando…&quot;, &quot;Ejecucion finalizada.&quot;, etc.).</li>
+</ul>
+<hr />
+<h2 id="4-flujo-de-trabajo-paso-a-paso">4. Flujo de trabajo paso a
+paso</h2>
+<h3 id="paso-1--selecciona-los-documentos">Paso 1 — Selecciona los
+documentos</h3>
+<p>Tienes dos formas equivalentes:</p>
+<ul>
+<li><strong>Arrastrar y soltar:</strong> arrastra una o varias
+<strong>carpetas</strong> o <strong>ficheros PDF</strong> desde el
+Explorador de Windows y suéltalos en cualquier parte de la ventana.</li>
+<li><strong>Botón:</strong> pulsa <strong>Seleccionar carpeta</strong> y
+elige una carpeta.</li>
+</ul>
+<p>En cuanto sueltas o eliges, la aplicación <strong>escanea
+inmediatamente</strong> y <strong>muestra los PDF encontrados en el
+grid</strong> con estado <code>Pending</code> (previsualización). La
+barra de estado indica cuántos se han encontrado, p. ej. <em>&quot;124
+documentos encontrados. Pulsa Ejecutar para procesar.&quot;</em> Todavía
+<strong>no se ha enviado nada</strong> al backend.</p>
+<blockquote>
+<p>Esta previsualización te permite comprobar <strong>qué se va a
+procesar</strong> antes de lanzar nada. Si sueltas otra selección
+distinta, la anterior se descarta y el grid se actualiza con la
+nueva.</p>
+</blockquote>
+<h3 id="paso-2--ajusta-incluir-subcarpetas">Paso 2 — Ajusta &quot;Incluir
+subcarpetas&quot;</h3>
+<p>La casilla <strong>Incluir subcarpetas</strong> (activada por
+defecto) controla si el escaneo entra en las subcarpetas de lo
+seleccionado. Si la cambias, <strong>vuelve a arrastrar o
+seleccionar</strong> la carpeta para que el escaneo se rehaga con el
+nuevo criterio.</p>
+<blockquote>
+<p>Solo se tienen en cuenta ficheros con extensión
+<strong><code>.pdf</code></strong>. El resto se ignora.</p>
+</blockquote>
+<h3 id="paso-3--revisa-la-configuración-opcional">Paso 3 — Revisa la
+configuración (opcional)</h3>
+<p>Si es la primera vez, o vas a cambiar de entorno, umbral de
+paralelismo, etc., pulsa <strong>Configuracion</strong>. Ver <a href="#5-configuración-detallada">Configuración detallada</a>.</p>
+<h3 id="paso-4--ejecuta">Paso 4 — Ejecuta</h3>
+<p>Pulsa <strong>Ejecutar</strong>. La aplicación procesa las filas
+<code>Pending</code>:</p>
+<ul>
+<li>Envía cada documento al backend según el paralelismo
+configurado.</li>
+<li>Los indicadores y el grid se <strong>refrescan en vivo</strong>
+(aprox. cada segundo).</li>
+<li>Cada documento pasa de <code>Pending</code> → <code>InFlight</code>
+→ <code>Succeeded</code> (o a un estado de error).</li>
+</ul>
+<p>Mientras dura el proceso, la aplicación <strong>impide que el equipo
+se suspenda</strong>, para que un lote largo no se corte al bloquearse
+la pantalla.</p>
+<h3 id="paso-5--controla-el-proceso">Paso 5 — Controla el proceso</h3>
+<p>Con una ejecución en marcha se habilitan:</p>
+<ul>
+<li><strong>Pausar:</strong> deja de enviar nuevos documentos. Los que
+ya están <code>InFlight</code> terminan.</li>
+<li><strong>Reanudar:</strong> continúa enviando los pendientes tras una
+pausa.</li>
+<li><strong>Cancelar:</strong> detiene la ejecución en cuanto es
+posible. Lo ya procesado se conserva.</li>
+</ul>
+<h3 id="paso-6--consulta-resultados">Paso 6 — Consulta resultados</h3>
+<ul>
+<li>Usa el <strong>Filtro</strong> de texto y el desplegable de
+<strong>Estado</strong> para acotar la lista.</li>
+<li><strong>Doble clic</strong> en una fila abre el <a href="#9-detalle-de-un-documento">detalle del documento</a> (petición y
+respuesta completas).</li>
+</ul>
+<h3 id="paso-7--exporta">Paso 7 — Exporta</h3>
+<p>Pulsa <strong>Exportar Excel</strong> o <strong>Exportar CSV</strong>
+para volcar los resultados a fichero. Ver <a href="#10-exportación-excel--csv">Exportación</a>.</p>
+<hr />
+<h2 id="5-configuración-detallada">5. Configuración detallada</h2>
+<p>Se accede con el botón <strong>Configuracion</strong>. Los cambios se
+aplican al pulsar <strong>Guardar</strong> y se conservan entre
+sesiones. Los valores fuera de rango se <strong>ajustan
+automáticamente</strong> al límite más cercano.</p>
+<h3 id="grupo-procesamiento">Grupo &quot;Procesamiento&quot;</h3>
+<table>
+<thead>
+<tr>
+<th>Opción</th>
+<th>Descripción</th>
+<th>Por defecto</th>
+<th>Rango / notas</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Environment</strong></td>
+<td>Entorno de DocumentIA contra el que se trabaja. Puedes tener varios
+y cambiar entre ellos. Botones <strong>Añadir</strong> /
+<strong>Eliminar</strong> para gestionarlos.</td>
+<td><code>PRO</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Backend URL</strong></td>
+<td>URL base del backend del entorno seleccionado.</td>
+<td><code>https://srbappprodocai.azurewebsites.net</code></td>
+<td>Cámbiala solo si te lo indican.</td>
+</tr>
+<tr>
+<td><strong>Function Key</strong></td>
+<td>Clave de acceso al backend del entorno.
+<strong>Obligatoria.</strong> El campo aparece
+<strong>enmascarado</strong> y <strong>nunca muestra</strong> la clave
+ya guardada: déjalo en blanco para conservar la actual, o escribe una
+nueva para reemplazarla. Un rótulo indica &quot;configurada&quot; / &quot;sin
+configurar&quot;.</td>
+<td><em>(vacía)</em></td>
+<td>Imprescindible para PRO. Se guarda <strong>ofuscada</strong> en
+<code>config.json</code> (nunca en texto plano).</td>
+</tr>
+<tr>
+<td><strong>Parallel Queries</strong></td>
+<td>Nº de documentos que se envían en paralelo.</td>
+<td><code>2</code></td>
+<td><strong>1–10</strong>. Subirlo acelera pero carga más el
+backend.</td>
+</tr>
+<tr>
+<td><strong>Internal Batch Size</strong></td>
+<td>Tamaño de lote interno de trabajo.</td>
+<td><code>1000</code></td>
+<td><strong>50–10.000</strong>.</td>
+</tr>
+<tr>
+<td><strong>Polling Interval</strong></td>
+<td>Cada cuánto se consulta el estado de un documento en curso.</td>
+<td><code>60</code> s</td>
+<td><strong>10–600</strong> s. Al principio consulta más rápido (3, 5,
+10, 20, 30 s) y luego se estabiliza en este intervalo.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="grupo-clasificacion">Grupo &quot;Clasificacion&quot;</h3>
+<table>
+<thead>
+<tr>
+<th>Opción</th>
+<th>Descripción</th>
+<th>Por defecto</th>
+<th>Valores</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Classification Level</strong></td>
+<td>Nivel de clasificación solicitado.</td>
+<td><code>TDN1_TDN2</code></td>
+<td><code>TDN1_TDN2</code> (familia + subtipo), <code>TDN1</code> (solo
+familia), <code>DEFAULT</code>.</td>
+</tr>
+<tr>
+<td><strong>Provider</strong></td>
+<td>Motor de clasificación. Déjalo en <code>auto</code> salvo
+indicación.</td>
+<td><code>auto</code></td>
+<td><code>auto</code>, <code>hybrid</code>,
+<code>hybrid-rules-gpt-di</code>, <code>hybrid-rules-di-gpt</code>,
+<code>hybrid-tdn</code>, <code>rules</code>, <code>gpt</code>,
+<code>di</code>.</td>
+</tr>
+<tr>
+<td><strong>Model</strong></td>
+<td>Modelo concreto a usar (avanzado).</td>
+<td><code>auto</code></td>
+<td>Texto libre; <code>auto</code> deja decidir al backend.</td>
+</tr>
+<tr>
+<td><strong>Only Classification</strong></td>
+<td>Si está activo, <strong>solo clasifica</strong>: omite extracción de
+datos, validación, integración y subida a GDC. Es lo habitual para un
+lote de clasificación masiva.</td>
+<td>Activado</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Generar resumen</strong></td>
+<td>Si está activo, el backend genera un <strong>resumen</strong> del
+documento (objetivo, datos clave, alertas y contenido) que se guarda en
+el histórico y se incluye en la exportación y en el detalle. Añade una
+llamada extra por documento (algo más de tiempo/coste). Puedes
+desactivarlo en lotes muy grandes donde no lo necesites.</td>
+<td>Activado</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="grupo-reprocesado">Grupo &quot;Reprocesado&quot;</h3>
+<table>
+<thead>
+<tr>
+<th>Opción</th>
+<th>Descripción</th>
+<th>Por defecto</th>
+<th>Rango / notas</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Force Reprocess</strong></td>
+<td>Ignora el histórico local <strong>y</strong> fuerza el reproceso en
+el backend, aunque el documento ya se hubiera clasificado.</td>
+<td>Desactivado</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>Max Retries</strong></td>
+<td>Reintentos automáticos ante fallos transitorios antes de marcar un
+documento como error definitivo.</td>
+<td><code>3</code></td>
+<td><strong>0–10</strong>.</td>
+</tr>
+<tr>
+<td><strong>Retry Strategy</strong></td>
+<td>Estrategia de reintento. Es fija: <em>Batch Completion</em> (los
+reintentos se agrupan al cierre del lote).</td>
+<td><em>Batch Completion</em></td>
+<td>Fija (informativa).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="grupo-gestion-de-historicos">Grupo &quot;Gestion de historicos&quot;</h3>
+<table>
+<thead>
+<tr>
+<th>Opción</th>
+<th>Descripción</th>
+<th>Por defecto</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Skip Already Processed</strong></td>
+<td>Omite los documentos que ya se clasificaron con éxito en ejecuciones
+anteriores. Ver <a href="#13-omisión-de-documentos-ya-procesados-históricos">Históricos</a>.</td>
+<td>Activado</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-estados-de-un-documento">6. Estados de un documento</h2>
+<p>Cada documento pasa por uno de estos estados, reflejados en la
+columna <strong>Status</strong> del grid y agregados en los seis
+<strong>indicadores</strong> superiores:</p>
+<table>
+<thead>
+<tr>
+<th>Estado</th>
+<th>Indicador</th>
+<th>Significado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Pending</code></td>
+<td><strong>Pendientes</strong></td>
+<td>Escaneado y en cola, aún no enviado.</td>
+</tr>
+<tr>
+<td><code>InFlight</code></td>
+<td><strong>En ejecucion</strong></td>
+<td>Enviado al backend, procesándose.</td>
+</tr>
+<tr>
+<td><code>Succeeded</code></td>
+<td><strong>Procesados OK</strong></td>
+<td>Clasificado correctamente.</td>
+</tr>
+<tr>
+<td><code>Error</code></td>
+<td><em>(transitorio)</em></td>
+<td>Fallo recuperable; se reintentará según <strong>Max
+Retries</strong>.</td>
+</tr>
+<tr>
+<td><code>DefinitiveError</code></td>
+<td><strong>Errores definitivos</strong></td>
+<td>Fallo tras agotar los reintentos. Requiere revisión.</td>
+</tr>
+<tr>
+<td><code>SkippedHistory</code></td>
+<td><strong>Omitidos por historico</strong></td>
+<td>No se reprocesó porque ya estaba clasificado (ver Skip Already
+Processed).</td>
+</tr>
+<tr>
+<td><code>Cancelled</code></td>
+<td><em>(no cuenta como OK ni error)</em></td>
+<td>Interrumpido por el usuario antes de completarse.</td>
+</tr>
+</tbody>
+</table>
+<p>El contador <strong>Total encontrados</strong> es el número de PDF
+detectados en el escaneo.</p>
+<hr />
+<h2 id="7-columnas-del-grid">7. Columnas del grid</h2>
+<table>
+<thead>
+<tr>
+<th>Columna</th>
+<th>Contenido</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>FileName</strong></td>
+<td>Nombre del fichero PDF.</td>
+</tr>
+<tr>
+<td><strong>Status</strong></td>
+<td>Estado actual (tabla anterior).</td>
+</tr>
+<tr>
+<td><strong>PagesIncluded</strong></td>
+<td>Páginas efectivamente incluidas en el análisis (puede ser un rango,
+p. ej. <code>1-10</code>, si se aplicó recorte).</td>
+</tr>
+<tr>
+<td><strong>Pages</strong></td>
+<td>Nº total de páginas del documento.</td>
+</tr>
+<tr>
+<td><strong>TDN1</strong></td>
+<td><strong>Familia</strong> de la tipología (nivel 1), p. ej.
+<code>COMU</code>, <code>DOCJ</code>, <code>CULC</code>.</td>
+</tr>
+<tr>
+<td><strong>TDN2</strong></td>
+<td><strong>Subtipo</strong> de la tipología (nivel 2), p. ej.
+<code>COMU-69</code>, <code>DOCJ-03</code>.</td>
+</tr>
+<tr>
+<td><strong>Confidence</strong></td>
+<td>Confianza de la clasificación, de <code>0</code> a <code>1</code>
+(p. ej. <code>0.95</code>).</td>
+</tr>
+<tr>
+<td><strong>ProcessDate</strong></td>
+<td>Fecha/hora de proceso (UTC, ISO 8601).</td>
+</tr>
+<tr>
+<td><strong>TotalDurationMs</strong></td>
+<td>Duración total del proceso del documento, en milisegundos.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Sobre TDN1 y TDN2:</strong> TDN1 es la familia y TDN2 el
+subtipo dentro de esa familia. La familia (TDN1) siempre es el prefijo
+del subtipo (<code>COMU-69</code> → familia <code>COMU</code>), por lo
+que ambas columnas son coherentes entre sí.</p>
+</blockquote>
+<hr />
+<h2 id="8-filtros-y-búsqueda">8. Filtros y búsqueda</h2>
+<p>Sobre el grid dispones de dos filtros combinables:</p>
+<ul>
+<li><strong>Filtro (texto):</strong> escribe parte del nombre de fichero
+para mostrar solo las coincidencias. Se aplica con un pequeño retardo
+mientras escribes.</li>
+<li><strong>Estado:</strong> desplegable para mostrar solo un estado
+concreto (<code>Pending</code>, <code>InFlight</code>,
+<code>Succeeded</code>, <code>Error</code>,
+<code>DefinitiveError</code>, <code>SkippedHistory</code>,
+<code>Cancelled</code>) o <strong>Todos</strong>.</li>
+</ul>
+<p>Los filtros afectan también a lo que se <strong>exporta</strong>: si
+hay un filtro activo, la exportación incluye únicamente las filas
+visibles. Ver <a href="#10-exportación-excel--csv">Exportación</a>.</p>
+<hr />
+<h2 id="9-detalle-de-un-documento">9. Detalle de un documento</h2>
+<p>Haz <strong>doble clic</strong> en una fila para abrir el diálogo
+<strong>Detalle del documento</strong>. Muestra:</p>
+<ul>
+<li>Una cabecera con <strong>FileName</strong>, <strong>Status</strong>,
+<strong>TDN1</strong>, <strong>TDN2</strong>,
+<strong>Confidence</strong>, <strong>ProcessDate</strong>,
+<strong>DurationMs</strong> y, si hubo error, el <strong>mensaje de
+error</strong>.</li>
+<li>Un cuadro <strong>Resumen</strong> (solo lectura) con la síntesis
+del documento generada por el backend, si estaba activada la opción
+<strong>Generar resumen</strong> al procesarlo.</li>
+<li>Dos pestañas:
+<ul>
+<li><strong>Request enviada:</strong> el JSON de la petición que se
+mandó al backend (el contenido del PDF va omitido por tamaño).</li>
+<li><strong>Response recibida:</strong> el JSON de respuesta del
+backend, <strong>con formato indentado</strong> para lectura cómoda
+(resumen, markdown extraído, detalle de clasificación, tiempos,
+etc.).</li>
+</ul></li>
+</ul>
+<blockquote>
+<p>Los documentos procesados <strong>después</strong> de la última
+actualización de la aplicación muestran la respuesta ya formateada.
+Registros muy antiguos podrían verse compactos; vuelve a procesarlos si
+necesitas la vista formateada.</p>
+</blockquote>
+<hr />
+<h2 id="10-exportación-excel--csv">10. Exportación (Excel / CSV)</h2>
+<p>Con <strong>Exportar Excel</strong> o <strong>Exportar CSV</strong>
+vuelcas los resultados a un fichero. Se abre un diálogo para elegir la
+ruta y el nombre.</p>
+<p><strong>Columnas exportadas</strong> (mismas en ambos formatos):</p>
+<pre><code>FileName; Status; PagesIncluded; Pages; TDN1; TDN2; Confidence; ProcessDate; TotalDurationMs; Summary</code></pre>
+<p>La columna <strong>Summary</strong> contiene el resumen del documento
+(si se generó; ver <a href="#5-configuración-detallada">Generar
+resumen</a>). Estará vacía en los documentos procesados con esa opción
+desactivada.</p>
+<p>Detalles:</p>
+<ul>
+<li><strong>Alcance:</strong> se exporta lo que corresponde al filtro
+activo. Sin filtro, se exporta toda la ejecución actual; con filtro de
+texto o de estado, solo las filas que cumplen el criterio.</li>
+<li><strong>CSV:</strong> separador <strong><code>;</code></strong>,
+codificación <strong>UTF-8 con BOM</strong> (Excel lo abre con acentos
+correctos). Los valores que empiezan por <code>= + - @</code> se
+neutralizan para que Excel no los interprete como fórmulas.</li>
+<li><strong>Excel:</strong> genera un <code>.xlsx</code> con una hoja
+llamada <strong>Resultados</strong>.</li>
+</ul>
+<hr />
+<h2 id="11-ficheros-de-estado-y-dónde-se-guardan">11. Ficheros de estado
+y dónde se guardan</h2>
+<table>
+<thead>
+<tr>
+<th>Fichero</th>
+<th>Ubicación</th>
+<th>Contenido</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config.json</code></td>
+<td><strong>Junto al ejecutable</strong></td>
+<td>Entornos, Function Keys (<strong>ofuscadas</strong>, nunca en texto
+plano), paralelismo, lotes, polling y opciones de clasificación.</td>
+</tr>
+<tr>
+<td><code>lite.db</code></td>
+<td><code>%LocalAppData%\DocumentIA.BatchLite\</code></td>
+<td>Base SQLite con el <strong>histórico permanente</strong> de
+ejecuciones y documentos.</td>
+</tr>
+</tbody>
+</table>
+<p>Ruta típica de la base de datos:
+<code>C:\Users\&lt;tu-usuario&gt;\AppData\Local\DocumentIA.BatchLite\lite.db</code></p>
+<ul>
+<li>La base de datos <strong>no se borra automáticamente</strong>. Es lo
+que permite omitir documentos ya clasificados y reanudar ejecuciones
+interrumpidas.</li>
+<li>Si <code>config.json</code> se corrompe, la aplicación arranca con
+los valores por defecto sin fallar (tendrás que volver a introducir la
+Function Key).</li>
+</ul>
+<blockquote>
+<p><strong>Copia de seguridad / reinicio:</strong> para empezar de cero
+(perder el histórico), cierra la aplicación y borra
+<code>lite.db</code>. Para copiar la configuración a otro equipo, lleva
+el <code>config.json</code>.</p>
+</blockquote>
+<hr />
+<h2 id="12-reanudar-una-ejecución-interrumpida">12. Reanudar una
+ejecución interrumpida</h2>
+<p>Si la aplicación se cierra de forma inesperada (corte de luz, cierre
+forzado…) mientras procesaba, al volver a abrirla detecta la
+<strong>ejecución incompleta</strong> y pregunta:</p>
+<blockquote>
+<p><em>&quot;Hay una ejecucion incompleta sobre &#39;<carpeta>&#39;. Pendientes: N,
+En vuelo: M, Completados: K. ¿Quieres continuarla? (No =
+descartarla)&quot;</em></p>
+</blockquote>
+<ul>
+<li><strong>Sí:</strong> reengancha los documentos que quedaron en vuelo
+y termina los pendientes, sin reprocesar los ya completados.</li>
+<li><strong>No:</strong> descarta esa ejecución (los resultados ya
+obtenidos se conservan en el histórico).</li>
+</ul>
+<blockquote>
+<p>Una simple <strong>previsualización</strong> (arrastrar ficheros sin
+llegar a pulsar Ejecutar) <strong>no</strong> dispara este aviso: solo
+se ofrecen para reanudar las ejecuciones que llegaron a lanzarse.</p>
+</blockquote>
+<hr />
+<h2 id="13-omisión-de-documentos-ya-procesados-históricos">13. Omisión
+de documentos ya procesados (históricos)</h2>
+<p>Con <strong>Skip Already Processed</strong> activo (por defecto),
+antes de enviar un documento la aplicación comprueba si ya lo clasificó
+con éxito anteriormente. La coincidencia se determina por la clave:</p>
+<pre><code>nombre de fichero  +  tamaño en bytes  +  fecha de última modificación</code></pre>
+<p>Si coincide, el documento se marca como <code>SkippedHistory</code>
+(contador <strong>Omitidos por historico</strong>) y no se vuelve a
+enviar, reutilizando el resultado anterior.</p>
+<p>Implicaciones prácticas:</p>
+<ul>
+<li>Puedes <strong>relanzar la misma carpeta</strong> cada día: solo se
+procesan los documentos nuevos o modificados.</li>
+<li>Si <strong>editas</strong> un PDF (cambia tamaño o fecha), se
+considera distinto y se reprocesa.</li>
+<li>Para <strong>forzar</strong> el reproceso de todo, activa
+<strong>Force Reprocess</strong> en configuración.</li>
+</ul>
+<hr />
+<h2 id="14-recomendaciones-operativas">14. Recomendaciones
+operativas</h2>
+<ul>
+<li><strong>Paralelismo prudente:</strong> mantén <strong>Parallel
+Queries = 2</strong> en horario laboral para no degradar el entorno PRO.
+Súbelo solo en ventanas de baja actividad y con autorización.</li>
+<li><strong>Lotes grandes fuera de horario:</strong> lanza los volúmenes
+altos al final de la jornada y deja el equipo encendido. La aplicación
+impide la suspensión mientras procesa.</li>
+<li><strong>Reejecución diaria:</strong> con <strong>Skip Already
+Processed</strong> activo, relanzar la misma carpeta es barato: solo
+entra lo nuevo.</li>
+<li><strong>Revisa los errores definitivos:</strong> filtra por
+<code>DefinitiveError</code> al terminar y abre el detalle (doble clic)
+para ver el mensaje de cada fallo.</li>
+<li><strong>Previsualiza antes de ejecutar:</strong> aprovecha que al
+arrastrar se ve el recuento y la lista para confirmar que la carpeta y
+el criterio de subcarpetas son los correctos.</li>
+</ul>
+<hr />
+<h2 id="15-resolución-de-problemas">15. Resolución de problemas</h2>
+<table>
+<thead>
+<tr>
+<th>Síntoma</th>
+<th>Causa probable</th>
+<th>Solución</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Todos los documentos terminan en error nada más empezar; mensajes de
+<strong>401 / no autorizado</strong>.</td>
+<td>Function Key vacía o incorrecta para el entorno seleccionado.</td>
+<td>Configuracion → introduce la <strong>Function Key</strong> correcta
+del entorno → Guardar.</td>
+</tr>
+<tr>
+<td>Arrastro ficheros y <strong>el grid no muestra nada</strong>, solo
+un número.</td>
+<td><em>(Comportamiento antiguo, ya corregido.)</em> Asegúrate de usar
+la versión actual: al soltar, el grid se puebla con las filas
+<code>Pending</code>.</td>
+<td>Actualiza a la última versión del ejecutable.</td>
+</tr>
+<tr>
+<td>El grid aparece <strong>vacío</strong> tras seleccionar una
+carpeta.</td>
+<td>La carpeta no contiene PDF, o <strong>Incluir subcarpetas</strong>
+está desactivado y los PDF están en subniveles.</td>
+<td>Activa <strong>Incluir subcarpetas</strong> y vuelve a
+seleccionar.</td>
+</tr>
+<tr>
+<td>La pestaña <strong>Response recibida</strong> se ve en una sola
+línea.</td>
+<td>Registro procesado con una versión anterior.</td>
+<td>Vuelve a procesar el documento; los nuevos se guardan
+formateados.</td>
+</tr>
+<tr>
+<td>Errores intermitentes que luego se recuperan solos.</td>
+<td>Fallos transitorios de red o del backend; se reintentan según
+<strong>Max Retries</strong>.</td>
+<td>Normal. Si persisten, revisa conectividad y sube <strong>Max
+Retries</strong>.</td>
+</tr>
+<tr>
+<td>Algún PDF concreto acaba en <strong>DefinitiveError</strong> con
+contenido inválido.</td>
+<td>Fichero corrupto o no es un PDF legible.</td>
+<td>Abre el detalle para ver el mensaje; revisa el fichero de
+origen.</td>
+</tr>
+<tr>
+<td>El proceso va lento.</td>
+<td>Paralelismo bajo o intervalo de polling alto.</td>
+<td>Sube <strong>Parallel Queries</strong> (con criterio) y/o baja
+<strong>Polling Interval</strong>.</td>
+</tr>
+<tr>
+<td>El equipo se suspende a mitad del lote.</td>
+<td>La prevención de suspensión solo actúa <strong>durante</strong> el
+proceso; si pausas mucho tiempo, el sistema puede suspenderse.</td>
+<td>Evita pausas largas en lotes desatendidos, o ajusta el plan de
+energía.</td>
+</tr>
+<tr>
+<td>No recuerda la configuración entre sesiones.</td>
+<td>El <code>config.json</code> no se puede escribir (carpeta de solo
+lectura).</td>
+<td>Mueve el ejecutable a una carpeta con permisos de escritura.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="16-glosario">16. Glosario</h2>
+<table>
+<thead>
+<tr>
+<th>Término</th>
+<th>Significado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>TDN1</strong></td>
+<td>Nivel 1 de la taxonomía: <strong>familia</strong> de la tipología
+documental (p. ej. <code>COMU</code>).</td>
+</tr>
+<tr>
+<td><strong>TDN2</strong></td>
+<td>Nivel 2: <strong>subtipo</strong> dentro de la familia (p. ej.
+<code>COMU-69</code>).</td>
+</tr>
+<tr>
+<td><strong>Tipología</strong></td>
+<td>Clase documental resultante de la clasificación.</td>
+</tr>
+<tr>
+<td><strong>Confidence</strong></td>
+<td>Grado de confianza de la clasificación, de 0 a 1.</td>
+</tr>
+<tr>
+<td><strong>Provider</strong></td>
+<td>Motor de clasificación (reglas, GPT, Document Intelligence o
+híbridos).</td>
+</tr>
+<tr>
+<td><strong>Only Classification</strong></td>
+<td>Modo en el que solo se clasifica, sin
+extracción/validación/integración posteriores.</td>
+</tr>
+<tr>
+<td><strong>Resumen</strong></td>
+<td>Síntesis del documento generada por el backend (objetivo, datos
+clave, alertas y contenido). Se guarda en el histórico, se exporta y se
+muestra en el detalle.</td>
+</tr>
+<tr>
+<td><strong>Polling</strong></td>
+<td>Consulta periódica del estado de un documento que se está procesando
+en el backend.</td>
+</tr>
+<tr>
+<td><strong>Batch / Lote</strong></td>
+<td>Grupo de documentos que se procesan juntos.</td>
+</tr>
+<tr>
+<td><strong>Histórico</strong></td>
+<td>Registro permanente en <code>lite.db</code> de lo ya procesado,
+usado para omitir duplicados y reanudar.</td>
+</tr>
+<tr>
+<td><strong>Ejecución</strong></td>
+<td>Un lanzamiento concreto de proceso sobre una selección de
+documentos.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Documento orientado al uso de la aplicación. Para dudas de
+plataforma (claves de acceso, entornos, cuotas del backend), contacta
+con el equipo de DocumentIA.</em></p>
+</body>
+</html>
