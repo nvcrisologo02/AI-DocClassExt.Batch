@@ -9,7 +9,7 @@ function New-EEIngestMetadata {
         # Umbral de fallback de extracción (CU→GPT) enviado en instrucciones.extraction.umbral.
         # El orquestador lo usa como umbral efectivo de fallback (y base de completitud/confianza
         # cuando no se informan los específicos), con precedencia sobre la config de la tipología.
-        [double]$ExtraccionUmbralFallback = 0.7
+        [double]$ExtraccionUmbralFallback = 0.5
     )
     return [ordered]@{
         instrucciones = [ordered]@{

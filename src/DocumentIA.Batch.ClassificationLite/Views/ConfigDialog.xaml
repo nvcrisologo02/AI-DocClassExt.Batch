@@ -1,0 +1,118 @@
+<Window x:Class="DocumentIA.Batch.ClassificationLite.Views.ConfigDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configuracion" Height="620" Width="620"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResize">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <GroupBox Header="Procesamiento" Padding="8" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Environment" VerticalAlignment="Center" Margin="0,4"/>
+                        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Margin="0,4">
+                            <ComboBox x:Name="EnvironmentCombo" Width="220"
+                                      DisplayMemberPath="Name" SelectionChanged="EnvironmentCombo_SelectionChanged"/>
+                            <Button x:Name="AddEnvironmentButton" Content="Añadir" Width="70" Margin="8,0,0,0"
+                                    Click="AddEnvironment_Click"/>
+                            <Button x:Name="RemoveEnvironmentButton" Content="Eliminar" Width="70" Margin="6,0,0,0"
+                                    Click="RemoveEnvironment_Click"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Backend URL" VerticalAlignment="Center" Margin="0,4"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="BackendUrlBox" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Function Key" VerticalAlignment="Center" Margin="0,4"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="FunctionKeyBox" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Parallel Queries (1-10)" VerticalAlignment="Center" Margin="0,4"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="ParallelBox" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Internal Batch Size" VerticalAlignment="Center" Margin="0,4"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="BatchSizeBox" Margin="0,4"/>
+
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Polling Interval (segundos)" VerticalAlignment="Center" Margin="0,4"/>
+                        <TextBox Grid.Row="5" Grid.Column="1" x:Name="PollingBox" Margin="0,4"/>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Clasificacion" Padding="8" Margin="0,0,0,10">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="200"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Classification Level" VerticalAlignment="Center" Margin="0,4"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="LevelCombo" Margin="0,4">
+                            <ComboBoxItem Content="TDN1_TDN2"/>
+                            <ComboBoxItem Content="TDN1"/>
+                            <ComboBoxItem Content="DEFAULT"/>
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Provider" VerticalAlignment="Center" Margin="0,4"/>
+                        <ComboBox Grid.Row="1" Grid.Column="1" x:Name="ProviderCombo" IsEditable="True" Margin="0,4">
+                            <ComboBoxItem Content="auto"/>
+                            <ComboBoxItem Content="hybrid"/>
+                            <ComboBoxItem Content="hybrid-rules-gpt-di"/>
+                            <ComboBoxItem Content="hybrid-rules-di-gpt"/>
+                            <ComboBoxItem Content="hybrid-tdn"/>
+                            <ComboBoxItem Content="rules"/>
+                            <ComboBoxItem Content="gpt"/>
+                            <ComboBoxItem Content="di"/>
+                        </ComboBox>
+
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Model" VerticalAlignment="Center" Margin="0,4"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="ModelBox" Margin="0,4"/>
+
+                        <CheckBox Grid.Row="3" Grid.Column="1" x:Name="OnlyClassificationCheck"
+                                  Content="Only Classification" Margin="0,8"/>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="Reprocesado" Padding="8" Margin="0,0,0,10">
+                    <StackPanel>
+                        <CheckBox x:Name="ForceReprocessCheck" Content="Force Reprocess (ignora historico local y fuerza reproceso en el backend)" Margin="0,4"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,4">
+                            <TextBlock Text="Max Retries" Width="200" VerticalAlignment="Center"/>
+                            <TextBox x:Name="MaxRetriesBox" Width="80"/>
+                        </StackPanel>
+                        <TextBlock Text="Retry Strategy: Batch Completion (fija)" Foreground="#666" Margin="0,4"/>
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox Header="Gestion de historicos" Padding="8">
+                    <CheckBox x:Name="SkipProcessedCheck" Content="Skip Already Processed (omite documentos ya clasificados con exito)" Margin="0,4"/>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Guardar" Width="100" Margin="0,0,8,0" Click="Save_Click" IsDefault="True"/>
+            <Button Content="Cancelar" Width="100" Click="Cancel_Click" IsCancel="True"/>
+        </StackPanel>
+    </Grid>
+</Window>
