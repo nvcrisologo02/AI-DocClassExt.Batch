@@ -33,6 +33,19 @@ public class LiteDocumentRowTests
         Assert.Equal(expected, row.IsLowConfidence);
     }
 
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("  ", false)]
+    [InlineData("OK", false)]
+    [InlineData("ok", false)]
+    [InlineData("BAJA_CONFIANZA_CLASIFICACION", true)]
+    [InlineData("OTRO_ESTADO", true)]
+    public void IsReviewableEstado_ClasificaCorrectamente(string? estado, bool esperado)
+    {
+        Assert.Equal(esperado, LiteDocumentRow.IsReviewableEstado(estado));
+    }
+
     [Fact]
     public void Estado_AlCambiar_NotificaResultadoDisplayEIsLowConfidence()
     {

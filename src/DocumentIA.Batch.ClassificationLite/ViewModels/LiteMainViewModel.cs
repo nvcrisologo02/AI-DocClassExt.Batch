@@ -170,7 +170,7 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
             return all;
         }
 
-        return all.Where(d => MatchesFilter(d.FileName, d.Status, IsReviewable(d.Estado))).ToList();
+        return all.Where(d => MatchesFilter(d.FileName, d.Status, LiteDocumentRow.IsReviewableEstado(d.Estado))).ToList();
     }
 
     private bool FilterRow(object item)
@@ -199,14 +199,6 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
         return string.Equals(StatusFilter, "Todos", StringComparison.OrdinalIgnoreCase)
             || string.Equals(status, StatusFilter, StringComparison.OrdinalIgnoreCase);
     }
-
-    /// <summary>
-    /// Condicion unica de "a revisar": Estado presente y distinto de "OK" (baja confianza u
-    /// otro rechazo del backend). Compartida por la rejilla (via LiteDocumentRow.IsLowConfidence,
-    /// que aplica la misma regla) y por la exportacion, para que nunca diverjan.
-    /// </summary>
-    private static bool IsReviewable(string? estado)
-        => !string.IsNullOrWhiteSpace(estado) && !string.Equals(estado, "OK", StringComparison.OrdinalIgnoreCase);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

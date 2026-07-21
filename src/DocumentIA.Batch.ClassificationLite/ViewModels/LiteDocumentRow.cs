@@ -136,8 +136,16 @@ public class LiteDocumentRow : INotifyPropertyChanged
         }
     }
 
-    public bool IsLowConfidence
-        => !string.IsNullOrWhiteSpace(Estado) && !string.Equals(Estado, "OK", StringComparison.OrdinalIgnoreCase);
+    public bool IsLowConfidence => IsReviewableEstado(Estado);
+
+    /// <summary>
+    /// Condicion unica de "a revisar": Estado presente y distinto de "OK" (baja confianza u
+    /// otro rechazo del backend). Compartida por la rejilla (via <see cref="IsLowConfidence"/>)
+    /// y por la exportacion, para que nunca diverjan.
+    /// </summary>
+    public static bool IsReviewableEstado(string? estado)
+        => !string.IsNullOrWhiteSpace(estado)
+           && !estado.Equals("OK", StringComparison.OrdinalIgnoreCase);
 
     public static LiteDocumentRow From(LiteDocument document)
     {
