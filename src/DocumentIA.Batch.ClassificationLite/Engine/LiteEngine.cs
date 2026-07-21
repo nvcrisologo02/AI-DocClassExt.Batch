@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Text.Json;
 using DocumentIA.Batch.ClassificationLite.Data;
 using DocumentIA.Batch.ClassificationLite.Models;
 
@@ -7,6 +8,10 @@ namespace DocumentIA.Batch.ClassificationLite.Engine;
 
 public class LiteEngine
 {
+    // El servidor devuelve el JSON compacto (una sola línea); lo reindentamos para
+    // que el diálogo de detalle lo muestre legible, igual que el request almacenado.
+    private static readonly JsonSerializerOptions ResponseJsonOptions = new() { WriteIndented = true };
+
     private readonly LiteRepository _repository;
     private readonly IIngestBackend _backend;
     private readonly LiteConfig _config;
@@ -257,7 +262,7 @@ public class LiteEngine
                 document.PagesIncluded = result.PagesIncluded;
                 document.ProcessDate = result.ProcessDate ?? DateTime.UtcNow.ToString("O");
                 document.DurationMs = result.DurationMs ?? stopwatch.ElapsedMilliseconds;
-                document.ResponseJson = status.Output.Value.GetRawText();
+                document.ResponseJson = JsonSerializer.Serialize(status.Output.Value, ResponseJsonOptions);
                 document.ErrorMessage = null;
                 document.Status = LiteDocumentStatus.Succeeded;
                 Interlocked.Exchange(ref _consecutiveUnauthorized, 0);

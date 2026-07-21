@@ -26,12 +26,19 @@ public static class LiteResultParser
         var clasificacion = detalle.HasValue ? GetProperty(detalle.Value, "Clasificacion", "clasificacion") : null;
         var seguimiento = detalle.HasValue ? GetProperty(detalle.Value, "Seguimiento", "seguimiento") : null;
 
+        var tdn2 = FirstNonEmpty(
+            GetString(identificacion, "Tdn2", "tdn2"),
+            GetString(clasificacion, "Tdn2Detectado", "tdn2Detectado"));
+
         return new LiteClassificationResult
         {
-            Tdn1 = GetString(identificacion, "Tdn1", "tdn1"),
-            Tdn2 = FirstNonEmpty(
-                GetString(identificacion, "Tdn2", "tdn2"),
-                GetString(clasificacion, "Tdn2Detectado", "tdn2Detectado")),
+            // El backend solo emite Identificacion.Tdn1 en clasificaciones parciales o
+            // en nivel TDN1; en el camino de éxito completo llega null. Como la familia
+            // TDN1 es el prefijo del TDN2 (COMU-69 -> COMU), la derivamos como fallback.
+            Tdn1 = FirstNonEmpty(
+                GetString(identificacion, "Tdn1", "tdn1"),
+                DeriveTdn1FromTdn2(tdn2)),
+            Tdn2 = tdn2,
             Confidence = GetDouble(resultado, "ConfianzaGlobal", "confianzaGlobal")
                 ?? GetDouble(clasificacion, "Confianza", "confianza"),
             Pages = (int?)GetLong(identificacion, "Paginas", "paginas"),
@@ -137,4 +144,15 @@ public static class LiteResultParser
 
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    private static string? DeriveTdn1FromTdn2(string? tdn2)
+    {
+        if (string.IsNullOrWhiteSpace(tdn2))
+        {
+            return null;
+        }
+
+        var separatorIndex = tdn2.IndexOfAny(new[] { '-', '.' });
+        return separatorIndex > 0 ? tdn2[..separatorIndex] : tdn2;
+    }
 }
