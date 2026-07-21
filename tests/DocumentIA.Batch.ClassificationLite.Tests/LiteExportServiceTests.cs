@@ -34,20 +34,21 @@ public class LiteExportServiceTests : IDisposable
         Confidence = 0.9123,
         ProcessDate = "2026-07-20T12:00:00Z",
         DurationMs = 4321,
-        Summary = "Objetivo del documento: presentar el balance."
+        Summary = "Objetivo del documento: presentar el balance.",
+        Estado = "OK"
     };
 
     [Fact]
-    public void ToRow_MapeaLasDiezColumnas()
+    public void ToRow_MapeaLasOnceColumnas()
     {
         var row = LiteExportService.ToRow(SampleDoc());
 
-        Assert.Equal(10, row.Length);
+        Assert.Equal(11, row.Length);
         Assert.Equal(
             new[]
             {
                 "informe.pdf", "Succeeded", "1-5", "8", "T01", "T01.02", "0,9123".Replace(',', '.'),
-                "2026-07-20T12:00:00Z", "4321", "Objetivo del documento: presentar el balance."
+                "OK", "2026-07-20T12:00:00Z", "4321", "Objetivo del documento: presentar el balance."
             },
             row);
     }
@@ -62,8 +63,20 @@ public class LiteExportServiceTests : IDisposable
         Assert.Equal(string.Empty, row[2]);
         Assert.Equal(string.Empty, row[3]);
         Assert.Equal(string.Empty, row[6]);
-        Assert.Equal(string.Empty, row[8]);
+        Assert.Equal(string.Empty, row[7]);
         Assert.Equal(string.Empty, row[9]);
+        Assert.Equal(string.Empty, row[10]);
+    }
+
+    [Fact]
+    public void ToRow_ConEstadoBajaConfianza_LoIncluyeTrasConfidence()
+    {
+        var doc = SampleDoc();
+        doc.Estado = "BAJA_CONFIANZA_CLASIFICACION";
+
+        var row = LiteExportService.ToRow(doc);
+
+        Assert.Equal("BAJA_CONFIANZA_CLASIFICACION", row[7]);
     }
 
     [Fact]
@@ -76,8 +89,8 @@ public class LiteExportServiceTests : IDisposable
         var bytes = File.ReadAllBytes(path);
         Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes.Take(3).ToArray());
         var lines = File.ReadAllLines(path, Encoding.UTF8);
-        Assert.Equal("FileName;Status;PagesIncluded;Pages;TDN1;TDN2;Confidence;ProcessDate;TotalDurationMs;Summary", lines[0]);
-        Assert.Contains("informe.pdf;Succeeded;1-5;8;T01;T01.02;0.9123;", lines[1]);
+        Assert.Equal("FileName;Status;PagesIncluded;Pages;TDN1;TDN2;Confidence;Estado;ProcessDate;TotalDurationMs;Summary", lines[0]);
+        Assert.Contains("informe.pdf;Succeeded;1-5;8;T01;T01.02;0.9123;OK;", lines[1]);
     }
 
     [Fact]

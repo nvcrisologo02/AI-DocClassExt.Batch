@@ -185,6 +185,30 @@ public class LiteRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void InsertUpdateDocument_PersisteYActualizaEstado()
+    {
+        var execution = _repository.CreateExecution(@"c:\docs", false, "{}");
+        var seed = NewDoc(execution.ExecutionId, "a.pdf");
+        seed.Estado = "OK";
+        _repository.InsertDocuments(new[] { seed });
+        var id = _repository.GetDocuments(execution.ExecutionId).Single().Id;
+
+        var afterInsert = _repository.GetDocument(id);
+        Assert.Equal("OK", afterInsert!.Estado);
+
+        afterInsert.Confidence = 0.45;
+        afterInsert.Estado = "BAJA_CONFIANZA_CLASIFICACION";
+        _repository.UpdateDocument(afterInsert);
+
+        var reloaded = _repository.GetDocument(id);
+        Assert.Equal("BAJA_CONFIANZA_CLASIFICACION", reloaded!.Estado);
+        Assert.Equal("BAJA_CONFIANZA_CLASIFICACION",
+            _repository.GetDocuments(execution.ExecutionId).Single().Estado);
+        Assert.Equal("BAJA_CONFIANZA_CLASIFICACION",
+            _repository.GetDocumentsForGrid(execution.ExecutionId).Single().Estado);
+    }
+
+    [Fact]
     public void GetDocument_DevuelveElDocumentoCompletoConAmbosJson()
     {
         var execution = _repository.CreateExecution(@"c:\docs", false, "{}");

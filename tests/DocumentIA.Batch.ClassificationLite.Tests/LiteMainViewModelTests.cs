@@ -26,7 +26,7 @@ public class LiteMainViewModelTests : IDisposable
         _executionId = execution.ExecutionId;
         _repository.InsertDocuments(new[]
         {
-            new LiteDocument { ExecutionId = _executionId, FileName = "alfa.pdf", FullPath = @"c:\docs\alfa.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.Succeeded, Tdn1 = "T01", Tdn2 = "T01.02", Confidence = 0.9, Pages = 5, PagesIncluded = "1-5", ProcessDate = "2026-07-20", DurationMs = 1000 },
+            new LiteDocument { ExecutionId = _executionId, FileName = "alfa.pdf", FullPath = @"c:\docs\alfa.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.Succeeded, Tdn1 = "T01", Tdn2 = "T01.02", Confidence = 0.9, Pages = 5, PagesIncluded = "1-5", ProcessDate = "2026-07-20", DurationMs = 1000, Estado = "OK" },
             new LiteDocument { ExecutionId = _executionId, FileName = "beta.pdf", FullPath = @"c:\docs\beta.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.Pending },
             new LiteDocument { ExecutionId = _executionId, FileName = "gamma.pdf", FullPath = @"c:\docs\gamma.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.DefinitiveError, ErrorMessage = "kaput" },
             new LiteDocument { ExecutionId = _executionId, FileName = "delta.pdf", FullPath = @"c:\docs\delta.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.SkippedHistory, Tdn1 = "T09" }
@@ -168,6 +168,40 @@ public class LiteMainViewModelTests : IDisposable
         var row = _viewModel.Rows.Single(r => r.FileName == "pesado.pdf");
         Assert.True(string.IsNullOrEmpty(row.RequestJson));
         Assert.True(string.IsNullOrEmpty(row.ResponseJson));
+    }
+
+    [Fact]
+    public void ShowOnlyReview_DejaVisibleSoloLosDocumentosDeBajaConfianza()
+    {
+        _repository.InsertDocuments(new[]
+        {
+            new LiteDocument { ExecutionId = _executionId, FileName = "epsilon.pdf", FullPath = @"c:\docs\epsilon.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.Succeeded, Confidence = 0.45, Estado = "BAJA_CONFIANZA_CLASIFICACION" }
+        });
+        _viewModel.ReloadRows();
+
+        _viewModel.ShowOnlyReview = true;
+
+        var visible = _viewModel.RowsView.Cast<LiteDocumentRow>().ToList();
+        Assert.Single(visible);
+        Assert.Equal("epsilon.pdf", visible[0].FileName);
+    }
+
+    [Fact]
+    public void ShowOnlyReview_LaExportacionSoloIncluyeLosDeBajaConfianza()
+    {
+        _repository.InsertDocuments(new[]
+        {
+            new LiteDocument { ExecutionId = _executionId, FileName = "epsilon.pdf", FullPath = @"c:\docs\epsilon.pdf", FileSize = 1, LastModifiedUtc = "x", Status = LiteDocumentStatus.Succeeded, Confidence = 0.45, Estado = "BAJA_CONFIANZA_CLASIFICACION" }
+        });
+        _viewModel.ReloadRows();
+        _viewModel.ShowOnlyReview = true;
+        var path = Path.Combine(_tempDir, "export-revision.csv");
+
+        _viewModel.ExportCsv(path);
+
+        var lines = File.ReadAllLines(path);
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("epsilon.pdf", lines[1]);
     }
 
     [Fact]

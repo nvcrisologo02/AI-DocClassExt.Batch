@@ -72,7 +72,8 @@ public class LiteRepository
                 RequestJson TEXT NULL,
                 ResponseJson TEXT NULL,
                 ErrorMessage TEXT NULL,
-                Summary TEXT NULL
+                Summary TEXT NULL,
+                Estado TEXT NULL
             );
 
             CREATE INDEX IF NOT EXISTS IX_Documents_Dedup
@@ -81,7 +82,8 @@ public class LiteRepository
                 ON Documents(ExecutionId, Status);
             """);
         EnsureColumn(connection, "Documents", "Summary", "TEXT NULL");
-        connection.Execute("PRAGMA user_version=2;");
+        EnsureColumn(connection, "Documents", "Estado", "TEXT NULL");
+        connection.Execute("PRAGMA user_version=3;");
     }
 
     private static void EnsureColumn(SqliteConnection connection, string table, string column, string definition)
@@ -147,11 +149,11 @@ public class LiteRepository
             INSERT INTO Documents (
                 ExecutionId, FileName, FullPath, FileSize, LastModifiedUtc, Status, BatchNumber, RetryCount,
                 InstanceId, StatusQueryUri, Tdn1, Tdn2, Confidence, Pages, PagesIncluded,
-                ProcessDate, DurationMs, RequestJson, ResponseJson, ErrorMessage, Summary)
+                ProcessDate, DurationMs, RequestJson, ResponseJson, ErrorMessage, Summary, Estado)
             VALUES (
                 @ExecutionId, @FileName, @FullPath, @FileSize, @LastModifiedUtc, @Status, @BatchNumber, @RetryCount,
                 @InstanceId, @StatusQueryUri, @Tdn1, @Tdn2, @Confidence, @Pages, @PagesIncluded,
-                @ProcessDate, @DurationMs, @RequestJson, @ResponseJson, @ErrorMessage, @Summary);
+                @ProcessDate, @DurationMs, @RequestJson, @ResponseJson, @ErrorMessage, @Summary, @Estado);
             """, documents, transaction);
         transaction.Commit();
     }
@@ -176,7 +178,8 @@ public class LiteRepository
                 RequestJson = @RequestJson,
                 ResponseJson = @ResponseJson,
                 ErrorMessage = @ErrorMessage,
-                Summary = @Summary
+                Summary = @Summary,
+                Estado = @Estado
             WHERE Id = @Id;
             """, document);
     }
@@ -202,7 +205,7 @@ public class LiteRepository
             SELECT
                 Id, ExecutionId, FileName, FullPath, FileSize, LastModifiedUtc, Status, BatchNumber,
                 RetryCount, InstanceId, StatusQueryUri, Tdn1, Tdn2, Confidence, Pages, PagesIncluded,
-                ProcessDate, DurationMs, ErrorMessage
+                ProcessDate, DurationMs, ErrorMessage, Estado
             FROM Documents
             WHERE ExecutionId = @executionId
             ORDER BY Id;

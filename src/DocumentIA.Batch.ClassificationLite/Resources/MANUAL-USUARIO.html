@@ -576,8 +576,19 @@ p. ej. <code>1-10</code>, si se aplicó recorte).</td>
 </tr>
 <tr>
 <td><strong>Confidence</strong></td>
-<td>Confianza de la clasificación, de <code>0</code> a <code>1</code>
-(p. ej. <code>0.95</code>).</td>
+<td>Confianza del <strong>clasificador</strong>, de <code>0</code> a
+<code>1</code> (p. ej. <code>0.95</code>). Es la confianza real del
+modelo, aunque el backend haya rechazado el resultado por baja confianza
+(ver <strong>Resultado</strong>).</td>
+</tr>
+<tr>
+<td><strong>Resultado</strong></td>
+<td>Estado de calidad de la clasificación. Vacío cuando es correcta
+(<code>OK</code>); muestra <strong>&quot;Baja confianza&quot;</strong> cuando el
+backend la marcó como dudosa
+(<code>BAJA_CONFIANZA_CLASIFICACION</code>), es decir, la confianza del
+clasificador no alcanzó el umbral de aceptación y conviene
+<strong>revisar</strong> ese documento.</td>
 </tr>
 <tr>
 <td><strong>ProcessDate</strong></td>
@@ -595,9 +606,17 @@ subtipo dentro de esa familia. La familia (TDN1) siempre es el prefijo
 del subtipo (<code>COMU-69</code> → familia <code>COMU</code>), por lo
 que ambas columnas son coherentes entre sí.</p>
 </blockquote>
+<blockquote>
+<p><strong>Baja confianza:</strong> un documento con <strong>Resultado =
+&quot;Baja confianza&quot;</strong> recibió una tipología tentativa (TDN1/TDN2)
+pero el clasificador no estaba lo bastante seguro, así que el backend no
+la dio por buena. Revisa esos documentos: la clasificación puede ser
+incorrecta. Usa el filtro <strong>&quot;Solo baja confianza&quot;</strong> para
+localizarlos (ver <a href="#8-filtros-y-búsqueda">Filtros</a>).</p>
+</blockquote>
 <hr />
 <h2 id="8-filtros-y-búsqueda">8. Filtros y búsqueda</h2>
-<p>Sobre el grid dispones de dos filtros combinables:</p>
+<p>Sobre el grid dispones de filtros combinables:</p>
 <ul>
 <li><strong>Filtro (texto):</strong> escribe parte del nombre de fichero
 para mostrar solo las coincidencias. Se aplica con un pequeño retardo
@@ -607,6 +626,10 @@ concreto (<code>Pending</code>, <code>InFlight</code>,
 <code>Succeeded</code>, <code>Error</code>,
 <code>DefinitiveError</code>, <code>SkippedHistory</code>,
 <code>Cancelled</code>) o <strong>Todos</strong>.</li>
+<li><strong>Solo baja confianza:</strong> casilla que deja a la vista
+únicamente los documentos marcados como dudosos (Resultado distinto de
+<code>OK</code>), para revisarlos de un vistazo. Se combina con los
+otros dos filtros.</li>
 </ul>
 <p>Los filtros afectan también a lo que se <strong>exporta</strong>: si
 hay un filtro activo, la exportación incluye únicamente las filas
@@ -646,7 +669,7 @@ necesitas la vista formateada.</p>
 vuelcas los resultados a un fichero. Se abre un diálogo para elegir la
 ruta y el nombre.</p>
 <p><strong>Columnas exportadas</strong> (mismas en ambos formatos):</p>
-<pre><code>FileName; Status; PagesIncluded; Pages; TDN1; TDN2; Confidence; ProcessDate; TotalDurationMs; Summary</code></pre>
+<pre><code>FileName; Status; PagesIncluded; Pages; TDN1; TDN2; Confidence; Estado; ProcessDate; TotalDurationMs; Summary</code></pre>
 <p>La columna <strong>Summary</strong> contiene el resumen del documento
 (si se generó; ver <a href="#5-configuración-detallada">Generar
 resumen</a>). Estará vacía en los documentos procesados con esa opción

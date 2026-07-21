@@ -19,6 +19,7 @@ public class LiteDocumentRow : INotifyPropertyChanged
     private string? _responseJson;
     private string? _errorMessage;
     private string? _summary;
+    private string? _estado;
 
     public long Id { get; set; }
     public string FileName { get; set; } = string.Empty;
@@ -100,6 +101,52 @@ public class LiteDocumentRow : INotifyPropertyChanged
         set { _summary = value; OnPropertyChanged(); }
     }
 
+    public string? Estado
+    {
+        get => _estado;
+        set
+        {
+            _estado = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ResultadoDisplay));
+            OnPropertyChanged(nameof(IsLowConfidence));
+        }
+    }
+
+    /// <summary>
+    /// Texto amigable para la columna "Resultado" de la rejilla: vacio en el caso normal
+    /// (Estado vacio u "OK", para no ensuciar la vista), "Baja confianza" para el rechazo
+    /// por baja confianza, y el Estado tal cual para cualquier otro caso no contemplado.
+    /// </summary>
+    public string ResultadoDisplay
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Estado) || string.Equals(Estado, "OK", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            if (Estado.Contains("BAJA_CONFIANZA", StringComparison.OrdinalIgnoreCase))
+            {
+                return "Baja confianza";
+            }
+
+            return Estado;
+        }
+    }
+
+    public bool IsLowConfidence => IsReviewableEstado(Estado);
+
+    /// <summary>
+    /// Condicion unica de "a revisar": Estado presente y distinto de "OK" (baja confianza u
+    /// otro rechazo del backend). Compartida por la rejilla (via <see cref="IsLowConfidence"/>)
+    /// y por la exportacion, para que nunca diverjan.
+    /// </summary>
+    public static bool IsReviewableEstado(string? estado)
+        => !string.IsNullOrWhiteSpace(estado)
+           && !estado.Equals("OK", StringComparison.OrdinalIgnoreCase);
+
     public static LiteDocumentRow From(LiteDocument document)
     {
         var row = new LiteDocumentRow
@@ -124,6 +171,7 @@ public class LiteDocumentRow : INotifyPropertyChanged
         RequestJson = document.RequestJson;
         ResponseJson = document.ResponseJson;
         ErrorMessage = document.ErrorMessage;
+        Estado = document.Estado;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

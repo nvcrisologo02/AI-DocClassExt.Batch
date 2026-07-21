@@ -41,8 +41,9 @@ public static class LiteResultParser
                 GetString(identificacion, "Tdn1", "tdn1"),
                 DeriveTdn1FromTdn2(tdn2)),
             Tdn2 = tdn2,
-            Confidence = GetDouble(resultado, "ConfianzaGlobal", "confianzaGlobal")
-                ?? GetDouble(clasificacion, "Confianza", "confianza"),
+            Confidence = GetDouble(clasificacion, "Confianza", "confianza")
+                ?? GetDouble(clasificacion, "ConfianzaGPT", "confianzaGPT")
+                ?? GetDouble(resultado, "ConfianzaGlobal", "confianzaGlobal"),
             Pages = (int?)GetLong(identificacion, "Paginas", "paginas"),
             PagesIncluded = GetString(detalle, "PaginasIncluidas", "paginasIncluidas"),
             ProcessDate = GetString(identificacion, "FechaProceso", "fechaProceso"),
