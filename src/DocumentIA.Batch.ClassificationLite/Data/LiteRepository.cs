@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using Dapper;
 using DocumentIA.Batch.ClassificationLite.Models;
 using Microsoft.Data.Sqlite;
@@ -70,7 +71,8 @@ public class LiteRepository
                 DurationMs INTEGER NULL,
                 RequestJson TEXT NULL,
                 ResponseJson TEXT NULL,
-                ErrorMessage TEXT NULL
+                ErrorMessage TEXT NULL,
+                Summary TEXT NULL
             );
 
             CREATE INDEX IF NOT EXISTS IX_Documents_Dedup
@@ -78,7 +80,17 @@ public class LiteRepository
             CREATE INDEX IF NOT EXISTS IX_Documents_Execution
                 ON Documents(ExecutionId, Status);
             """);
-        connection.Execute("PRAGMA user_version=1;");
+        EnsureColumn(connection, "Documents", "Summary", "TEXT NULL");
+        connection.Execute("PRAGMA user_version=2;");
+    }
+
+    private static void EnsureColumn(SqliteConnection connection, string table, string column, string definition)
+    {
+        var columns = connection.Query<string>($"SELECT name FROM pragma_table_info('{table}');");
+        if (!columns.Any(c => string.Equals(c, column, StringComparison.OrdinalIgnoreCase)))
+        {
+            connection.Execute($"ALTER TABLE {table} ADD COLUMN {column} {definition};");
+        }
     }
 
     public LiteExecution CreateExecution(
@@ -135,11 +147,11 @@ public class LiteRepository
             INSERT INTO Documents (
                 ExecutionId, FileName, FullPath, FileSize, LastModifiedUtc, Status, BatchNumber, RetryCount,
                 InstanceId, StatusQueryUri, Tdn1, Tdn2, Confidence, Pages, PagesIncluded,
-                ProcessDate, DurationMs, RequestJson, ResponseJson, ErrorMessage)
+                ProcessDate, DurationMs, RequestJson, ResponseJson, ErrorMessage, Summary)
             VALUES (
                 @ExecutionId, @FileName, @FullPath, @FileSize, @LastModifiedUtc, @Status, @BatchNumber, @RetryCount,
                 @InstanceId, @StatusQueryUri, @Tdn1, @Tdn2, @Confidence, @Pages, @PagesIncluded,
-                @ProcessDate, @DurationMs, @RequestJson, @ResponseJson, @ErrorMessage);
+                @ProcessDate, @DurationMs, @RequestJson, @ResponseJson, @ErrorMessage, @Summary);
             """, documents, transaction);
         transaction.Commit();
     }
@@ -163,7 +175,8 @@ public class LiteRepository
                 DurationMs = @DurationMs,
                 RequestJson = @RequestJson,
                 ResponseJson = @ResponseJson,
-                ErrorMessage = @ErrorMessage
+                ErrorMessage = @ErrorMessage,
+                Summary = @Summary
             WHERE Id = @Id;
             """, document);
     }

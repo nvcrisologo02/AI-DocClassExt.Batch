@@ -26,4 +26,5 @@ public class LiteConfig
     public bool ForceReprocess { get; set; } = false;
     public int MaxRetries { get; set; } = 3;
     public bool SkipAlreadyProcessed { get; set; } = true;
+    public bool GenerateSummary { get; set; } = true;
 }

@@ -64,6 +64,7 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Classification Level" VerticalAlignment="Center" Margin="0,4"/>
@@ -90,6 +91,8 @@
 
                         <CheckBox Grid.Row="3" Grid.Column="1" x:Name="OnlyClassificationCheck"
                                   Content="Only Classification" Margin="0,8"/>
+                        <CheckBox Grid.Row="4" Grid.Column="1" x:Name="GenerateSummaryCheck"
+                                  Content="Generar resumen del documento" Margin="0,0,0,8"/>
                     </Grid>
                 </GroupBox>
 

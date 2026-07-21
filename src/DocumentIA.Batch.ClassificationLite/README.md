@@ -5,7 +5,8 @@ Herramienta de clasificacion masiva simplificada (hasta 100.000 documentos por e
 ## Que hace
 
 Recorre una carpeta (local o de red, con o sin subcarpetas), envia cada PDF a DocumentIA
-para clasificacion (TDN1/TDN2) y guarda el resultado en una base SQLite local.
+para clasificacion (TDN1/TDN2), captura el resumen del documento y guarda el resultado en
+una base SQLite local. Resultados y resumen se exportan a CSV/Excel y se ven en el detalle.
 
 ## Ejecucion desde codigo
 
@@ -47,6 +48,7 @@ interrumpidas por un cierre inesperado.
 | Force Reprocess | false |
 | Max Retries | 3 (estrategia Batch Completion) |
 | Skip Already Processed | true |
+| Generar resumen | true (captura `DatosExtraidos.Resumen`; se exporta y se ve en el detalle) |
 
 ## Recomendaciones operativas
 

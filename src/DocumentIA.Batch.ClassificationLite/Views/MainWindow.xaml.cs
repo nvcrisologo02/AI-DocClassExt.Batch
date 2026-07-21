@@ -155,6 +155,7 @@ public partial class MainWindow : Window
             {
                 row.RequestJson = full.RequestJson;
                 row.ResponseJson = full.ResponseJson;
+                row.Summary = full.Summary;
             }
 
             new DetailDialog(row) { Owner = this }.ShowDialog();

@@ -14,6 +14,7 @@ public class LiteClassificationResult
     public string? ProcessDate { get; set; }
     public long? DurationMs { get; set; }
     public string? Estado { get; set; }
+    public string? Summary { get; set; }
 }
 
 public static class LiteResultParser
@@ -25,6 +26,7 @@ public static class LiteResultParser
         var detalle = GetProperty(output, "DetalleEjecucion", "detalleEjecucion");
         var clasificacion = detalle.HasValue ? GetProperty(detalle.Value, "Clasificacion", "clasificacion") : null;
         var seguimiento = detalle.HasValue ? GetProperty(detalle.Value, "Seguimiento", "seguimiento") : null;
+        var datosExtraidos = GetProperty(output, "DatosExtraidos", "datosExtraidos");
 
         var tdn2 = FirstNonEmpty(
             GetString(identificacion, "Tdn2", "tdn2"),
@@ -45,7 +47,10 @@ public static class LiteResultParser
             PagesIncluded = GetString(detalle, "PaginasIncluidas", "paginasIncluidas"),
             ProcessDate = GetString(identificacion, "FechaProceso", "fechaProceso"),
             DurationMs = GetLong(seguimiento, "DuracionTotalMs", "duracionTotalMs"),
-            Estado = GetString(resultado, "Estado", "estado")
+            Estado = GetString(resultado, "Estado", "estado"),
+            Summary = FirstNonEmpty(
+                GetString(datosExtraidos, "Resumen", "resumen"),
+                GetString(clasificacion, "ResumenCombinado", "resumenCombinado"))
         };
     }
 

@@ -27,7 +27,7 @@ public static class LiteRequestFactory
                 ClassificationOnly = effectiveClassificationOnly,
                 ExecuteIntegrarWhenClassificationOnly = effectiveClassificationOnly ? false : null,
                 MaxPagesForClassificationOnly = effectiveClassificationOnly ? 10 : 0,
-                ForzarResumenPorDefecto = null,
+                ForzarResumenPorDefecto = config.GenerateSummary,
                 SkipDuplicateCheck = false,
                 ForceReprocess = config.ForceReprocess,
                 SkipGdcUpload = true,
