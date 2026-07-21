@@ -26,6 +26,13 @@ public partial class LiteMainViewModel
     private bool _isPaused;
     private string _statusMessage = string.Empty;
 
+    /// <summary>
+    /// Ejecución escaneada como previsualización (estado <see cref="LiteExecutionStatus.Scanned"/>)
+    /// que aún no se ha procesado. Al pulsar Ejecutar, <see cref="StartAsync"/> la consume sin
+    /// volver a escanear. Un nuevo drop la descarta antes de crear la siguiente.
+    /// </summary>
+    private string? _scannedExecutionId;
+
     public IReadOnlyList<string> SelectedPaths { get; set; } = Array.Empty<string>();
 
     public bool IncludeSubfolders { get; set; } = true;
@@ -80,11 +87,87 @@ public partial class LiteMainViewModel
         StatusMessage = "Ejecucion anterior descartada.";
     }
 
+    /// <summary>
+    /// Escanea las rutas seleccionadas y puebla el grid con las filas Pending como
+    /// previsualización, sin arrancar el motor de proceso. Se dispara al arrastrar o
+    /// seleccionar ficheros/carpetas para dar feedback inmediato de qué se va a procesar.
+    /// La ejecución se crea en estado <see cref="LiteExecutionStatus.Scanned"/> y
+    /// <see cref="StartAsync"/> la consume después sin re-escanear.
+    /// </summary>
+    public async Task PreviewAsync(
+        IReadOnlyList<string> paths,
+        bool includeSubfolders,
+        CancellationToken cancellationToken = default)
+    {
+        if (IsRunning || paths is null || paths.Count == 0)
+        {
+            return;
+        }
+
+        // Un nuevo drop reemplaza el preview anterior: descartarlo para no dejar
+        // ejecuciones Scanned colgadas en la base de datos.
+        DiscardPendingPreview();
+
+        SelectedPaths = paths;
+        IncludeSubfolders = includeSubfolders;
+
+        var configSnapshot = System.Text.Json.JsonSerializer.Serialize(Config);
+        var execution = _repository.CreateExecution(
+            paths[0], includeSubfolders, configSnapshot, LiteExecutionStatus.Scanned);
+        CurrentExecutionId = execution.ExecutionId;
+        _scannedExecutionId = execution.ExecutionId;
+
+        StatusMessage = "Escaneando documentos...";
+        var scanner = new FolderScanner(_repository);
+        var config = Config;
+        var scan = await Task.Run(() => scanner.Scan(
+            execution.ExecutionId, paths, includeSubfolders,
+            config.SkipAlreadyProcessed, config.ForceReprocess, config.InternalBatchSize, cancellationToken),
+            cancellationToken);
+
+        SafeRefreshRowsAndCounters();
+        StatusMessage = scan.TotalFound == 0
+            ? "No se encontraron documentos PDF."
+            : $"{scan.TotalFound} documentos encontrados. Pulsa Ejecutar para procesar.";
+    }
+
+    private void DiscardPendingPreview()
+    {
+        if (_scannedExecutionId is null)
+        {
+            return;
+        }
+
+        _repository.UpdateExecutionStatus(_scannedExecutionId, LiteExecutionStatus.Aborted, setCompletedAt: true);
+        _scannedExecutionId = null;
+    }
+
     public async Task StartAsync(CancellationToken externalToken = default)
     {
         if (IsRunning || SelectedPaths.Count == 0)
         {
             return;
+        }
+
+        // Si existe un preview ya escaneado para la selección actual, procesar sobre
+        // esas filas sin volver a escanear: solo se cambia el estado a Running y se
+        // arranca el motor.
+        if (_scannedExecutionId is not null
+            && string.Equals(_scannedExecutionId, CurrentExecutionId, StringComparison.Ordinal))
+        {
+            var preview = _repository.GetExecution(_scannedExecutionId);
+            _scannedExecutionId = null;
+
+            if (preview is not null)
+            {
+                _repository.UpdateExecutionStatus(preview.ExecutionId, LiteExecutionStatus.Running);
+                await RunExecutionAsync(preview, externalToken, async (engine, ct) =>
+                {
+                    StatusMessage = "Procesando...";
+                    await engine.RunAsync(preview.ExecutionId, ct);
+                });
+                return;
+            }
         }
 
         var configSnapshot = System.Text.Json.JsonSerializer.Serialize(Config);
