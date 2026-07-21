@@ -27,7 +27,7 @@ public class LiteResultParserTests
 
         Assert.Equal("T01", result.Tdn1);
         Assert.Equal("T01.02", result.Tdn2);
-        Assert.Equal(0.91, result.Confidence);
+        Assert.Equal(0.85, result.Confidence);
         Assert.Equal(14, result.Pages);
         Assert.Equal("1-10", result.PagesIncluded);
         Assert.Equal("2026-07-20T10:00:00Z", result.ProcessDate);
@@ -58,6 +58,25 @@ public class LiteResultParserTests
         Assert.Equal(7, result.Pages);
         Assert.Equal("3", result.PagesIncluded);
         Assert.Equal(8100, result.DurationMs);
+    }
+
+    [Fact]
+    public void Parse_BajaConfianza_UsaLaConfianzaRealDelClasificadorYCapturaElEstado()
+    {
+        var output = Parse("""
+            {
+              "DatosExtraidos": { "Resumen": "Resumen del documento." },
+              "DetalleEjecucion": {
+                "Clasificacion": { "Confianza": 0.45, "ConfianzaGPT": 0.45, "Tdn2Detectado": "COMU-48" }
+              },
+              "Resultado": { "Estado": "BAJA_CONFIANZA_CLASIFICACION", "ConfianzaGlobal": 0, "ConfianzaClasificacion": 0 }
+            }
+            """);
+
+        var result = LiteResultParser.Parse(output);
+
+        Assert.Equal(0.45, result.Confidence);
+        Assert.Equal("BAJA_CONFIANZA_CLASIFICACION", result.Estado);
     }
 
     [Fact]

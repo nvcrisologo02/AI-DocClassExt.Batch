@@ -25,6 +25,7 @@ public class LiteDocument
     public string? ResponseJson { get; set; }
     public string? ErrorMessage { get; set; }
     public string? Summary { get; set; }
+    public string? Estado { get; set; }
 }
 
 public static class LiteDocumentStatus

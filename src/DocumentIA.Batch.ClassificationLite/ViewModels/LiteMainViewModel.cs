@@ -17,6 +17,7 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
 
     private string _filterText = string.Empty;
     private string _statusFilter = "Todos";
+    private bool _showOnlyReview;
     private int _totalFound;
     private int _pendingCount;
     private int _inFlightCount;
@@ -63,6 +64,12 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
     {
         get => _statusFilter;
         set { _statusFilter = value ?? "Todos"; OnPropertyChanged(); RowsView.Refresh(); }
+    }
+
+    public bool ShowOnlyReview
+    {
+        get => _showOnlyReview;
+        set { _showOnlyReview = value; OnPropertyChanged(); RowsView.Refresh(); }
     }
 
     public int TotalFound { get => _totalFound; private set { _totalFound = value; OnPropertyChanged(); } }
@@ -155,14 +162,15 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
 
         var all = _repository.GetDocuments(CurrentExecutionId);
         var hasFilter = !string.IsNullOrWhiteSpace(FilterText)
-            || !string.Equals(StatusFilter, "Todos", StringComparison.OrdinalIgnoreCase);
+            || !string.Equals(StatusFilter, "Todos", StringComparison.OrdinalIgnoreCase)
+            || ShowOnlyReview;
 
         if (!hasFilter)
         {
             return all;
         }
 
-        return all.Where(d => MatchesFilter(d.FileName, d.Status)).ToList();
+        return all.Where(d => MatchesFilter(d.FileName, d.Status, IsReviewable(d.Estado))).ToList();
     }
 
     private bool FilterRow(object item)
@@ -172,10 +180,10 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
             return false;
         }
 
-        return MatchesFilter(row.FileName, row.Status);
+        return MatchesFilter(row.FileName, row.Status, row.IsLowConfidence);
     }
 
-    private bool MatchesFilter(string fileName, string status)
+    private bool MatchesFilter(string fileName, string status, bool isReviewable)
     {
         if (!string.IsNullOrWhiteSpace(FilterText)
             && fileName.IndexOf(FilterText, StringComparison.OrdinalIgnoreCase) < 0)
@@ -183,9 +191,22 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
             return false;
         }
 
+        if (ShowOnlyReview && !isReviewable)
+        {
+            return false;
+        }
+
         return string.Equals(StatusFilter, "Todos", StringComparison.OrdinalIgnoreCase)
             || string.Equals(status, StatusFilter, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Condicion unica de "a revisar": Estado presente y distinto de "OK" (baja confianza u
+    /// otro rechazo del backend). Compartida por la rejilla (via LiteDocumentRow.IsLowConfidence,
+    /// que aplica la misma regla) y por la exportacion, para que nunca diverjan.
+    /// </summary>
+    private static bool IsReviewable(string? estado)
+        => !string.IsNullOrWhiteSpace(estado) && !string.Equals(estado, "OK", StringComparison.OrdinalIgnoreCase);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

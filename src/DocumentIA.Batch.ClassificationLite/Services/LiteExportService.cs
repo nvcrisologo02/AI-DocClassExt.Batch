@@ -12,7 +12,7 @@ public static class LiteExportService
 {
     public static readonly string[] Headers =
     {
-        "FileName", "Status", "PagesIncluded", "Pages", "TDN1", "TDN2", "Confidence", "ProcessDate", "TotalDurationMs", "Summary"
+        "FileName", "Status", "PagesIncluded", "Pages", "TDN1", "TDN2", "Confidence", "Estado", "ProcessDate", "TotalDurationMs", "Summary"
     };
 
     public static string[] ToRow(LiteDocument document) => new[]
@@ -24,6 +24,7 @@ public static class LiteExportService
         document.Tdn1 ?? string.Empty,
         document.Tdn2 ?? string.Empty,
         document.Confidence?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,
+        document.Estado ?? string.Empty,
         document.ProcessDate ?? string.Empty,
         document.DurationMs?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
         document.Summary ?? string.Empty

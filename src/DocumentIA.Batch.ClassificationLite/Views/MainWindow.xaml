@@ -65,7 +65,8 @@
                 <TextBlock Text="Filtro:" VerticalAlignment="Center" Margin="0,0,6,0"/>
                 <TextBox Width="220" Margin="0,0,12,0" Text="{Binding FilterText, UpdateSourceTrigger=PropertyChanged, Delay=300}"/>
                 <TextBlock Text="Estado:" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                <ComboBox Width="160" ItemsSource="{Binding StatusFilterOptions}" SelectedItem="{Binding StatusFilter}"/>
+                <ComboBox Width="160" ItemsSource="{Binding StatusFilterOptions}" SelectedItem="{Binding StatusFilter}" Margin="0,0,12,0"/>
+                <CheckBox Content="Solo baja confianza" IsChecked="{Binding ShowOnlyReview}" VerticalAlignment="Center"/>
             </StackPanel>
             <DataGrid x:Name="ResultsGrid" ItemsSource="{Binding RowsView}" AutoGenerateColumns="False"
                       IsReadOnly="True" EnableRowVirtualization="True" EnableColumnVirtualization="True"
@@ -79,6 +80,7 @@
                     <DataGridTextColumn Header="TDN1" Binding="{Binding Tdn1}" Width="110"/>
                     <DataGridTextColumn Header="TDN2" Binding="{Binding Tdn2}" Width="130"/>
                     <DataGridTextColumn Header="Confidence" Binding="{Binding Confidence}" Width="90"/>
+                    <DataGridTextColumn Header="Resultado" Binding="{Binding ResultadoDisplay}" Width="120"/>
                     <DataGridTextColumn Header="ProcessDate" Binding="{Binding ProcessDate}" Width="160"/>
                     <DataGridTextColumn Header="TotalDurationMs" Binding="{Binding TotalDurationMs}" Width="120"/>
                 </DataGrid.Columns>

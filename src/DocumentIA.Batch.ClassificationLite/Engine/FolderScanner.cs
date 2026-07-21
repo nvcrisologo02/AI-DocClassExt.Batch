@@ -75,7 +75,8 @@ public class FolderScanner
                             PagesIncluded = historical.PagesIncluded,
                             ProcessDate = historical.ProcessDate,
                             DurationMs = historical.DurationMs,
-                            Summary = historical.Summary
+                            Summary = historical.Summary,
+                            Estado = historical.Estado
                         };
                     }
                     else
