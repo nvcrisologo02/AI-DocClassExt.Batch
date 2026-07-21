@@ -41,6 +41,7 @@ public partial class ConfigDialog : Window
         ProviderCombo.Text = _config.Provider;
         LevelCombo.Text = _config.ClassificationLevel;
         OnlyClassificationCheck.IsChecked = _config.OnlyClassification;
+        GenerateSummaryCheck.IsChecked = _config.GenerateSummary;
         ForceReprocessCheck.IsChecked = _config.ForceReprocess;
         SkipProcessedCheck.IsChecked = _config.SkipAlreadyProcessed;
     }
@@ -148,6 +149,7 @@ public partial class ConfigDialog : Window
         _config.Provider = string.IsNullOrWhiteSpace(ProviderCombo.Text) ? "auto" : ProviderCombo.Text.Trim();
         _config.ClassificationLevel = string.IsNullOrWhiteSpace(LevelCombo.Text) ? "TDN1_TDN2" : LevelCombo.Text.Trim();
         _config.OnlyClassification = OnlyClassificationCheck.IsChecked == true;
+        _config.GenerateSummary = GenerateSummaryCheck.IsChecked == true;
         _config.ForceReprocess = ForceReprocessCheck.IsChecked == true;
         _config.SkipAlreadyProcessed = SkipProcessedCheck.IsChecked == true;
 

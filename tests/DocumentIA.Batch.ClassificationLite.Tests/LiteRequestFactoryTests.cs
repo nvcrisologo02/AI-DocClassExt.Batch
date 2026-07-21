@@ -19,7 +19,7 @@ public class LiteRequestFactoryTests
         Assert.True(request.Instrucciones.ClassificationOnly);
         Assert.False(request.Instrucciones.ExecuteIntegrarWhenClassificationOnly);
         Assert.Equal(10, request.Instrucciones.MaxPagesForClassificationOnly);
-        Assert.Null(request.Instrucciones.ForzarResumenPorDefecto);
+        Assert.True(request.Instrucciones.ForzarResumenPorDefecto);
         Assert.False(request.Instrucciones.SkipDuplicateCheck);
         Assert.False(request.Instrucciones.ForceReprocess);
         Assert.True(request.Instrucciones.SkipGdcUpload);
@@ -73,6 +73,16 @@ public class LiteRequestFactoryTests
         var request = LiteRequestFactory.Build(config, "doc.pdf", Bytes, "corr-1");
 
         Assert.True(request.Instrucciones.ForceReprocess);
+    }
+
+    [Fact]
+    public void Build_GenerateSummaryFalse_NoFuerzaElResumen()
+    {
+        var config = new LiteConfig { GenerateSummary = false };
+
+        var request = LiteRequestFactory.Build(config, "doc.pdf", Bytes, "corr-1");
+
+        Assert.False(request.Instrucciones.ForzarResumenPorDefecto);
     }
 
     [Fact]

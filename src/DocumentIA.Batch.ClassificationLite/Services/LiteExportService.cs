@@ -12,7 +12,7 @@ public static class LiteExportService
 {
     public static readonly string[] Headers =
     {
-        "FileName", "Status", "PagesIncluded", "Pages", "TDN1", "TDN2", "Confidence", "ProcessDate", "TotalDurationMs"
+        "FileName", "Status", "PagesIncluded", "Pages", "TDN1", "TDN2", "Confidence", "ProcessDate", "TotalDurationMs", "Summary"
     };
 
     public static string[] ToRow(LiteDocument document) => new[]
@@ -25,7 +25,8 @@ public static class LiteExportService
         document.Tdn2 ?? string.Empty,
         document.Confidence?.ToString("0.####", CultureInfo.InvariantCulture) ?? string.Empty,
         document.ProcessDate ?? string.Empty,
-        document.DurationMs?.ToString(CultureInfo.InvariantCulture) ?? string.Empty
+        document.DurationMs?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
+        document.Summary ?? string.Empty
     };
 
     public static void ExportCsv(IEnumerable<LiteDocument> documents, string path)

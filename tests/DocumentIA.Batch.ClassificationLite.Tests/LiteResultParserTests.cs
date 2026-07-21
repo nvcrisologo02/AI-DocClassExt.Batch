@@ -124,5 +124,37 @@ public class LiteResultParserTests
         Assert.Null(result.ProcessDate);
         Assert.Null(result.DurationMs);
         Assert.Null(result.Estado);
+        Assert.Null(result.Summary);
+    }
+
+    [Fact]
+    public void Parse_ExtraeResumenDesdeDatosExtraidos()
+    {
+        var output = Parse("""
+            {
+              "DatosExtraidos": { "Resumen": "Objetivo del documento: Presentar el balance." },
+              "DetalleEjecucion": { "Clasificacion": { "ResumenCombinado": "Otro resumen." } },
+              "Resultado": { "Estado": "OK" }
+            }
+            """);
+
+        var result = LiteResultParser.Parse(output);
+
+        Assert.Equal("Objetivo del documento: Presentar el balance.", result.Summary);
+    }
+
+    [Fact]
+    public void Parse_SinDatosExtraidos_UsaResumenCombinadoComoFallback()
+    {
+        var output = Parse("""
+            {
+              "detalleEjecucion": { "clasificacion": { "resumenCombinado": "Resumen de respaldo." } },
+              "resultado": { "estado": "OK" }
+            }
+            """);
+
+        var result = LiteResultParser.Parse(output);
+
+        Assert.Equal("Resumen de respaldo.", result.Summary);
     }
 }

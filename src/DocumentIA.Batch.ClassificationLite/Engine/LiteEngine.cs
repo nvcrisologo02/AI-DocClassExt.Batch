@@ -262,6 +262,7 @@ public class LiteEngine
                 document.PagesIncluded = result.PagesIncluded;
                 document.ProcessDate = result.ProcessDate ?? DateTime.UtcNow.ToString("O");
                 document.DurationMs = result.DurationMs ?? stopwatch.ElapsedMilliseconds;
+                document.Summary = result.Summary;
                 document.ResponseJson = JsonSerializer.Serialize(status.Output.Value, ResponseJsonOptions);
                 document.ErrorMessage = null;
                 document.Status = LiteDocumentStatus.Succeeded;

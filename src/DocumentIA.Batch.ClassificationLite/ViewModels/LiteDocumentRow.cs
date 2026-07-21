@@ -18,6 +18,7 @@ public class LiteDocumentRow : INotifyPropertyChanged
     private string? _requestJson;
     private string? _responseJson;
     private string? _errorMessage;
+    private string? _summary;
 
     public long Id { get; set; }
     public string FileName { get; set; } = string.Empty;
@@ -86,6 +87,17 @@ public class LiteDocumentRow : INotifyPropertyChanged
     {
         get => _errorMessage;
         set { _errorMessage = value; OnPropertyChanged(); }
+    }
+
+    /// <summary>
+    /// Resumen del documento. No se rellena desde la lectura ligera de la rejilla
+    /// (<see cref="UpdateFrom"/>): se carga bajo demanda al abrir el dialogo de detalle,
+    /// igual que RequestJson/ResponseJson.
+    /// </summary>
+    public string? Summary
+    {
+        get => _summary;
+        set { _summary = value; OnPropertyChanged(); }
     }
 
     public static LiteDocumentRow From(LiteDocument document)

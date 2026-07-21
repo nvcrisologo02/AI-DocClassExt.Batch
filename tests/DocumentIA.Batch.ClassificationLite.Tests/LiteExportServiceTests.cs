@@ -33,16 +33,23 @@ public class LiteExportServiceTests : IDisposable
         Tdn2 = "T01.02",
         Confidence = 0.9123,
         ProcessDate = "2026-07-20T12:00:00Z",
-        DurationMs = 4321
+        DurationMs = 4321,
+        Summary = "Objetivo del documento: presentar el balance."
     };
 
     [Fact]
-    public void ToRow_MapeaLasNueveColumnas()
+    public void ToRow_MapeaLasDiezColumnas()
     {
         var row = LiteExportService.ToRow(SampleDoc());
 
-        Assert.Equal(9, row.Length);
-        Assert.Equal(new[] { "informe.pdf", "Succeeded", "1-5", "8", "T01", "T01.02", "0,9123".Replace(',', '.'), "2026-07-20T12:00:00Z", "4321" }, row);
+        Assert.Equal(10, row.Length);
+        Assert.Equal(
+            new[]
+            {
+                "informe.pdf", "Succeeded", "1-5", "8", "T01", "T01.02", "0,9123".Replace(',', '.'),
+                "2026-07-20T12:00:00Z", "4321", "Objetivo del documento: presentar el balance."
+            },
+            row);
     }
 
     [Fact]
@@ -56,6 +63,7 @@ public class LiteExportServiceTests : IDisposable
         Assert.Equal(string.Empty, row[3]);
         Assert.Equal(string.Empty, row[6]);
         Assert.Equal(string.Empty, row[8]);
+        Assert.Equal(string.Empty, row[9]);
     }
 
     [Fact]
@@ -68,8 +76,21 @@ public class LiteExportServiceTests : IDisposable
         var bytes = File.ReadAllBytes(path);
         Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes.Take(3).ToArray());
         var lines = File.ReadAllLines(path, Encoding.UTF8);
-        Assert.Equal("FileName;Status;PagesIncluded;Pages;TDN1;TDN2;Confidence;ProcessDate;TotalDurationMs", lines[0]);
+        Assert.Equal("FileName;Status;PagesIncluded;Pages;TDN1;TDN2;Confidence;ProcessDate;TotalDurationMs;Summary", lines[0]);
         Assert.Contains("informe.pdf;Succeeded;1-5;8;T01;T01.02;0.9123;", lines[1]);
+    }
+
+    [Fact]
+    public void ExportCsv_ResumenConPuntoYComaYComillas_SeExportaEntrecomillado()
+    {
+        var path = Path.Combine(_tempDir, "resumen.csv");
+        var doc = SampleDoc();
+        doc.Summary = "Objetivo: clasificar; contiene \"anexos\" y datos.";
+
+        LiteExportService.ExportCsv(new[] { doc }, path);
+
+        var lines = File.ReadAllLines(path, Encoding.UTF8);
+        Assert.EndsWith("\"Objetivo: clasificar; contiene \"\"anexos\"\" y datos.\"", lines[1]);
     }
 
     [Fact]
@@ -150,6 +171,6 @@ public class LiteExportServiceTests : IDisposable
         LiteExportService.ExportCsv(new[] { doc }, path);
 
         var lines = File.ReadAllLines(path, Encoding.UTF8);
-        Assert.EndsWith(";-5", lines[1]);
+        Assert.Contains(";-5;", lines[1]);
     }
 }

@@ -1,6 +1,8 @@
 using System.IO;
+using Dapper;
 using DocumentIA.Batch.ClassificationLite.Data;
 using DocumentIA.Batch.ClassificationLite.Models;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace DocumentIA.Batch.ClassificationLite.Tests;
@@ -100,6 +102,86 @@ public class LiteRepositoryTests : IDisposable
         Assert.Equal("1-10", reloaded.PagesIncluded);
         Assert.Equal(4200, reloaded.DurationMs);
         Assert.Equal("{\"b\":2}", reloaded.ResponseJson);
+    }
+
+    [Fact]
+    public void InsertUpdateDocument_PersisteYActualizaSummary()
+    {
+        var execution = _repository.CreateExecution(@"c:\docs", false, "{}");
+        var seed = NewDoc(execution.ExecutionId, "a.pdf");
+        seed.Summary = "Resumen inicial.";
+        _repository.InsertDocuments(new[] { seed });
+        var id = _repository.GetDocuments(execution.ExecutionId).Single().Id;
+
+        var afterInsert = _repository.GetDocument(id);
+        Assert.Equal("Resumen inicial.", afterInsert!.Summary);
+
+        afterInsert.Summary = "Resumen actualizado tras clasificar.";
+        _repository.UpdateDocument(afterInsert);
+
+        var reloaded = _repository.GetDocument(id);
+        Assert.Equal("Resumen actualizado tras clasificar.", reloaded!.Summary);
+        Assert.Equal("Resumen actualizado tras clasificar.",
+            _repository.GetDocuments(execution.ExecutionId).Single().Summary);
+    }
+
+    [Fact]
+    public void EnsureSchema_MigraBaseDeDatosPreexistenteSinColumnaSummary()
+    {
+        // Simula una BD creada por una version anterior de la app, sin la columna Summary,
+        // para verificar que el constructor de LiteRepository migra el esquema en lugar de fallar.
+        var legacyDir = Path.Combine(Path.GetTempPath(), "lite-repo-legacy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(legacyDir);
+        var dbPath = Path.Combine(legacyDir, "legacy.db");
+        try
+        {
+            var connectionString = new SqliteConnectionStringBuilder { DataSource = dbPath }.ToString();
+            using (var connection = new SqliteConnection(connectionString))
+            {
+                connection.Open();
+                connection.Execute("""
+                    CREATE TABLE Documents (
+                        Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        ExecutionId TEXT NOT NULL,
+                        FileName TEXT NOT NULL,
+                        FullPath TEXT NOT NULL,
+                        FileSize INTEGER NOT NULL,
+                        LastModifiedUtc TEXT NOT NULL,
+                        Status TEXT NOT NULL,
+                        BatchNumber INTEGER NOT NULL DEFAULT 0,
+                        RetryCount INTEGER NOT NULL DEFAULT 0,
+                        InstanceId TEXT NULL,
+                        StatusQueryUri TEXT NULL,
+                        Tdn1 TEXT NULL,
+                        Tdn2 TEXT NULL,
+                        Confidence REAL NULL,
+                        Pages INTEGER NULL,
+                        PagesIncluded TEXT NULL,
+                        ProcessDate TEXT NULL,
+                        DurationMs INTEGER NULL,
+                        RequestJson TEXT NULL,
+                        ResponseJson TEXT NULL,
+                        ErrorMessage TEXT NULL
+                    );
+                    """);
+                connection.Execute("PRAGMA user_version=1;");
+            }
+            SqliteConnection.ClearAllPools();
+
+            var repository = new LiteRepository(dbPath);
+            var execution = repository.CreateExecution(@"c:\docs", false, "{}");
+            var seed = NewDoc(execution.ExecutionId, "a.pdf");
+            seed.Summary = "Resumen tras migrar.";
+            repository.InsertDocuments(new[] { seed });
+
+            var doc = repository.GetDocuments(execution.ExecutionId).Single();
+            Assert.Equal("Resumen tras migrar.", doc.Summary);
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            try { Directory.Delete(legacyDir, recursive: true); } catch { }
+        }
     }
 
     [Fact]
