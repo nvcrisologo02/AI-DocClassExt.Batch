@@ -146,6 +146,21 @@ public class LiteResultParserTests
         Assert.Null(result.Summary);
     }
 
+    [Theory]
+    [InlineData("PENDIENTE_REINTENTO", true)]
+    [InlineData("pendiente_reintento", true)]
+    [InlineData("ERROR", true)]
+    [InlineData("error", true)]
+    [InlineData("OK", false)]
+    [InlineData("BAJA_CONFIANZA_CLASIFICACION", false)]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("  ", false)]
+    public void IsRetryableBackendFailure_ClasificaSegunElEstado(string? estado, bool esperado)
+    {
+        Assert.Equal(esperado, LiteResultParser.IsRetryableBackendFailure(estado));
+    }
+
     [Fact]
     public void Parse_ExtraeResumenDesdeDatosExtraidos()
     {

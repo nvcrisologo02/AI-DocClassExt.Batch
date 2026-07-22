@@ -52,6 +52,22 @@ public class FakeIngestBackend : IIngestBackend
         };
     }
 
+    public static DurableStatusResponse CompletedStatusWithEstado(string estado, string? tdn1 = null, string? tdn2 = null, double confidence = 0)
+    {
+        var json = $$"""
+            {
+              "Identificacion": { "Tdn1": "{{tdn1}}", "Tdn2": "{{tdn2}}", "Paginas": 5, "FechaProceso": "2026-07-20T12:00:00Z" },
+              "Resultado": { "Estado": "{{estado}}", "ConfianzaGlobal": {{confidence.ToString(System.Globalization.CultureInfo.InvariantCulture)}} },
+              "DetalleEjecucion": { "PaginasIncluidas": "1-5", "Seguimiento": { "DuracionTotalMs": 3000 } }
+            }
+            """;
+        return new DurableStatusResponse
+        {
+            RuntimeStatus = "Completed",
+            Output = JsonDocument.Parse(json).RootElement.Clone()
+        };
+    }
+
     public static DurableStatusResponse FailedStatus() => new() { RuntimeStatus = "Failed" };
 
     public static DurableStatusResponse RunningStatus() => new() { RuntimeStatus = "Running" };

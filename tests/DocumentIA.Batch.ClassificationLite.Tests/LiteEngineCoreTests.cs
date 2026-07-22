@@ -179,6 +179,51 @@ public class LiteEngineCoreTests : IDisposable
     }
 
     [Fact]
+    public async Task ProcessDocument_EstadoPendienteReintento_MarcaError()
+    {
+        _backend.OnStatus = _ => FakeIngestBackend.CompletedStatusWithEstado("PENDIENTE_REINTENTO");
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var doc = SeedDoc(execution.ExecutionId, "pendiente.pdf");
+
+        await NewEngine().ProcessDocumentAsync(doc, CancellationToken.None);
+
+        var stored = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.Error, stored.Status);
+        Assert.Equal("PENDIENTE_REINTENTO", stored.Estado);
+        Assert.NotNull(stored.ResponseJson);
+    }
+
+    [Fact]
+    public async Task ProcessDocument_EstadoError_MarcaError()
+    {
+        _backend.OnStatus = _ => FakeIngestBackend.CompletedStatusWithEstado("ERROR");
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var doc = SeedDoc(execution.ExecutionId, "error.pdf");
+
+        await NewEngine().ProcessDocumentAsync(doc, CancellationToken.None);
+
+        var stored = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.Error, stored.Status);
+        Assert.Equal("ERROR", stored.Estado);
+        Assert.NotNull(stored.ResponseJson);
+    }
+
+    [Fact]
+    public async Task ProcessDocument_EstadoBajaConfianza_SigueSucceeded()
+    {
+        _backend.OnStatus = _ => FakeIngestBackend.CompletedStatusWithEstado("BAJA_CONFIANZA_CLASIFICACION", "COMU", "COMU-48", 0.45);
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        var doc = SeedDoc(execution.ExecutionId, "bajaconfianza.pdf");
+
+        await NewEngine().ProcessDocumentAsync(doc, CancellationToken.None);
+
+        var stored = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.Succeeded, stored.Status);
+        Assert.Equal("BAJA_CONFIANZA_CLASIFICACION", stored.Estado);
+        Assert.Equal(0.45, stored.Confidence);
+    }
+
+    [Fact]
     public async Task ProcessDocument_CompletedSinOutput_MarcaError()
     {
         _backend.OnStatus = _ => new DocumentIA.Batch.Services.DurableStatusResponse
