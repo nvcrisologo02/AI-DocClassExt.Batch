@@ -42,16 +42,42 @@ PROVENANCE = {"PRPI", "ACUI", "ACUE", "PRPE", "DEAC", "SERE"}
 # observados en los PDFs del corpus). Complementan a los auto-derivados del catalogo.
 CURATED_MARKERS: dict[str, list[str]] = {
     "NOTS": [r"nota simple", r"informaci[oó]n registral"],
-    "CERJ": [r"certific[oa]", r"certificaci[oó]n"],
-    "CERA": [r"justificante de (pago|transferencia)", r"recib[ií]", r"carta de pago"],
+    "CERJ": [r"certific[oa]", r"certificaci[oó]n", r"carta de no vinculaci[oó]n", r"vida laboral"],
+    "CERA": [r"justificante de (pago|transferencia|abono)", r"recib[ií]", r"carta de pago",
+             r"al corriente de pago", r"autoliquidaci[oó]n"],
     "INRG": [r"calificaci[oó]n registral", r"inscripci[oó]n practicada", r"asiento de presentaci[oó]n"],
-    "ESCR": [r"escritura( p[uú]blica| de)", r"ante m[ií].{0,20}notario"],
-    "FACT": [r"factura", r"n[ií]?mero de factura", r"base imponible"],
-    "FICH": [r"\bficha\b", r"conocimiento del cliente", r"KYC", r"origen de (los )?fondos"],
-    "FOTO": [r"reportaje fotogr[aá]fico", r"fotograf[ií]a"],
-    "TASA": [r"informe de tasaci[oó]n", r"valor de tasaci[oó]n", r"sociedad de tasaci[oó]n"],
-    "CORR": [r"\bde:\s", r"\bpara:\s", r"\basunto:\s"],
-    "NOVA": [r"novaci[oó]n", r"cesi[oó]n de cr[eé]dito", r"refinanciaci[oó]n"],
+    "ESCR": [r"escritura( p[uú]blica| de)", r"ante m[ií].{0,20}notario", r"protocolo n"],
+    "FACT": [r"\bfactura\b", r"n[uú]mero de factura", r"base imponible", r"total factura"],
+    "FICH": [r"\bficha\b", r"conocimiento del cliente", r"\bKYC\b", r"origen de (los )?fondos"],
+    "FOTO": [r"reportaje fotogr[aá]fico", r"fotograf[ií]as?"],
+    "TASA": [r"informe de tasaci[oó]n", r"valor de tasaci[oó]n", r"sociedad de tasaci[oó]n", r"ECO/?805"],
+    "CORR": [r"\bde\s*:", r"\bpara\s*:", r"\basunto\s*:", r"correo electr[oó]nico"],
+    "NOVA": [r"novaci[oó]n", r"cesi[oó]n de cr[eé]dito", r"refinanciaci[oó]n", r"liberaci[oó]n de fiador"],
+    # Familias añadidas al curar el 34% UNDECIDABLE (marcadores derivados de la definición del catálogo)
+    "COMU": [r"burofax", r"le (comunicamos|notificamos|informamos)", r"se le (notifica|requiere|comunica)",
+             r"requerimiento", r"notificaci[oó]n", r"consentimiento", r"screening"],
+    "ESIN": [r"\binforme\b", r"\bestudio\b", r"parte de visita", r"visita (t[eé]cnica|express|de estado|de mantenimiento)",
+             r"due diligence", r"informe de b[uú]squeda", r"e?informa\b"],
+    "DOCA": [r"expediente (sancionador|administrativo)", r"recurso de (alzada|reposici[oó]n)", r"restauraci[oó]n de la legalidad",
+             r"\bdiligencia\b", r"\boficio\b", r"cambio de uso"],
+    "DOCJ": [r"\bdemanda\b", r"contestaci[oó]n a la demanda", r"administraci[oó]n concursal", r"acta de posesi[oó]n",
+             r"\bprocurador\b", r"solicitud de subasta", r"personaci[oó]n", r"juzgado de (primera instancia|lo mercantil)"],
+    "CUAD": [r"cuadro de amortizaci[oó]n", r"reparto de costes", r"coeficientes de", r"responsabilidad hipotecaria",
+             r"cuadro econ[oó]mico"],
+    "INLI": [r"\binventario\b", r"\blistado\b", r"checklist", r"relaci[oó]n de (activos|documentos|intervinientes)"],
+    "LIPR": [r"licencia de (obra|apertura|actividad|primera ocupaci[oó]n|demolici[oó]n|parcelaci[oó]n)",
+             r"c[eé]dula de habitabilidad", r"se concede (licencia|el permiso)", r"vado"],
+    "CERT": [r"certificado (de eficiencia energ[eé]tica|final de obra|de instalaci[oó]n)", r"bolet[ií]n",
+             r"final de obra"],
+    "CEDU": [r"c[eé]dula urban[ií]stica"],
+    "ACTT": [r"acta de (recepci[oó]n|replanteo|inicio|paralizaci[oó]n)", r"recepci[oó]n de (la )?obra",
+             r"direcci[oó]n facultativa", r"\bITE\b"],
+    "DECL": [r"modelo \d{3}", r"declaraci[oó]n (de|del) (IVA|IRPF|sociedades|operaciones)", r"alteraci[oó]n catastral",
+             r"90[0-4][A-Z]?"],
+    "PRES": [r"presupuesto", r"presupuesto de ejecuci[oó]n material", r"\bPEM\b", r"estimaci[oó]n de (costes|gastos)"],
+    "PBLO": [r"publicaci[oó]n", r"portal inmobiliario", r"idealista|fotocasa"],
+    "DECA": [r"decreto", r"resoluci[oó]n administrativa"],
+    "OFER": [r"\boferta\b", r"hoja de puja", r"propuesta (vinculante|no vinculante|econ[oó]mica)"],
 }
 
 QUOTED = re.compile('["“‘’\']([^"”’\']{4,40})["”’\']')
@@ -149,6 +175,11 @@ def main() -> None:
         except Exception as exc:  # noqa: BLE001 - registrar y seguir
             rows_out.append({**base_row(r, exp, pred), "veredicto": "PDF_ERROR", "evidencia_exp": "", "evidencia_pred": str(exc)[:60]})
             continue
+        if len(text.strip()) < 80:
+            # PDF escaneado sin texto extraible por pypdf: no auditable por contenido
+            # con este metodo. Necesitaria el markdown OCR de DI (persistido en BD).
+            rows_out.append({**base_row(r, exp, pred), "veredicto": "NO_TEXT", "evidencia_exp": "", "evidencia_pred": "(escaneado)"})
+            continue
         eh = hits(markers.get(exp, []), text)
         ph = hits(markers.get(pred, []), text)
         rows_out.append({
@@ -168,7 +199,7 @@ def main() -> None:
     summ = Counter(x["veredicto"] for x in rows_out)
     total = len(rows_out)
     print(f"Discrepancias TDN1 auditadas: {total}")
-    for k in ["MISLABEL_LIKELY", "REAL_ERROR_LIKELY", "AMBIGUOUS_BOTH", "PROVENANCE", "UNDECIDABLE", "PDF_ERROR"]:
+    for k in ["MISLABEL_LIKELY", "REAL_ERROR_LIKELY", "AMBIGUOUS_BOTH", "PROVENANCE", "UNDECIDABLE", "NO_TEXT", "PDF_ERROR"]:
         if summ.get(k):
             print(f"  {k:18s} {summ[k]:3d}  ({100*summ[k]/total:.0f}%)")
     print(f"\nEscrito: {out}")
