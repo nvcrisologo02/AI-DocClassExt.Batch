@@ -15,4 +15,5 @@ public sealed class RunInfo
     public int Error { get; set; }
     public int Timeout { get; set; }
     public int Parallel { get; set; }
+    public int MaxPagesClassification { get; set; }
 }

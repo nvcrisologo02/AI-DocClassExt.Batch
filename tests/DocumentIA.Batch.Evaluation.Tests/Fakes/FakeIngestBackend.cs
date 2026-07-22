@@ -16,7 +16,14 @@ public class FakeIngestBackend : IIngestBackend
 
     public Func<string, DurableStatusResponse> OnStatus { get; set; } = _ => CompletedStatus("T01", "T01.02", 0.9);
 
-    public Task<IngestResponse> IngestAsync(IngestRequest request, CancellationToken ct) => Task.FromResult(OnIngest(request));
+    /// <summary>Ultima request recibida por IngestAsync, para inspeccionar en los tests (p.ej. el recorte de paginas).</summary>
+    public IngestRequest? LastRequest { get; private set; }
+
+    public Task<IngestResponse> IngestAsync(IngestRequest request, CancellationToken ct)
+    {
+        LastRequest = request;
+        return Task.FromResult(OnIngest(request));
+    }
 
     public Task<DurableStatusResponse> GetStatusAsync(string statusQueryUri, CancellationToken ct) => Task.FromResult(OnStatus(statusQueryUri));
 

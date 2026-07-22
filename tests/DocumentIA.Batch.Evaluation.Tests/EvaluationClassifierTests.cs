@@ -34,8 +34,8 @@ public class EvaluationClassifierTests : IDisposable
         };
     }
 
-    private static EvaluationClassifier NewClassifier(FakeIngestBackend backend, LiteConfig? config = null)
-        => new(backend, config ?? new LiteConfig(), delay: (_, _) => Task.CompletedTask);
+    private static EvaluationClassifier NewClassifier(FakeIngestBackend backend, LiteConfig? config = null, int maxPagesClassification = 5)
+        => new(backend, config ?? new LiteConfig(), maxPagesClassification, delay: (_, _) => Task.CompletedTask);
 
     [Fact]
     public async Task ClassifyAsync_Completado_RellenaPrediccionYProveedor()
@@ -116,6 +116,42 @@ public class EvaluationClassifierTests : IDisposable
 
         Assert.Equal(EvaluationEstado.Error, result.Estado);
         Assert.NotNull(result.Error);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_PorDefecto_EnviaRecorteDe5Paginas()
+    {
+        var backend = new FakeIngestBackend();
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        await NewClassifier(backend).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.NotNull(backend.LastRequest);
+        Assert.Equal(5, backend.LastRequest!.Instrucciones.MaxPagesForClassificationOnly);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_ConRecorteExplicito_SobrescribeMaxPages()
+    {
+        var backend = new FakeIngestBackend();
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        await NewClassifier(backend, maxPagesClassification: 3).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal(3, backend.LastRequest!.Instrucciones.MaxPagesForClassificationOnly);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_ConRecorteCero_RespetaValorDeLiteRequestFactory()
+    {
+        var backend = new FakeIngestBackend();
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        await NewClassifier(backend, maxPagesClassification: 0).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        // LiteConfig por defecto tiene OnlyClassification = true, por lo que LiteRequestFactory
+        // calcula 10 sin que el harness lo sobrescriba.
+        Assert.Equal(10, backend.LastRequest!.Instrucciones.MaxPagesForClassificationOnly);
     }
 
     [Fact]

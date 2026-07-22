@@ -13,6 +13,7 @@ public static class RunCommand
     private const string DefaultCorpusRoot = @"H:\Documentia\ParaNacho\Class";
     private const string DefaultEnv = "DEV";
     private const int DefaultParallel = 2;
+    private const int DefaultMaxPagesClassification = 5;
 
     public static async Task<int> ExecuteAsync(string[] args)
     {
@@ -23,10 +24,16 @@ public static class RunCommand
         var label = parsed.GetOrDefault("label", string.Empty);
         var parallel = parsed.GetIntOrDefault("parallel", DefaultParallel);
         var configPath = parsed.GetOrDefault("config", Path.Combine(AppContext.BaseDirectory, "config.json"));
+        var maxPagesClassification = parsed.GetIntOrDefault("max-pages", DefaultMaxPagesClassification);
 
         if (parallel < 1)
         {
             throw new EvaluationUsageException("--parallel debe ser >= 1.");
+        }
+
+        if (maxPagesClassification < 0)
+        {
+            throw new EvaluationUsageException("--max-pages debe ser >= 0.");
         }
 
         var evalDir = EvalPaths.FindEvalDirectory();
@@ -70,7 +77,7 @@ public static class RunCommand
         };
 
         var backend = new IngestBackendAdapter(new DocumentIaBackendClient(), environment);
-        var classifier = new EvaluationClassifier(backend, evalConfig);
+        var classifier = new EvaluationClassifier(backend, evalConfig, maxPagesClassification);
 
         var startedAt = DateTime.UtcNow;
         var runDirName = $"{startedAt:yyyyMMdd-HHmmss}" + (string.IsNullOrWhiteSpace(label) ? string.Empty : $"-{label}");
@@ -78,7 +85,7 @@ public static class RunCommand
         Directory.CreateDirectory(runDir);
 
         Console.WriteLine($"Set: {set} ({documents.Count} documentos) | Entorno: {environment.Name} ({environment.BackendUrl})");
-        Console.WriteLine($"Corpus: {corpusRoot} | Paralelismo: {parallel} | Salida: {runDir}");
+        Console.WriteLine($"Corpus: {corpusRoot} | Paralelismo: {parallel} | Max paginas clasificacion: {maxPagesClassification} | Salida: {runDir}");
 
         var results = new EvaluationResultRow[documents.Count];
         var processed = 0;
@@ -124,7 +131,8 @@ public static class RunCommand
             Ok = results.Count(r => r.Estado == EvaluationEstado.Ok),
             Error = results.Count(r => r.Estado == EvaluationEstado.Error),
             Timeout = results.Count(r => r.Estado == EvaluationEstado.Timeout),
-            Parallel = parallel
+            Parallel = parallel,
+            MaxPagesClassification = maxPagesClassification
         };
 
         var runInfoJson = System.Text.Json.JsonSerializer.Serialize(runInfo, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });

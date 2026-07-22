@@ -17,13 +17,25 @@ public class EvaluationClassifier
 {
     private readonly IIngestBackend _backend;
     private readonly LiteConfig _config;
+    private readonly int _maxPagesClassification;
     private readonly AdaptivePollingStrategy _polling;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
-    public EvaluationClassifier(IIngestBackend backend, LiteConfig config, Func<TimeSpan, CancellationToken, Task>? delay = null)
+    /// <summary>
+    /// <paramref name="maxPagesClassification"/> es el recorte de paginas de la
+    /// clasificacion-only del harness (independiente del hardcodeado de LiteRequestFactory, que
+    /// no se toca por ser compartido con la app Lite). Si es 0 se respeta el valor que calcule
+    /// LiteRequestFactory sin sobrescribirlo.
+    /// </summary>
+    public EvaluationClassifier(
+        IIngestBackend backend,
+        LiteConfig config,
+        int maxPagesClassification = 5,
+        Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         _backend = backend;
         _config = config;
+        _maxPagesClassification = maxPagesClassification;
         _polling = new AdaptivePollingStrategy(config.PollingIntervalSeconds);
         _delay = delay ?? Task.Delay;
     }
@@ -51,6 +63,10 @@ public class EvaluationClassifier
                 var bytes = await File.ReadAllBytesAsync(fullPath, ct);
                 var correlationId = Guid.NewGuid().ToString();
                 var request = LiteRequestFactory.Build(_config, document.FileName, bytes, correlationId);
+                if (_maxPagesClassification > 0)
+                {
+                    request.Instrucciones.MaxPagesForClassificationOnly = _maxPagesClassification;
+                }
 
                 var response = await _backend.IngestAsync(request, ct);
                 var outcome = await PollUntilTerminalAsync(response.StatusQueryUri, stopwatch, ct);
