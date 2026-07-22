@@ -30,7 +30,7 @@ def decide(row: dict, verdict: str | None, ev_exp: str, ev_pred: str) -> dict:
         return _r("SIN CLASIFICAR", "", "", "El clasificador no devolvio tipologia", "Revisar (posible baja confianza / Desconocido)")
     if pred2 == exp2 and pred1 == exp1:
         return _r("OK", exp1, exp2, "Clasificacion coincide con la etiqueta", "Ninguna")
-    if pred1 == exp1:  # familia correcta, subtipo distinto
+    if pred1 == exp1:  # familia correcta, subtipo distinto -> refinado luego con audit_tdn2
         return _r("REVISAR-TDN2", exp1, "", f"TDN1 OK; TDN2 dif ({pred2} vs {exp2})", "Pendiente auditoria de subtipos TDN2")
 
     # discrepancia de TDN1: usar veredicto del auditor
@@ -50,6 +50,23 @@ def decide(row: dict, verdict: str | None, ev_exp: str, ev_pred: str) -> dict:
 
 def _r(resultado, prop1, prop2, motivo, accion) -> dict:
     return {"resultado": resultado, "prop1": prop1, "prop2": prop2, "motivo": motivo, "accion": accion}
+
+
+# Refina un REVISAR-TDN2 con el veredicto del auditor de subtipos (audit_tdn2.csv).
+# El split MISLABEL/REAL_ERROR de TDN2 es heuristico -> las acciones llevan "(confirmar)".
+def refine_tdn2(dec: dict, row: dict, a2: dict) -> dict:
+    exp1, exp2, pred2 = row["expected_tdn1"], row["expected_tdn2"], row["predicted_tdn2"]
+    v = a2["veredicto_tdn2"]
+    if v in ("CATALOG_DUP", "CATCHALL"):
+        motivo = "Subtipos duplicados en catalogo" if v == "CATALOG_DUP" else f"Confusion con subtipo cajon de sastre ({a2['motivo']})"
+        return _r("TDN2-CATALOGO", exp1, "", motivo, "Calidad de catalogo TDN2 (AB de catalogo) - no es fallo de clasificador")
+    if v == "MISLABEL_LIKELY":
+        return _r("TDN2-ETIQUETA", exp1, pred2, f"Subtipo: contenido encaja con {pred2} ({a2['motivo']})", f"Re-etiquetar subtipo a {pred2} (confirmar)")
+    if v == "REAL_ERROR_LIKELY":
+        return _r("TDN2-CLASIFICADOR", exp1, exp2, f"Subtipo: contenido encaja con {exp2} ({a2['motivo']})", f"Target de prompt subtipo {exp2} vs {pred2} (confirmar)")
+    if v == "NO_TEXT":
+        return _r("TDN2-ESCANEADO", exp1, "", "Subtipo no auditable: escaneado sin texto", "Recuperar de BD / revision humana")
+    return _r("TDN2-HUMANO", exp1, "", f"Subtipo ambiguo/sin señal ({a2['motivo']})", "Revision humana de subtipo")
 
 
 RESULTADO_DESC = {
@@ -118,6 +135,7 @@ def main() -> None:
     results = load(run / "results.csv")
     audit = {r["rel_path"]: r for r in load(run / "audit_groundtruth.csv")}
     notext_db = {r["rel_path"]: r for r in load(run / "audit_notext_db.csv")}
+    tdn2 = {r["filename"]: r for r in load(run / "audit_tdn2.csv")}
 
     out_rows = []
     for r in results:
@@ -131,6 +149,8 @@ def main() -> None:
             d = notext_db[rel]
             verdict, ev_exp, ev_pred = d["veredicto"], d["evidencia_exp"], d["evidencia_pred"]
         dec = decide(r, verdict, ev_exp, ev_pred)
+        if dec["resultado"] == "REVISAR-TDN2" and r["file_name"] in tdn2:
+            dec = refine_tdn2(dec, r, tdn2[r["file_name"]])
         fn = r["file_name"]
         out_rows.append({
             "filename": fn,
