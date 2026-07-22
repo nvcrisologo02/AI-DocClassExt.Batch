@@ -52,6 +52,63 @@ def _r(resultado, prop1, prop2, motivo, accion) -> dict:
     return {"resultado": resultado, "prop1": prop1, "prop2": prop2, "motivo": motivo, "accion": accion}
 
 
+RESULTADO_DESC = {
+    "OK": "TDN1 y TDN2 correctos",
+    "REVISAR-TDN2": "TDN1 correcto, subtipo pendiente de auditar",
+    "PROCEDENCIA": "Familia definida por procedencia/workflow, no decidible por texto",
+    "REVISAR-HUMANO": "Ambiguo o sin marcador decisivo",
+    "REVISAR-ETIQUETA": "Ground-truth probablemente erroneo -> re-etiquetar",
+    "SIN CLASIFICAR": "El clasificador no devolvio tipologia",
+    "REVISAR-CLASIFICADOR": "Fallo real del clasificador -> target de prompt",
+    "REVISAR-ESCANEADO": "Escaneado sin texto, no recuperado de BD",
+    "ERROR": "Error de ejecucion",
+}
+
+
+def _md_escape(s: str) -> str:
+    return (s or "").replace("|", "\\|").replace("\n", " ")
+
+
+def write_markdown(run: Path, rows: list[dict], byres: Counter, total: int) -> None:
+    lines: list[str] = []
+    lines.append(f"# Informe de clasificacion por fichero — {run.name}")
+    lines.append("")
+    lines.append(f"Total documentos: **{total}**. Generado desde `results.csv` + auditor de "
+                 "ground-truth (`audit_groundtruth.csv`) + recuperacion de escaneados de BD "
+                 "(`audit_notext_db.csv`).")
+    lines.append("")
+    lines.append("## Cuadro resumen (por resultado)")
+    lines.append("")
+    lines.append("| Resultado | Docs | % | Descripcion |")
+    lines.append("|---|---:|---:|---|")
+    for k, n in byres.most_common():
+        lines.append(f"| {k} | {n} | {100*n/total:.0f}% | {RESULTADO_DESC.get(k, '')} |")
+    lines.append("")
+    lines.append("## Acciones generales")
+    lines.append("")
+    byacc = Counter(x["acciones"].split(":")[0].split(" - ")[0] for x in rows)
+    lines.append("| Accion | Docs |")
+    lines.append("|---|---:|")
+    for k, n in byacc.most_common():
+        lines.append(f"| {k} | {n} |")
+    lines.append("")
+    lines.append("## Detalle por fichero")
+    lines.append("")
+    lines.append("Ordenado por resultado. `propuesto` = tipologia validada (si OK) o corregida por el auditor.")
+    lines.append("")
+    hdr = ["nombre", "TDN1 esp", "TDN2 esp", "TDN1 clas", "TDN2 clas", "resultado",
+           "TDN1 prop", "TDN2 prop", "motivos", "acciones"]
+    lines.append("| " + " | ".join(hdr) + " |")
+    lines.append("|" + "|".join(["---"] * len(hdr)) + "|")
+    for r in rows:
+        lines.append("| " + " | ".join(_md_escape(str(x)) for x in [
+            r["nombre"], r["tdn1_esperado"], r["tdn2_esperado"], r["tdn1_clasificado"],
+            r["tdn2_clasificado"], r["resultado"], r["tdn1_propuesto"] or "-",
+            r["tdn2_propuesto"] or "-", r["motivos"], r["acciones"],
+        ]) + " |")
+    (run / "informe_por_fichero.md").write_text("\n".join(lines), encoding="utf-8")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--run", required=True)
@@ -99,6 +156,7 @@ def main() -> None:
     # Resumen
     total = len(out_rows)
     byres = Counter(x["resultado"] for x in out_rows)
+    write_markdown(run, out_rows, byres, total)
     print(f"Informe por fichero: {total} documentos -> {out_csv}\n")
     print("Resumen por resultado:")
     for k, n in byres.most_common():
