@@ -30,7 +30,7 @@ public class EvaluationClassifier
     public EvaluationClassifier(
         IIngestBackend backend,
         LiteConfig config,
-        int maxPagesClassification = 5,
+        int maxPagesClassification = 10,
         Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         _backend = backend;

@@ -13,7 +13,7 @@ public static class RunCommand
     private const string DefaultCorpusRoot = @"H:\Documentia\ParaNacho\Class";
     private const string DefaultEnv = "DEV";
     private const int DefaultParallel = 2;
-    private const int DefaultMaxPagesClassification = 5;
+    private const int DefaultMaxPagesClassification = 10;
 
     public static async Task<int> ExecuteAsync(string[] args)
     {

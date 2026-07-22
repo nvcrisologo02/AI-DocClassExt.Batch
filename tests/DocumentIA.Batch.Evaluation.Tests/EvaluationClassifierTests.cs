@@ -34,7 +34,7 @@ public class EvaluationClassifierTests : IDisposable
         };
     }
 
-    private static EvaluationClassifier NewClassifier(FakeIngestBackend backend, LiteConfig? config = null, int maxPagesClassification = 5)
+    private static EvaluationClassifier NewClassifier(FakeIngestBackend backend, LiteConfig? config = null, int maxPagesClassification = 10)
         => new(backend, config ?? new LiteConfig(), maxPagesClassification, delay: (_, _) => Task.CompletedTask);
 
     [Fact]
@@ -119,7 +119,7 @@ public class EvaluationClassifierTests : IDisposable
     }
 
     [Fact]
-    public async Task ClassifyAsync_PorDefecto_EnviaRecorteDe5Paginas()
+    public async Task ClassifyAsync_PorDefecto_EnviaRecorteDe10Paginas()
     {
         var backend = new FakeIngestBackend();
         var doc = SeedDoc("ACTE/a.pdf");
@@ -127,7 +127,7 @@ public class EvaluationClassifierTests : IDisposable
         await NewClassifier(backend).ClassifyAsync(_tempDir, doc, CancellationToken.None);
 
         Assert.NotNull(backend.LastRequest);
-        Assert.Equal(5, backend.LastRequest!.Instrucciones.MaxPagesForClassificationOnly);
+        Assert.Equal(10, backend.LastRequest!.Instrucciones.MaxPagesForClassificationOnly);
     }
 
     [Fact]
