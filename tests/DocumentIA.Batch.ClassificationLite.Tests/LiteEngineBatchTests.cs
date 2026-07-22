@@ -215,6 +215,43 @@ public class LiteEngineBatchTests : IDisposable
     }
 
     [Fact]
+    public async Task RunAsync_PendienteReintentoPersistente_AcabaDefinitiveError()
+    {
+        _backend.OnStatus = _ => FakeIngestBackend.CompletedStatusWithEstado("PENDIENTE_REINTENTO");
+
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        SeedDocs(execution.ExecutionId, 1, batchNumber: 1);
+
+        await NewEngine(new LiteConfig { MaxRetries = 2 }).RunAsync(execution.ExecutionId, CancellationToken.None);
+
+        var doc = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.DefinitiveError, doc.Status);
+        Assert.Equal("PENDIENTE_REINTENTO", doc.Estado);
+        Assert.Equal(2, doc.RetryCount);
+    }
+
+    [Fact]
+    public async Task RunAsync_PendienteReintentoLuegoOK_TerminaSucceeded()
+    {
+        var attempts = 0;
+        _backend.OnStatus = _ => ++attempts == 1
+            ? FakeIngestBackend.CompletedStatusWithEstado("PENDIENTE_REINTENTO")
+            : FakeIngestBackend.CompletedStatus("T01", "T01.02", 0.9);
+
+        var execution = _repository.CreateExecution(_docsDir, false, "{}");
+        SeedDocs(execution.ExecutionId, 1, batchNumber: 1);
+
+        await NewEngine(new LiteConfig { MaxRetries = 2 }).RunAsync(execution.ExecutionId, CancellationToken.None);
+
+        var doc = _repository.GetDocuments(execution.ExecutionId).Single();
+        Assert.Equal(LiteDocumentStatus.Succeeded, doc.Status);
+        Assert.Equal("T01", doc.Tdn1);
+        Assert.Equal("T01.02", doc.Tdn2);
+        Assert.Equal(0.9, doc.Confidence);
+        Assert.Equal(1, doc.RetryCount);
+    }
+
+    [Fact]
     public async Task RunAsync_Cancelado_MarcaEjecucionCancelled()
     {
         var execution = _repository.CreateExecution(_docsDir, false, "{}");

@@ -151,6 +151,15 @@ public static class LiteResultParser
     private static string? FirstNonEmpty(params string?[] values)
         => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
 
+    /// <summary>
+    /// Estados de resultado del backend que indican que la clasificación no se completó y
+    /// debe reintentarse (a diferencia de OK o BAJA_CONFIANZA_CLASIFICACION, que son válidos).
+    /// </summary>
+    public static bool IsRetryableBackendFailure(string? estado)
+        => !string.IsNullOrWhiteSpace(estado)
+           && (estado.Equals("PENDIENTE_REINTENTO", StringComparison.OrdinalIgnoreCase)
+               || estado.Equals("ERROR", StringComparison.OrdinalIgnoreCase));
+
     private static string? DeriveTdn1FromTdn2(string? tdn2)
     {
         if (string.IsNullOrWhiteSpace(tdn2))

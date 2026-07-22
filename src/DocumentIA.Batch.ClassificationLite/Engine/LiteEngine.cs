@@ -266,6 +266,16 @@ public class LiteEngine
                 document.Estado = result.Estado;
                 document.ResponseJson = JsonSerializer.Serialize(status.Output.Value, ResponseJsonOptions);
                 document.ErrorMessage = null;
+
+                if (LiteResultParser.IsRetryableBackendFailure(result.Estado))
+                {
+                    document.Status = LiteDocumentStatus.Error;
+                    document.ErrorMessage = $"El backend no completó la clasificación (Estado={result.Estado}).";
+                    _repository.UpdateDocument(document);
+                    ProgressChanged?.Invoke();
+                    return;
+                }
+
                 document.Status = LiteDocumentStatus.Succeeded;
                 Interlocked.Exchange(ref _consecutiveUnauthorized, 0);
                 Interlocked.Exchange(ref _autoPauseSignaled, 0);
