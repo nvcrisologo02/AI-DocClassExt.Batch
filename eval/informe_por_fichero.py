@@ -76,8 +76,13 @@ RESULTADO_DESC = {
     "REVISAR-HUMANO": "Ambiguo o sin marcador decisivo",
     "REVISAR-ETIQUETA": "Ground-truth probablemente erroneo -> re-etiquetar",
     "SIN CLASIFICAR": "El clasificador no devolvio tipologia",
-    "REVISAR-CLASIFICADOR": "Fallo real del clasificador -> target de prompt",
+    "REVISAR-CLASIFICADOR": "Fallo real del clasificador (TDN1) -> target de prompt",
     "REVISAR-ESCANEADO": "Escaneado sin texto, no recuperado de BD",
+    "TDN2-CATALOGO": "Subtipo: defecto de catalogo (duplicado o cajon de sastre), no del clasificador",
+    "TDN2-ETIQUETA": "Subtipo: etiqueta probablemente erronea -> re-etiquetar (confirmar)",
+    "TDN2-CLASIFICADOR": "Subtipo: fallo real del clasificador -> target de prompt (confirmar)",
+    "TDN2-ESCANEADO": "Subtipo no auditable: escaneado sin texto",
+    "TDN2-HUMANO": "Subtipo ambiguo o sin señal -> revision humana",
     "ERROR": "Error de ejecucion",
 }
 
