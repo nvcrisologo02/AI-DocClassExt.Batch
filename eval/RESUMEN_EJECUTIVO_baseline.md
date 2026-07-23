@@ -61,6 +61,21 @@ El detalle por familia (informe `resumen_tdn1.csv`) muestra que cada tipo de pro
 - **Problema solo de subtipo** (familia bien detectada): **DOCN, PBLO, PRES, DOCJ** — el motor acierta la familia y solo falla el subtipo.
 - **Familias que ya funcionan bien**: ACTR, DEAC, CERT, LIPR, DECL, CEDU, ESCR (mayoría correctas).
 
+## 4-quater. Primera mejora de calidad medida (reglas de contraste)
+
+Como prueba del ciclo de mejora medible, se afinaron las descripciones de catálogo de 5 familias con fallos reales del clasificador (NOTS, CUAD, CERA, COMU, CORR) y se midió el antes/después sobre los mismos documentos:
+
+| Familia | Antes → Después |
+|---|---|
+| NOTS | 9/15 → 13/15 |
+| CUAD | 3/9 → 5/9 |
+| CERA | 8/15 → 9/15 |
+| COMU | 5/15 → 6/15 |
+| CORR | 4/15 → 5/15 |
+| **Total 5 familias (TDN1)** | **42% → 55%** |
+
+Comparación pareada (McNemar): 11 documentos mejoran, 2 empeoran, **p = 0,022 → mejora estadísticamente significativa**, sin regresión en ninguna familia. Requirió una iteración (la primera versión de la regla COMU/CORR mejoraba en neto pero degradaba CORR; la segunda, asimétrica, lo corrigió). Es la primera mejora de calidad verificada y demuestra que el trabajo de contraste sobre familias clasificables por contenido sí mueve la aguja de forma medible.
+
 ## 5. Recomendación: orden de trabajo
 
 El mayor retorno **no está en ajustar prompts todavía**, sino en preparar el terreno:
