@@ -119,14 +119,15 @@ def write_markdown(run: Path, rows: list[dict], byres: Counter, total: int) -> N
     lines.append("Ordenado por resultado. `propuesto` = tipologia validada (si OK) o corregida por el auditor.")
     lines.append("")
     hdr = ["nombre", "TDN1 esp", "TDN2 esp", "TDN1 clas", "TDN2 clas", "resultado",
-           "TDN1 prop", "TDN2 prop", "motivos", "acciones"]
+           "TDN1 mio", "TDN2 mio", "coincide", "conf", "acciones"]
     lines.append("| " + " | ".join(hdr) + " |")
     lines.append("|" + "|".join(["---"] * len(hdr)) + "|")
     for r in rows:
         lines.append("| " + " | ".join(_md_escape(str(x)) for x in [
             r["nombre"], r["tdn1_esperado"], r["tdn2_esperado"], r["tdn1_clasificado"],
-            r["tdn2_clasificado"], r["resultado"], r["tdn1_propuesto"] or "-",
-            r["tdn2_propuesto"] or "-", r["motivos"], r["acciones"],
+            r["tdn2_clasificado"], r["resultado"], r.get("tdn1_mi_criterio") or "-",
+            r.get("tdn2_mi_criterio") or "-", r.get("mi_coincide_con") or "-",
+            r.get("mi_confianza") or "-", r["acciones"],
         ]) + " |")
     (run / "informe_por_fichero.md").write_text("\n".join(lines), encoding="utf-8")
 
@@ -141,6 +142,7 @@ def main() -> None:
     audit = {r["rel_path"]: r for r in load(run / "audit_groundtruth.csv")}
     notext_db = {r["rel_path"]: r for r in load(run / "audit_notext_db.csv")}
     tdn2 = {r["filename"]: r for r in load(run / "audit_tdn2.csv")}
+    mio = {r["filename"]: r for r in load(run / "mi_criterio.csv")}  # clasificacion independiente (subconjunto contestado)
 
     out_rows = []
     for r in results:
@@ -157,6 +159,7 @@ def main() -> None:
         if dec["resultado"] == "REVISAR-TDN2" and r["file_name"] in tdn2:
             dec = refine_tdn2(dec, r, tdn2[r["file_name"]])
         fn = r["file_name"]
+        mi = mio.get(fn)  # mi criterio independiente (solo subconjunto contestado)
         out_rows.append({
             "filename": fn,
             "nombre": fn[9:],  # quita el prefijo de etiqueta 'XXXX-NN--' (9 chars)
@@ -167,6 +170,11 @@ def main() -> None:
             "resultado": dec["resultado"],
             "tdn1_propuesto": dec["prop1"],
             "tdn2_propuesto": dec["prop2"],
+            "tdn1_mi_criterio": mi["mi_tdn1"] if mi else "",
+            "tdn2_mi_criterio": mi["mi_tdn2"] if mi else "",
+            "mi_coincide_con": mi["coincide"] if mi else "",
+            "mi_confianza": mi["confianza"] if mi else "",
+            "mi_razon": mi["razon"] if mi else "",
             "motivos": dec["motivo"],
             "acciones": dec["accion"],
         })
