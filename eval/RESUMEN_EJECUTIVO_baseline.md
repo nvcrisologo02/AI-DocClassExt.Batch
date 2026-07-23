@@ -51,6 +51,16 @@ Dos conclusiones adicionales de este ejercicio:
 1. **Robustez del clasificador** (hallazgo nuevo): en los 20 documentos donde el clasificador **no devolvió ninguna tipología**, el documento sí era perfectamente clasificable (18 de 20 coinciden con la etiqueta). No es un problema de criterio sino de que el motor a veces no emite resultado — es un fallo técnico acotado y corregible.
 2. Los documentos **escaneados** están, en su mayoría, bien etiquetados (10 de 11): el clasificador es quien tropieza con ellos, no la referencia.
 
+## 4-ter. Resumen por familia (dónde se concentra cada problema)
+
+El detalle por familia (informe `resumen_tdn1.csv`) muestra que cada tipo de problema se concentra en familias distintas, lo que permite priorizar:
+
+- **Fallos reales del clasificador** (trabajo de prompt): se concentran en **COMU, CORR, CUAD, NOTS, CERA** (5-6 fallos cada una).
+- **Etiquetas mal puestas** (re-etiquetado): sobre todo **INRG** (10 de 15) y **NOVA** (6 de 11).
+- **Familias de procedencia** (negocio): **PRPI** (15 de 15, el 100%), **DOCA** (10) y **ACUI/ACUE**.
+- **Problema solo de subtipo** (familia bien detectada): **DOCN, PBLO, PRES, DOCJ** — el motor acierta la familia y solo falla el subtipo.
+- **Familias que ya funcionan bien**: ACTR, DEAC, CERT, LIPR, DECL, CEDU, ESCR (mayoría correctas).
+
 ## 5. Recomendación: orden de trabajo
 
 El mayor retorno **no está en ajustar prompts todavía**, sino en preparar el terreno:
