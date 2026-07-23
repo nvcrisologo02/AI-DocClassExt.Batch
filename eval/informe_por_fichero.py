@@ -111,6 +111,63 @@ def _md_escape(s: str) -> str:
     return (s or "").replace("|", "\\|").replace("\n", " ")
 
 
+# Agrupa el resultado por fichero en un bucket para el resumen por familia.
+def _bucket(resultado: str) -> str:
+    if resultado == "OK":
+        return "ok"
+    if resultado in ("CLASIF-FALLO", "CLASIF-SIN-RESPUESTA", "REVISAR-CLASIFICADOR"):
+        return "fallo_clasif"
+    if resultado in ("RE-ETIQUETAR", "REVISAR-ETIQUETA"):
+        return "reetiquetar"
+    if resultado == "PROCEDENCIA":
+        return "procedencia"
+    if resultado.startswith("TDN2-"):
+        return "subtipo"
+    if resultado == "TERCERA-OPCION":
+        return "tercera"
+    return "otros"
+
+
+BUCKETS = ["ok", "fallo_clasif", "reetiquetar", "procedencia", "subtipo", "tercera", "otros"]
+BUCKET_HDR = {"ok": "OK", "fallo_clasif": "Fallo clasif.", "reetiquetar": "Re-etiquetar",
+              "procedencia": "Procedencia", "subtipo": "Subtipo", "tercera": "3a opcion", "otros": "Otros"}
+
+
+# Resumen agregado por familia TDN1 (agrupa por la familia ESPERADA del golden).
+# Devuelve las lineas markdown de la seccion y escribe resumen_tdn1.csv.
+def tdn1_summary(run: Path, rows: list[dict]) -> list[str]:
+    from collections import Counter, defaultdict
+    per: dict[str, Counter] = defaultdict(Counter)
+    for r in rows:
+        per[r["tdn1_esperado"]][_bucket(r["resultado"])] += 1
+
+    csv_rows = []
+    for fam in sorted(per):
+        c = per[fam]
+        n = sum(c.values())
+        # acierto real de familia: el clasificador acerto la familia en OK + subtipo (familia ok)
+        # + re-etiquetar (etiqueta mal, clasificador tenia razon)
+        aciertos = c["ok"] + c["subtipo"] + c["reetiquetar"]
+        csv_rows.append({"tdn1": fam, "n": n, **{b: c[b] for b in BUCKETS},
+                         "acierto_familia_real_pct": round(100 * aciertos / n) if n else 0})
+    with (run / "resumen_tdn1.csv").open("w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=list(csv_rows[0].keys()), delimiter=";")
+        w.writeheader()
+        w.writerows(csv_rows)
+
+    lines = ["## Resumen por familia TDN1", "",
+             "Agrupado por la familia **esperada** (etiqueta del golden). "
+             "`Acierto familia real %` = el clasificador acertó la familia (incluye subtipos y los casos "
+             "donde la etiqueta estaba mal y el clasificador tenía razón).", "",
+             "| TDN1 | N | " + " | ".join(BUCKET_HDR[b] for b in BUCKETS) + " | Acierto fam. real % |",
+             "|---|---:|" + "|".join(["---:"] * len(BUCKETS)) + "|---:|"]
+    for cr in csv_rows:
+        lines.append("| " + cr["tdn1"] + " | " + str(cr["n"]) + " | "
+                     + " | ".join(str(cr[b]) for b in BUCKETS) + " | " + str(cr["acierto_familia_real_pct"]) + " |")
+    lines.append("")
+    return lines
+
+
 def write_markdown(run: Path, rows: list[dict], byres: Counter, total: int) -> None:
     lines: list[str] = []
     lines.append(f"# Informe de clasificacion por fichero — {run.name}")
@@ -134,6 +191,7 @@ def write_markdown(run: Path, rows: list[dict], byres: Counter, total: int) -> N
     for k, n in byacc.most_common():
         lines.append(f"| {k} | {n} |")
     lines.append("")
+    lines.extend(tdn1_summary(run, rows))
     lines.append("## Detalle por fichero")
     lines.append("")
     lines.append("Ordenado por resultado. `propuesto` = tipologia validada (si OK) o corregida por el auditor.")
@@ -222,6 +280,20 @@ def main() -> None:
     byacc = Counter(x["acciones"].split(":")[0].split(" - ")[0] for x in out_rows)
     for k, n in byacc.most_common():
         print(f"  {n:4d}  {k}")
+
+    # Resumen por familia TDN1 (consola): familias con mas problemas primero
+    from collections import defaultdict
+    perfam: dict[str, Counter] = defaultdict(Counter)
+    for x in out_rows:
+        perfam[x["tdn1_esperado"]][_bucket(x["resultado"])] += 1
+    print("\nResumen por familia TDN1 (familias con mas fallos de clasificador):")
+    ordered = sorted(perfam.items(), key=lambda kv: -(kv[1]["fallo_clasif"]))
+    print(f"  {'TDN1':6s} {'N':>3s} {'OK':>3s} {'Fclas':>5s} {'Reeti':>5s} {'Proc':>4s} {'Subt':>4s} {'3a':>2s}")
+    for fam, c in ordered:
+        if sum(c.values()) == 0:
+            continue
+        print(f"  {fam:6s} {sum(c.values()):3d} {c['ok']:3d} {c['fallo_clasif']:5d} "
+              f"{c['reetiquetar']:5d} {c['procedencia']:4d} {c['subtipo']:4d} {c['tercera']:2d}")
 
 
 if __name__ == "__main__":
