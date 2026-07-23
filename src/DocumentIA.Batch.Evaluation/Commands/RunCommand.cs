@@ -38,6 +38,17 @@ public static class RunCommand
 
         var evalDir = EvalPaths.FindEvalDirectory();
         var documents = LoadDocuments(set, evalDir);
+
+        // Filtro opcional por familia TDN1 esperada (p.ej. --only-tdn1 COMU,CORR,CUAD,NOTS,CERA)
+        // para re-evaluar solo unas familias tras un cambio de catalogo, sin reprocesar todo el set.
+        var onlyTdn1 = parsed.GetOrDefault("only-tdn1", string.Empty);
+        if (!string.IsNullOrWhiteSpace(onlyTdn1))
+        {
+            var fams = onlyTdn1.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(f => f.ToUpperInvariant()).ToHashSet();
+            documents = documents.Where(d => fams.Contains((d.ExpectedTdn1 ?? string.Empty).ToUpperInvariant())).ToList();
+        }
+
         if (documents.Count == 0)
         {
             throw new EvaluationUsageException($"El set '{set}' no tiene documentos que evaluar.");
