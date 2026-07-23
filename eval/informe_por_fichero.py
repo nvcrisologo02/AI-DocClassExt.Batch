@@ -69,6 +69,22 @@ def refine_tdn2(dec: dict, row: dict, a2: dict) -> dict:
     return _r("TDN2-HUMANO", exp1, "", f"Subtipo ambiguo/sin señal ({a2['motivo']})", "Revision humana de subtipo")
 
 
+# Reconcilia el veredicto usando mi clasificacion independiente como decisor
+# (para el subconjunto contestado, donde es mas fiable que el auditor por keywords).
+def reconcile_mi(dec: dict, row: dict, mi: dict) -> dict:
+    exp1, pred1, m1 = row["expected_tdn1"], row["predicted_tdn1"], mi["mi_tdn1"]
+    razon = mi.get("razon", "")
+    coin = mi["coincide"]
+    if coin == "clasificador":  # mi lectura = clasificador -> la etiqueta esta mal
+        return _r("RE-ETIQUETAR", m1, "", f"Mi lectura: {razon}", f"Re-etiquetar de {exp1} a {m1}")
+    if coin == "etiqueta":  # mi lectura = etiqueta
+        if not pred1:
+            return _r("CLASIF-SIN-RESPUESTA", m1, "", f"Doc clasificable ({m1}) pero el clasificador no respondio. {razon}", "Revisar robustez del clasificador (no es problema de etiqueta)")
+        return _r("CLASIF-FALLO", m1, "", f"Mi lectura confirma la etiqueta {m1}: {razon}", f"Fallo del clasificador ({pred1}); target de prompt {m1} vs {pred1}")
+    # ninguno: propongo una tercera tipologia distinta de etiqueta y clasificador
+    return _r("TERCERA-OPCION", m1, "", f"Ni etiqueta ({exp1}) ni clasificador ({pred1 or '-'}): mi lectura es {m1}. {razon}", f"Revisar: proponer {m1}")
+
+
 RESULTADO_DESC = {
     "OK": "TDN1 y TDN2 correctos",
     "REVISAR-TDN2": "TDN1 correcto, subtipo pendiente de auditar",
@@ -83,6 +99,10 @@ RESULTADO_DESC = {
     "TDN2-CLASIFICADOR": "Subtipo: fallo real del clasificador -> target de prompt (confirmar)",
     "TDN2-ESCANEADO": "Subtipo no auditable: escaneado sin texto",
     "TDN2-HUMANO": "Subtipo ambiguo o sin señal -> revision humana",
+    "RE-ETIQUETAR": "Mi lectura coincide con el clasificador: la etiqueta del golden esta mal",
+    "CLASIF-FALLO": "Mi lectura coincide con la etiqueta: el clasificador fallo -> target de prompt",
+    "CLASIF-SIN-RESPUESTA": "Documento clasificable pero el clasificador no devolvio nada -> robustez",
+    "TERCERA-OPCION": "Mi lectura difiere de etiqueta Y clasificador: propongo una tercera",
     "ERROR": "Error de ejecucion",
 }
 
@@ -160,6 +180,10 @@ def main() -> None:
             dec = refine_tdn2(dec, r, tdn2[r["file_name"]])
         fn = r["file_name"]
         mi = mio.get(fn)  # mi criterio independiente (solo subconjunto contestado)
+        # Para el subconjunto contestado, mi lectura independiente MANDA sobre el auditor
+        # automatico (por keywords, menos fiable): reconcilia resultado/motivo/accion.
+        if mi and mi["coincide"] != "ambos":
+            dec = reconcile_mi(dec, r, mi)
         out_rows.append({
             "filename": fn,
             "nombre": fn[9:],  # quita el prefijo de etiqueta 'XXXX-NN--' (9 chars)
