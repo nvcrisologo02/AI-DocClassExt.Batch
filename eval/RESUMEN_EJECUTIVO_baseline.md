@@ -10,11 +10,11 @@ Se ha construido un **sistema de evaluación reproducible** de la calidad de cla
 
 ## 2. El hallazgo principal
 
-> **La precisión real del clasificador es notablemente mejor de lo que dicen las cifras crudas.** La medición directa da 56,5% de acierto en familia (TDN1) y 31,7% en subtipo (TDN2), pero al revisar los "errores" uno a uno se comprueba que **la mayoría no son fallos del clasificador**, sino problemas de las etiquetas de referencia y de la taxonomía.
+> **La precisión real del clasificador es mejor de lo que dicen las cifras crudas.** La medición directa da 57% de acierto en familia (TDN1), pero al reclasificar de forma independiente los documentos "en disputa" se comprueba que **40 de esos "errores" eran en realidad etiquetas de referencia mal puestas** (el clasificador acertaba). Corregidas, la precisión **real de familia sube al 65%**.
 
-De los 467 documentos, solo el 31% es correcto de forma plena, pero de los 320 restantes **~24% (110 documentos) son problemas estructurales de taxonomía que ningún ajuste técnico puede resolver** — no dependen del clasificador.
+De los 467 documentos, el 31% es correcto de forma plena. Del resto, **~24% (110 documentos) son problemas estructurales de taxonomía** —familias de procedencia y defectos de catálogo— **que ningún ajuste técnico puede resolver**, y otro bloque son etiquetas de referencia erróneas. El trabajo técnico real del clasificador, aunque existe, queda acotado y localizado documento a documento.
 
-Esta conclusión se ha **verificado de forma independiente**: los 127 documentos "en disputa" se han vuelto a clasificar a ciegas, uno a uno, leyendo su contenido sin conocer ni la etiqueta ni la decisión del clasificador (ver sección 4-bis). El resultado confirma que buena parte de los "errores" son etiquetas de referencia mal puestas o categorías no derivables del texto.
+Todas las disputas (165 documentos) se han **verificado de forma independiente**: se reclasificaron a ciegas, una a una, leyendo el contenido sin conocer ni la etiqueta ni la decisión del clasificador (ver sección 4-bis).
 
 ## 3. Cómo se descomponen los resultados
 
@@ -22,10 +22,13 @@ Esta conclusión se ha **verificado de forma independiente**: los 127 documentos
 |---|---:|---|---|
 | Correcto | 147 (31%) | — | — |
 | **Familia definida por procedencia** | 72 (15%) | El tipo depende de quién generó el documento y del workflow, no de su contenido | **Negocio** |
+| **Fallo real del clasificador** (familia) | 68 (15%) | El documento sí es de la familia etiquetada; el clasificador se equivocó | **Equipo técnico** |
+| Etiqueta de referencia errónea (familia) | 40 (9%) | El documento está mal etiquetado; el clasificador acertaba | Revisión (negocio) |
 | **Defecto de catálogo de subtipos** | 38 (8%) | Subtipos duplicados o "cajón de sastre" imposibles de distinguir | **Negocio** |
-| Etiqueta de referencia errónea | 58 (12%) | El documento está mal etiquetado; el clasificador acertaba | Revisión (negocio) |
-| Escaneados / baja confianza | 62 (13%) | Requieren OCR o revisión puntual | Mixto |
-| **Fallo real del clasificador** | 41 (9%) | Aquí sí ayuda el trabajo técnico de prompts | **Equipo técnico** |
+| Errores de subtipo (clasificador / etiqueta) | 53 (11%) | Familia correcta; falla o discrepa el subtipo | Mixto (confirmar) |
+| Escaneados de subtipo / ambiguos | 26 (6%) | Requieren OCR o revisión puntual | Mixto |
+| **Clasificador no responde** | 18 (4%) | Documento clasificable, pero el motor no devolvió nada (robustez) | **Equipo técnico** |
+| Tercera tipología | 5 (1%) | Ni la etiqueta ni el clasificador acertaron | Revisión |
 
 ## 4. Los tres hallazgos estructurales (decisiones de negocio)
 
@@ -35,11 +38,13 @@ Esta conclusión se ha **verificado de forma independiente**: los 127 documentos
 
 ## 4-bis. Verificación independiente (segunda opinión ciega)
 
-Los **127 documentos en disputa** (aquellos donde la etiqueta y el clasificador no coincidían, o el clasificador no decidió) se han reclasificado desde cero leyendo su contenido, sin conocer ninguna decisión previa. De los 93 que discrepaban a nivel de familia:
+**Todos los documentos en disputa (165)** —aquellos donde la etiqueta y el clasificador no coincidían, o el clasificador no decidió— se han reclasificado desde cero leyendo su contenido, sin conocer ninguna decisión previa. De los 131 que discrepaban a nivel de familia:
 
-- En el **71%** la segunda opinión coincide con la **etiqueta de referencia** (el clasificador se equivocó o no respondió).
-- En el **25%** coincide con el **clasificador** (la etiqueta de referencia estaba mal).
+- En el **66%** la segunda opinión coincide con la **etiqueta de referencia** (el clasificador se equivocó o no respondió).
+- En el **31%** coincide con el **clasificador** (la etiqueta de referencia estaba mal).
 - En un **4%** ni una ni otra eran correctas: apareció una **tercera** tipología más adecuada.
+
+Esta cobertura es **completa** (no una muestra): cada disputa de familia tiene ya una segunda opinión independiente registrada en el informe por fichero.
 
 Dos conclusiones adicionales de este ejercicio:
 
@@ -50,11 +55,11 @@ Dos conclusiones adicionales de este ejercicio:
 
 El mayor retorno **no está en ajustar prompts todavía**, sino en preparar el terreno:
 
-1. **Limpiar las etiquetas de referencia** con la lista priorizada ya generada (documentos con etiqueta dudosa, cada uno con su corrección propuesta, evidencia y una segunda opinión independiente). *Sin esto, cualquier mejora se mide contra ruido.*
-2. **Decidir la estrategia de las familias de procedencia**: aportar metadato externo (sistema origen, quién lo subió, estado) o aceptar techo bajo y enrutar aparte.
-3. **Sanear el catálogo de subtipos**: fusionar duplicados y revisar los cajones de sastre.
-4. **Corregir la robustez del clasificador**: evitar que devuelva "sin tipología" en documentos clasificables (20 casos detectados). Es trabajo técnico acotado.
-5. **Solo entonces**, atacar los fallos reales del clasificador con ajustes de prompt, midiendo cada cambio contra la referencia ya limpia.
+1. **Limpiar las etiquetas de referencia** (~66 documentos con etiqueta dudosa: 40 de familia + 26 de subtipo), cada uno con corrección propuesta, evidencia y segunda opinión independiente ya generadas. *Sin esto, cualquier mejora se mide contra ruido.*
+2. **Decidir la estrategia de las familias de procedencia** (72 docs): aportar metadato externo (sistema origen, quién lo subió, estado) o aceptar techo bajo y enrutar aparte.
+3. **Sanear el catálogo de subtipos** (38 docs): fusionar duplicados y revisar los cajones de sastre.
+4. **Corregir la robustez del clasificador**: evitar que devuelva "sin tipología" en documentos clasificables (18 casos detectados). Trabajo técnico acotado.
+5. **Atacar los fallos reales del clasificador con ajustes de prompt** (68 de familia + 27 de subtipo, ya localizados documento a documento), midiendo cada cambio contra la referencia ya limpia.
 
 ## 6. Estado y trazabilidad
 
