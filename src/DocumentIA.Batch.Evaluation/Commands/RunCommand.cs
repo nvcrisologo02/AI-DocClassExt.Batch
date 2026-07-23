@@ -49,6 +49,20 @@ public static class RunCommand
             documents = documents.Where(d => fams.Contains((d.ExpectedTdn1 ?? string.Empty).ToUpperInvariant())).ToList();
         }
 
+        // Filtro opcional por lista de ficheros (--only-files <ruta>, un nombre por linea) para
+        // validar un subconjunto concreto de documentos (p.ej. los que fallaban) sin correr todo.
+        var onlyFilesPath = parsed.GetOrDefault("only-files", string.Empty);
+        if (!string.IsNullOrWhiteSpace(onlyFilesPath))
+        {
+            if (!File.Exists(onlyFilesPath))
+            {
+                throw new EvaluationUsageException($"--only-files: no existe el fichero '{onlyFilesPath}'.");
+            }
+            var wanted = File.ReadAllLines(onlyFilesPath)
+                .Select(l => l.Trim()).Where(l => l.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            documents = documents.Where(d => wanted.Contains(d.FileName)).ToList();
+        }
+
         if (documents.Count == 0)
         {
             throw new EvaluationUsageException($"El set '{set}' no tiene documentos que evaluar.");
