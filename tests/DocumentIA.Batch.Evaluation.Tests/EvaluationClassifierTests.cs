@@ -169,4 +169,13 @@ public class EvaluationClassifierTests : IDisposable
         Assert.Equal(EvaluationEstado.Error, result.Estado);
         Assert.Contains("output", result.Error, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData("INRG-08--OP-99-SCXX-00_800822_106820349.PDF", "OP-99-SCXX-00_800822_106820349.PDF")]
+    [InlineData("COMU-07--E23006170.PDF", "E23006170.PDF")]
+    [InlineData("1143_Nota_Simple.pdf", "1143_Nota_Simple.pdf")]
+    public void StripEtiquetaPrefix_QuitaSoloElPrefijoDeEtiquetaGolden(string entrada, string esperado)
+    {
+        Assert.Equal(esperado, EvaluationClassifier.StripEtiquetaPrefix(entrada));
+    }
 }

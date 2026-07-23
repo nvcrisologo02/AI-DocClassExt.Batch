@@ -40,6 +40,14 @@ public class EvaluationClassifier
         _delay = delay ?? Task.Delay;
     }
 
+    // Quita el prefijo de etiqueta del golden ('XXXX-NN--') del nombre de fichero, para no
+    // enviar la respuesta al backend. Si no hay prefijo (nombre de produccion), lo deja igual.
+    private static readonly System.Text.RegularExpressions.Regex EtiquetaPrefix =
+        new(@"^[A-Z]{4}-\d{2}--", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    internal static string StripEtiquetaPrefix(string fileName)
+        => EtiquetaPrefix.Replace(fileName, string.Empty);
+
     public async Task<EvaluationResultRow> ClassifyAsync(string corpusRoot, ManifestRow document, CancellationToken ct)
     {
         var result = new EvaluationResultRow
@@ -62,7 +70,13 @@ public class EvaluationClassifier
             {
                 var bytes = await File.ReadAllBytesAsync(fullPath, ct);
                 var correlationId = Guid.NewGuid().ToString();
-                var request = LiteRequestFactory.Build(_config, document.FileName, bytes, correlationId);
+                // Nombre neutro: los ficheros del golden llevan la etiqueta como prefijo
+                // ('XXXX-NN--'). Si ese nombre llega al backend puede filtrarse a la clasificacion
+                // (p.ej. fallback sin texto que inyecta el nombre en el prompt) y contaminar la
+                // evaluacion. Se envia el nombre SIN la etiqueta (representativo de produccion);
+                // la trazabilidad real se conserva en el results.csv (RelPath/FileName originales).
+                var nombreNeutro = StripEtiquetaPrefix(document.FileName);
+                var request = LiteRequestFactory.Build(_config, nombreNeutro, bytes, correlationId);
                 if (_maxPagesClassification > 0)
                 {
                     request.Instrucciones.MaxPagesForClassificationOnly = _maxPagesClassification;
