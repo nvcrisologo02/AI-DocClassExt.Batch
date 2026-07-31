@@ -26,3 +26,11 @@ config.local.json
 
 # Salidas del harness de evaluacion (eval/): resultados de ejecuciones, no versionados
 eval/runs/
+eval/vacios_persistentes_44.txt
+__pycache__/
+*.pyc
+# Listas de trabajo generadas por el harness (regenerables)
+eval/pendientes_limpio.txt
+eval/prueba5_fallback.txt
+eval/vacios_limpio.txt
+eval/vacios_p2.txt
