@@ -70,6 +70,9 @@ public class EvaluationClassifier
             {
                 var bytes = await File.ReadAllBytesAsync(fullPath, ct);
                 var correlationId = Guid.NewGuid().ToString();
+                // Se registra en la fila en cuanto se genera (no al final): si IngestAsync o el
+                // poll fallan/hacen timeout, el correlationId del intento sigue siendo trazable.
+                result.CorrelationId = correlationId;
                 // Nombre neutro: los ficheros del golden llevan la etiqueta como prefijo
                 // ('XXXX-NN--'). Si ese nombre llega al backend puede filtrarse a la clasificacion
                 // (p.ej. fallback sin texto que inyecta el nombre en el prompt) y contaminar la
@@ -154,6 +157,11 @@ public class EvaluationClassifier
         var (provider, fallback) = ExtractProviderAndFallback(outcome.Output.Value);
         result.Proveedor = provider;
         result.Fallback = fallback;
+
+        var (estadoContrato, rateLimit, origenMarkdown) = ExtractContratoTrace(outcome.Output.Value);
+        result.EstadoContrato = estadoContrato ?? string.Empty;
+        result.RateLimit = rateLimit;
+        result.OrigenMarkdown = origenMarkdown ?? string.Empty;
     }
 
     /// <summary>
@@ -175,6 +183,36 @@ public class EvaluationClassifier
         var fallback = bool.TryParse(fallbackText, out var parsed) && parsed;
 
         return (provider, fallback);
+    }
+
+    /// <summary>
+    /// Extrae Resultado.Estado (estado del contrato, distinto del Estado interno del harness),
+    /// DetalleEjecucion.Clasificacion.RateLimitExcedido y DetalleEjecucion.OrigenMarkdown, con la
+    /// misma tolerancia a mayusculas/minusculas que <see cref="ExtractProviderAndFallback"/>. Sirve
+    /// para distinguir en el results.csv "sin tipologia por rate limit" de "sin tipologia por
+    /// falta de texto", ambos indistinguibles hasta ahora al quedar como celda vacia.
+    /// </summary>
+    private static (string? EstadoContrato, bool RateLimit, string? OrigenMarkdown) ExtractContratoTrace(JsonElement output)
+    {
+        var estadoContrato = TryGetProperty(output, out var resultado, "Resultado", "resultado")
+            ? GetString(resultado, "Estado", "estado")
+            : null;
+
+        string? origenMarkdown = null;
+        var rateLimit = false;
+
+        if (TryGetProperty(output, out var detalle, "DetalleEjecucion", "detalleEjecucion"))
+        {
+            origenMarkdown = GetString(detalle, "OrigenMarkdown", "origenMarkdown");
+
+            if (TryGetProperty(detalle, out var clasificacion, "Clasificacion", "clasificacion"))
+            {
+                var rateLimitText = GetString(clasificacion, "RateLimitExcedido", "rateLimitExcedido");
+                rateLimit = bool.TryParse(rateLimitText, out var parsedRateLimit) && parsedRateLimit;
+            }
+        }
+
+        return (estadoContrato, rateLimit, origenMarkdown);
     }
 
     private static bool TryGetProperty(JsonElement source, out JsonElement value, params string[] names)

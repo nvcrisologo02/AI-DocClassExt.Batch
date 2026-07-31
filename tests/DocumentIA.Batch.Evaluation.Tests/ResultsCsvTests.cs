@@ -32,7 +32,11 @@ public class ResultsCsvTests : IDisposable
                 Fallback = false,
                 DuracionMs = 4321,
                 Estado = EvaluationEstado.Ok,
-                Error = null
+                Error = null,
+                EstadoContrato = "OK",
+                RateLimit = false,
+                OrigenMarkdown = "LayoutPreClasificacion",
+                CorrelationId = "corr-a"
             },
             new()
             {
@@ -47,7 +51,11 @@ public class ResultsCsvTests : IDisposable
                 Fallback = false,
                 DuracionMs = 0,
                 Estado = EvaluationEstado.Timeout,
-                Error = "Timeout esperando el resultado (30 min)."
+                Error = "Timeout esperando el resultado (30 min).",
+                EstadoContrato = "PENDIENTE_REINTENTO",
+                RateLimit = true,
+                OrigenMarkdown = "MarkdownPersistidoBD",
+                CorrelationId = "corr-b"
             }
         };
 
@@ -60,11 +68,19 @@ public class ResultsCsvTests : IDisposable
         Assert.Equal("gpt-4.1", read[0].Proveedor);
         Assert.False(read[0].Fallback);
         Assert.Equal(EvaluationEstado.Ok, read[0].Estado);
+        Assert.Equal("OK", read[0].EstadoContrato);
+        Assert.False(read[0].RateLimit);
+        Assert.Equal("LayoutPreClasificacion", read[0].OrigenMarkdown);
+        Assert.Equal("corr-a", read[0].CorrelationId);
 
         Assert.Equal(EvaluationEstado.Timeout, read[1].Estado);
         Assert.Null(read[1].PredictedTdn1);
         Assert.Null(read[1].Confianza);
         Assert.Contains("Timeout", read[1].Error);
+        Assert.Equal("PENDIENTE_REINTENTO", read[1].EstadoContrato);
+        Assert.True(read[1].RateLimit);
+        Assert.Equal("MarkdownPersistidoBD", read[1].OrigenMarkdown);
+        Assert.Equal("corr-b", read[1].CorrelationId);
     }
 
     [Fact]
@@ -81,5 +97,6 @@ public class ResultsCsvTests : IDisposable
 
         var text = File.ReadAllText(_tempFile);
         Assert.Contains("rel_path;file_name;expected_tdn1", text);
+        Assert.Contains("estado_contrato;rate_limit;origen_markdown;correlation_id", text);
     }
 }

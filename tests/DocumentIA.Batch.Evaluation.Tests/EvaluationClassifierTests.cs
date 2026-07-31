@@ -58,6 +58,85 @@ public class EvaluationClassifierTests : IDisposable
     }
 
     [Fact]
+    public async Task ClassifyAsync_CapturaEstadoContratoRateLimitYOrigenMarkdown()
+    {
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => FakeIngestBackend.CompletedStatus(
+                "ACTE", "ACTE-01", 0.4,
+                estadoContrato: "PENDIENTE_REINTENTO",
+                rateLimitExcedido: true,
+                origenMarkdown: "MarkdownPersistidoBD")
+        };
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        var result = await NewClassifier(backend).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal("PENDIENTE_REINTENTO", result.EstadoContrato);
+        Assert.True(result.RateLimit);
+        Assert.Equal("MarkdownPersistidoBD", result.OrigenMarkdown);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_CapturaCamposDelContrato_ConVariantesCamelCase()
+    {
+        var json = """
+            {
+              "Identificacion": { "Tdn1": "ACTE", "Tdn2": "ACTE-01", "Paginas": 5, "FechaProceso": "2026-07-20T12:00:00Z" },
+              "resultado": { "estado": "REVISION", "confianzaGlobal": 0.6 },
+              "detalleEjecucion": {
+                "origenMarkdown": "LayoutPreClasificacion",
+                "clasificacion": { "clasificador": "gpt-4.1", "fallbackLLM": "false", "rateLimitExcedido": true }
+              }
+            }
+            """;
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => new DocumentIA.Batch.Services.DurableStatusResponse
+            {
+                RuntimeStatus = "Completed",
+                Output = System.Text.Json.JsonDocument.Parse(json).RootElement.Clone()
+            }
+        };
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        var result = await NewClassifier(backend).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal("REVISION", result.EstadoContrato);
+        Assert.True(result.RateLimit);
+        Assert.Equal("LayoutPreClasificacion", result.OrigenMarkdown);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_PropagaCorrelationIdGeneradoAlConstruirLaRequest()
+    {
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => FakeIngestBackend.CompletedStatus("ACTE", "ACTE-01", 0.9)
+        };
+        var doc = SeedDoc("ACTE/a.pdf");
+
+        var result = await NewClassifier(backend).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.False(string.IsNullOrEmpty(result.CorrelationId));
+        Assert.Equal(backend.LastRequest!.Trazabilidad.CorrelationId, result.CorrelationId);
+    }
+
+    [Fact]
+    public async Task ClassifyAsync_AgotaReintentos_ConservaCorrelationIdDelUltimoIntento()
+    {
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.FailedStatus() };
+        var doc = SeedDoc("ACTE/a.pdf");
+        var config = new LiteConfig { MaxRetries = 2 };
+
+        var result = await NewClassifier(backend, config).ClassifyAsync(_tempDir, doc, CancellationToken.None);
+
+        Assert.Equal(EvaluationEstado.Error, result.Estado);
+        Assert.False(string.IsNullOrEmpty(result.CorrelationId));
+        Assert.Equal(backend.LastRequest!.Trazabilidad.CorrelationId, result.CorrelationId);
+    }
+
+    [Fact]
     public async Task ClassifyAsync_DetectaFallbackActivado()
     {
         var backend = new FakeIngestBackend
