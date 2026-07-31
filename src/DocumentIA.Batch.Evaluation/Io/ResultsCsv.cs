@@ -10,7 +10,8 @@ public static class ResultsCsv
     {
         "rel_path", "file_name", "expected_tdn1", "expected_tdn2",
         "predicted_tdn1", "predicted_tdn2", "confianza", "proveedor",
-        "fallback", "duracion_ms", "estado", "error"
+        "fallback", "duracion_ms", "estado", "error",
+        "estado_contrato", "rate_limit", "origen_markdown", "correlation_id"
     };
 
     public static void Write(string path, IEnumerable<EvaluationResultRow> rows)
@@ -28,7 +29,11 @@ public static class ResultsCsv
             r.Fallback ? "True" : "False",
             r.DuracionMs.ToString(CultureInfo.InvariantCulture),
             r.Estado,
-            r.Error
+            r.Error,
+            r.EstadoContrato,
+            r.RateLimit ? "True" : "False",
+            r.OrigenMarkdown,
+            r.CorrelationId
         });
 
         CsvUtil.WriteRows(path, Header, lines);
@@ -66,7 +71,11 @@ public static class ResultsCsv
                 Fallback = string.Equals(Get(f, index, "fallback"), "True", StringComparison.OrdinalIgnoreCase),
                 DuracionMs = long.TryParse(Get(f, index, "duracion_ms"), out var ms) ? ms : 0,
                 Estado = Get(f, index, "estado"),
-                Error = NullIfEmpty(Get(f, index, "error"))
+                Error = NullIfEmpty(Get(f, index, "error")),
+                EstadoContrato = Get(f, index, "estado_contrato"),
+                RateLimit = string.Equals(Get(f, index, "rate_limit"), "True", StringComparison.OrdinalIgnoreCase),
+                OrigenMarkdown = Get(f, index, "origen_markdown"),
+                CorrelationId = Get(f, index, "correlation_id")
             });
         }
 

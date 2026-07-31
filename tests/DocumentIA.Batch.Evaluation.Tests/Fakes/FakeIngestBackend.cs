@@ -27,16 +27,25 @@ public class FakeIngestBackend : IIngestBackend
 
     public Task<DurableStatusResponse> GetStatusAsync(string statusQueryUri, CancellationToken ct) => Task.FromResult(OnStatus(statusQueryUri));
 
-    public static DurableStatusResponse CompletedStatus(string tdn1, string tdn2, double confidence, string? provider = null, bool fallback = false)
+    public static DurableStatusResponse CompletedStatus(
+        string tdn1,
+        string tdn2,
+        double confidence,
+        string? provider = null,
+        bool fallback = false,
+        string estadoContrato = "OK",
+        bool rateLimitExcedido = false,
+        string origenMarkdown = "")
     {
         var json = $$"""
             {
               "Identificacion": { "Tdn1": "{{tdn1}}", "Tdn2": "{{tdn2}}", "Paginas": 5, "FechaProceso": "2026-07-20T12:00:00Z" },
-              "Resultado": { "Estado": "OK", "ConfianzaGlobal": {{confidence.ToString(System.Globalization.CultureInfo.InvariantCulture)}} },
+              "Resultado": { "Estado": "{{estadoContrato}}", "ConfianzaGlobal": {{confidence.ToString(System.Globalization.CultureInfo.InvariantCulture)}} },
               "DetalleEjecucion": {
                 "PaginasIncluidas": "1-5",
+                "OrigenMarkdown": "{{origenMarkdown}}",
                 "Seguimiento": { "DuracionTotalMs": 3000 },
-                "Clasificacion": { "Clasificador": {{(provider is null ? "null" : $"\"{provider}\"")}}, "FallbackLLM": "{{fallback.ToString().ToLowerInvariant()}}" }
+                "Clasificacion": { "Clasificador": {{(provider is null ? "null" : $"\"{provider}\"")}}, "FallbackLLM": "{{fallback.ToString().ToLowerInvariant()}}", "RateLimitExcedido": {{rateLimitExcedido.ToString().ToLowerInvariant()}} }
               }
             }
             """;
