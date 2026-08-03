@@ -93,3 +93,23 @@ El mayor retorno **no está en ajustar prompts todavía**, sino en preparar el t
 - Detalle documento a documento disponible en el informe por fichero.
 
 > **Conclusión:** el clasificador de contenido funciona mejor de lo que sugería el número inicial, y una segunda opinión independiente lo confirma. La palanca de mejora inmediata es de **negocio y taxonomía** (etiquetas, procedencia, catálogo), no de tecnología. El trabajo técnico pendiente —robustez del motor y ajuste de prompts en los fallos reales— es acotado y ya está localizado documento a documento.
+
+---
+
+## ADENDA (2026-08-03) — Baseline final consolidado y fiable
+
+Tras corregir tres fuentes de error de medición detectadas durante el trabajo (etiqueta filtrada en el nombre de fichero, saturación por paralelismo alto que provocaba rate limits, y caídas de la unidad de red), se ha ejecutado la medición definitiva sobre los 467 documentos, con corpus copiado a disco local y sin incidencias:
+
+| Métrica | Valor final |
+|---|---|
+| **Acierto de familia (TDN1)** | **59,1%** (276/467) |
+| **Acierto de subtipo (TDN2)** | **32,8%** (153/467) |
+| Documentos sin clasificar | 17 (4%) — 8 por límite de peticiones, 9 por error |
+
+**Correcciones importantes sobre estimaciones previas de este informe:**
+
+1. **No existe un "gap de extracción" relevante.** Se había estimado que ~1 de cada 5 documentos no tenía texto extraíble; la medición limpia lo sitúa en el **0,4%**: el motor de extracción de texto funciona en el 99,6% de los casos. Aquella estimación estaba inflada por incidencias de entorno.
+2. **La contaminación por nombre de fichero no penalizó el resultado.** Eliminada la fuga, el acierto de familia no bajó (57% → 59%), porque las mejoras aplicadas (reglas de contraste y robustez) compensaron el efecto.
+3. Las cifras intermedias que se manejaron durante el análisis (26%, 50%) correspondían a mediciones tomadas con el entorno degradado y quedan descartadas.
+
+**Conclusión:** el punto de partida real y verificado es **59,1% de acierto de familia**, con el reparto de causas ya conocido: buena parte de lo restante son etiquetas de referencia a revisar, familias definidas por procedencia y defectos de catálogo de subtipos, todos ellos pendientes de decisión de negocio.
