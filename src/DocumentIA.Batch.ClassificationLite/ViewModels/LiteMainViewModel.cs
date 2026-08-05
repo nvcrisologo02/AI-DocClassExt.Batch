@@ -5,6 +5,7 @@ using System.Windows.Data;
 using DocumentIA.Batch.ClassificationLite.Data;
 using DocumentIA.Batch.ClassificationLite.Models;
 using DocumentIA.Batch.ClassificationLite.Services;
+using DocumentIA.Batch.Services;
 
 namespace DocumentIA.Batch.ClassificationLite.ViewModels;
 
@@ -32,6 +33,17 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
         Config = _configService.Load();
         RowsView = CollectionViewSource.GetDefaultView(Rows);
         RowsView.Filter = FilterRow;
+        _ = InicializarSolicitanteAsync();
+    }
+
+    /// <summary>
+    /// Resuelve el solicitante fuera del hilo de UI: la consulta del UPN puede necesitar el
+    /// controlador de dominio y no debe bloquear el arranque.
+    /// </summary>
+    private async Task InicializarSolicitanteAsync()
+    {
+        Config.Solicitante = await Task.Run(
+            () => SolicitanteProvider.ObtenerSolicitante(LiteConfig.ProgramaSolicitante));
     }
 
     public LiteConfig Config { get; private set; }

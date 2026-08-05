@@ -110,8 +110,19 @@
                     </StackPanel>
                 </GroupBox>
 
-                <GroupBox Header="Gestion de historicos" Padding="8">
+                <GroupBox Header="Gestion de historicos" Padding="8" Margin="0,0,0,10">
                     <CheckBox x:Name="SkipProcessedCheck" Content="Skip Already Processed (omite documentos ya clasificados con exito)" Margin="0,4"/>
+                </GroupBox>
+
+                <GroupBox Header="Trazabilidad" Padding="8">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,4">
+                            <TextBlock Text="Solicitante" Width="200" VerticalAlignment="Center"/>
+                            <TextBox x:Name="SolicitanteBox" Width="320"/>
+                        </StackPanel>
+                        <TextBlock Text="Se rellena solo con el usuario del equipo. Vacio restaura el valor calculado. No se guarda en config.json."
+                                   Foreground="#666" TextWrapping="Wrap" Margin="0,4"/>
+                    </StackPanel>
                 </GroupBox>
             </StackPanel>
         </ScrollViewer>

@@ -88,7 +88,8 @@ public class LiteConfigService
             ForceReprocess = config.ForceReprocess,
             MaxRetries = config.MaxRetries,
             SkipAlreadyProcessed = config.SkipAlreadyProcessed,
-            GenerateSummary = config.GenerateSummary
+            GenerateSummary = config.GenerateSummary,
+            Solicitante = config.Solicitante
         };
     }
 

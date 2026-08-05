@@ -75,8 +75,13 @@
                               Margin="0,4,0,0" />
                     <CheckBox Content="Forzar resumen por defecto"
                               IsChecked="{Binding ForzarResumenPorDefecto, Mode=TwoWay}"
-                              ToolTip="Envía forzarResumenPorDefecto para cubrir casuística de resumen en clasificación." 
+                              ToolTip="Envía forzarResumenPorDefecto para cubrir casuística de resumen en clasificación."
                               Margin="0,4,0,0" />
+
+                    <TextBlock Text="Solicitante" FontSize="11" FontWeight="SemiBold" Margin="0,10,0,2" />
+                    <TextBox Text="{Binding Solicitante, Mode=TwoWay}"
+                             ToolTip="Se rellena solo con el usuario del equipo. Si se deja vacío se restaura el valor calculado. No se guarda en la configuración."
+                             Padding="6" />
 
                     <Button Content="Save Configuration" Command="{Binding SaveConfigCommand}" Margin="0,12,0,0" Padding="8" Background="#1B7C3F" Foreground="White" FontWeight="SemiBold" />
 

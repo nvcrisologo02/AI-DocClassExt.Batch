@@ -34,6 +34,26 @@ public class LiteRequestFactoryTests
     }
 
     [Fact]
+    public void Build_ConSolicitanteConfigurado_LoEnviaTalCual()
+    {
+        var config = new LiteConfig { Solicitante = "DocumentIA.Batch.ClassificationLite/nombre.apellido@sareb.es" };
+
+        var request = LiteRequestFactory.Build(config, "doc.pdf", Bytes, "corr-1");
+
+        Assert.Equal("DocumentIA.Batch.ClassificationLite/nombre.apellido@sareb.es", request.Trazabilidad.SubmittedBy);
+    }
+
+    [Fact]
+    public void Build_SinSolicitante_RecuperaLaEtiquetaDelPrograma()
+    {
+        var config = new LiteConfig { Solicitante = "   " };
+
+        var request = LiteRequestFactory.Build(config, "doc.pdf", Bytes, "corr-1");
+
+        Assert.StartsWith(LiteConfig.ProgramaSolicitante, request.Trazabilidad.SubmittedBy);
+    }
+
+    [Fact]
     public void Build_NivelDefault_NoEnviaNivel()
     {
         var config = new LiteConfig { ClassificationLevel = "DEFAULT" };
