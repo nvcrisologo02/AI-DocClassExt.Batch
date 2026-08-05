@@ -468,8 +468,12 @@ public class IngestTrazabilidad
     [JsonPropertyName("correlationId")]
     public string CorrelationId { get; set; } = Guid.NewGuid().ToString();
 
+    /// <summary>
+    /// Origen de la peticion: "programa/usuario". Sin valor por defecto a proposito, para que
+    /// cada ejecutable declare el suyo y ninguno herede la etiqueta de otro.
+    /// </summary>
     [JsonPropertyName("submittedBy")]
-    public string SubmittedBy { get; set; } = "DocumentIA.Batch";
+    public string SubmittedBy { get; set; } = string.Empty;
 }
 
 public class IngestResponse
