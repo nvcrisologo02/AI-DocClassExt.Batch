@@ -176,6 +176,11 @@
                         <TextBlock Text="Número de colas" Foreground="{StaticResource BrushMuted}" />
                         <TextBox Text="{Binding NumeroColas, Mode=TwoWay}" Margin="0,4,0,14" />
 
+                        <TextBlock Text="Solicitante" Foreground="{StaticResource BrushMuted}" />
+                        <TextBox Text="{Binding Solicitante, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Margin="0,4,0,2" />
+                        <TextBlock Text="Se rellena solo con el usuario del equipo. Vacío restaura el valor calculado."
+                                   Foreground="#94A3B8" FontSize="10" TextWrapping="Wrap" Margin="0,0,0,14" />
+
                         <TextBlock Text="UMBRALES" Foreground="#64748B" FontSize="11" FontWeight="SemiBold" Margin="0,8,0,10" />
 
                         <Grid Margin="0,0,0,8">

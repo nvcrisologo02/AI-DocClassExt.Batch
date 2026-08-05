@@ -10,6 +10,9 @@ namespace DocumentIA.Batch.Evaluation.Commands;
 
 public static class RunCommand
 {
+    /// <summary>Etiqueta de este ejecutable dentro de trazabilidad.submittedBy.</summary>
+    public const string ProgramaSolicitante = "DocumentIA.Batch.Evaluation";
+
     private const string DefaultCorpusRoot = @"H:\Documentia\ParaNacho\Class";
     private const string DefaultEnv = "DEV";
     private const int DefaultParallel = 2;
@@ -98,7 +101,10 @@ public static class RunCommand
             ForceReprocess = config.ForceReprocess,
             MaxRetries = config.MaxRetries,
             SkipAlreadyProcessed = config.SkipAlreadyProcessed,
-            GenerateSummary = false
+            GenerateSummary = false,
+            // Etiqueta propia: sin esto el harness heredaba la del batch real y sus
+            // ejecuciones quedaban mezcladas con las de produccion en el Monitor.
+            Solicitante = SolicitanteProvider.ObtenerSolicitante(ProgramaSolicitante)
         };
 
         var backend = new IngestBackendAdapter(new DocumentIaBackendClient(), environment);

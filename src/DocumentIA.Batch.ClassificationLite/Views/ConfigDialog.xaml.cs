@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using DocumentIA.Batch.ClassificationLite.Models;
 using DocumentIA.Batch.ClassificationLite.Services;
 using DocumentIA.Batch.Models;
+using DocumentIA.Batch.Services;
 
 namespace DocumentIA.Batch.ClassificationLite.Views;
 
@@ -45,6 +46,7 @@ public partial class ConfigDialog : Window
         GenerateSummaryCheck.IsChecked = _config.GenerateSummary;
         ForceReprocessCheck.IsChecked = _config.ForceReprocess;
         SkipProcessedCheck.IsChecked = _config.SkipAlreadyProcessed;
+        SolicitanteBox.Text = _config.Solicitante;
     }
 
     private void EnvironmentCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -182,6 +184,7 @@ public partial class ConfigDialog : Window
         _config.GenerateSummary = GenerateSummaryCheck.IsChecked == true;
         _config.ForceReprocess = ForceReprocessCheck.IsChecked == true;
         _config.SkipAlreadyProcessed = SkipProcessedCheck.IsChecked == true;
+        _config.Solicitante = SolicitanteProvider.NormalizarEdicion(LiteConfig.ProgramaSolicitante, SolicitanteBox.Text);
 
         LiteConfigService.Normalize(_config);
         DialogResult = true;

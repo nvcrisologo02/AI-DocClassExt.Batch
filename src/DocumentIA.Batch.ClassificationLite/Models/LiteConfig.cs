@@ -1,9 +1,13 @@
+using System.Text.Json.Serialization;
 using DocumentIA.Batch.Models;
 
 namespace DocumentIA.Batch.ClassificationLite.Models;
 
 public class LiteConfig
 {
+    /// <summary>Etiqueta de este ejecutable dentro de trazabilidad.submittedBy.</summary>
+    public const string ProgramaSolicitante = "DocumentIA.Batch.ClassificationLite";
+
     public string SelectedEnvironment { get; set; } = "PRO";
 
     public List<EnvironmentConfig> Environments { get; set; } = new()
@@ -27,4 +31,12 @@ public class LiteConfig
     public int MaxRetries { get; set; } = 3;
     public bool SkipAlreadyProcessed { get; set; } = true;
     public bool GenerateSummary { get; set; } = true;
+
+    /// <summary>
+    /// Valor que viaja en trazabilidad.submittedBy ("programa/usuario"). Editable, pero
+    /// deliberadamente NO se persiste: se recalcula en cada arranque para que una edición
+    /// puntual no quede pegada ni viaje al siguiente usuario del equipo.
+    /// </summary>
+    [JsonIgnore]
+    public string Solicitante { get; set; } = ProgramaSolicitante;
 }

@@ -46,6 +46,20 @@ public class LiteConfigServiceTests : IDisposable
     }
 
     [Fact]
+    public void Save_NoPersisteElSolicitante()
+    {
+        var service = new LiteConfigService(ConfigPath);
+        var config = service.Load();
+        config.Solicitante = "DocumentIA.Batch.ClassificationLite/nombre.apellido@sareb.es";
+
+        service.Save(config);
+
+        Assert.DoesNotContain("nombre.apellido@sareb.es", File.ReadAllText(ConfigPath));
+        // Al recargar se vuelve a la etiqueta del programa: el valor real lo repone el arranque.
+        Assert.Equal(LiteConfig.ProgramaSolicitante, service.Load().Solicitante);
+    }
+
+    [Fact]
     public void SaveYLoad_HacenRoundTrip()
     {
         var service = new LiteConfigService(ConfigPath);

@@ -17,6 +17,9 @@ namespace DocumentIA.Batch.Classification.ViewModels;
 
 public class ClassificationMainViewModel : ObservableObject
 {
+    /// <summary>Etiqueta de este ejecutable dentro de trazabilidad.submittedBy.</summary>
+    public const string ProgramaSolicitante = "DocumentIA.Batch.Classification";
+
     private readonly SettingsService _settingsService;
     private readonly DocumentIaBackendClient _backendClient;
     private readonly BatchRunStorageService _runStorageService;
@@ -27,6 +30,7 @@ public class ClassificationMainViewModel : ObservableObject
     private string _functionKey = string.Empty;
     private int _numeroColas = 4;
     private bool _forceReprocess;
+    private string _solicitante = ProgramaSolicitante;
     private bool _classificationOnly;
     private bool _ejecutarIntegridad;
     private bool _forzarResumenPorDefecto = true;
@@ -77,6 +81,16 @@ public class ClassificationMainViewModel : ObservableObject
         Files.CollectionChanged += Files_CollectionChanged;
 
         LoadConfig();
+        _ = InicializarSolicitanteAsync();
+    }
+
+    /// <summary>
+    /// Resuelve el solicitante fuera del hilo de UI: la consulta del UPN puede necesitar el
+    /// controlador de dominio y no debe bloquear el arranque.
+    /// </summary>
+    private async Task InicializarSolicitanteAsync()
+    {
+        Solicitante = await Task.Run(() => SolicitanteProvider.ObtenerSolicitante(ProgramaSolicitante));
     }
 
     // Suscribe a PropertyChanged de cada item para refrescar contadores al cambiar estado
@@ -166,6 +180,28 @@ public class ClassificationMainViewModel : ObservableObject
     {
         get => _forceReprocess;
         set => SetProperty(ref _forceReprocess, value);
+    }
+
+    /// <summary>
+    /// Valor que viaja en trazabilidad.submittedBy. Se precarga con "programa/usuario" y es
+    /// editable; si se deja vacío se restaura el valor calculado. No se persiste en la
+    /// configuración: se recalcula en cada arranque para que no quede pegado a otro usuario.
+    /// </summary>
+    public string Solicitante
+    {
+        get => _solicitante;
+        set
+        {
+            var normalizado = SolicitanteProvider.NormalizarEdicion(ProgramaSolicitante, value);
+
+            if (!SetProperty(ref _solicitante, normalizado) &&
+                !string.Equals(value, normalizado, StringComparison.Ordinal))
+            {
+                // El texto entrante se ha normalizado hasta coincidir con el valor actual:
+                // hay que notificar igualmente para que el cuadro recupere lo que se enviará.
+                OnPropertyChanged();
+            }
+        }
     }
 
     public bool EjecutarIntegridad
@@ -635,7 +671,7 @@ public class ClassificationMainViewModel : ObservableObject
             Trazabilidad = new IngestTrazabilidad
             {
                 CorrelationId = correlationId,
-                SubmittedBy = "DocumentIA.Batch.Classification"
+                SubmittedBy = Solicitante
             }
         };
     }

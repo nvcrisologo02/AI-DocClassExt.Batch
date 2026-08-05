@@ -54,7 +54,7 @@ public static class LiteRequestFactory
             Trazabilidad = new IngestTrazabilidad
             {
                 CorrelationId = correlationId,
-                SubmittedBy = "DocumentIA.Batch.ClassificationLite"
+                SubmittedBy = SolicitanteProvider.NormalizarEdicion(LiteConfig.ProgramaSolicitante, config.Solicitante)
             }
         };
     }
