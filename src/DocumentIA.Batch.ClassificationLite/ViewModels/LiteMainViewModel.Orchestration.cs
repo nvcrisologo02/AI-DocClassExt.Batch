@@ -49,35 +49,136 @@ public partial class LiteMainViewModel
     public LiteExecution? GetPendingRecovery() => _repository.GetIncompleteExecution();
 
     /// <summary>
-    /// Marshaliza ReloadRows() y RefreshCounters() juntos en una unica operacion del
-    /// despachador (en vez de dos BeginInvoke separados). Las propiedades que toca
-    /// RefreshCounters (TotalFound, PendingCount, etc.) estan ligadas a TextBlock de la
-    /// ventana igual que Rows/RowsView: son objetos de interfaz con afinidad de hilo, y
-    /// notificarlas desde un hilo distinto del que las creo lanza una excepcion no
-    /// controlada fuera de cualquier try/catch de la aplicacion.
+    /// Numero de refrescos encolados en el despachador y todavia sin aplicar. Nunca pasa de 1:
+    /// ver <see cref="RequestRefresh"/>.
     /// </summary>
-    private void SafeRefreshRowsAndCounters() => MarshalToUiThread(() =>
-    {
-        ReloadRows();
-        RefreshCounters();
-    });
+    internal int QueuedRefreshCount => _refreshQueued;
 
-    private void MarshalToUiThread(Action action)
+    /// <summary>Snapshot leido y pendiente de aplicar sobre la rejilla, si hay alguno.</summary>
+    internal LiteGridSnapshot? PendingSnapshot => _pendingSnapshot;
+
+    private int _refreshQueued;
+    private LiteGridSnapshot? _pendingSnapshot;
+
+    /// <summary>
+    /// Pide un refresco de la rejilla y los indicadores. Desde el hilo de interfaz se aplica en
+    /// el acto; desde cualquier otro hilo se lee de SQLite aqui mismo y solo la proyeccion viaja
+    /// al despachador. Rows/RowsView y las propiedades de recuento estan ligadas a la ventana:
+    /// son objetos con afinidad de hilo y tocarlas desde fuera lanza una excepcion no controlada
+    /// fuera de cualquier try/catch de la aplicacion.
+    ///
+    /// Solo puede haber un refresco encolado a la vez. Sin esa cota, un refresco mas lento que el
+    /// periodo del temporizador deja la cola del despachador creciendo sin limite; como esas
+    /// operaciones tienen mas prioridad que el pintado y la entrada, la ventana deja de pintarse
+    /// y de atender el raton aunque el motor siga clasificando sin problema.
+    /// </summary>
+    internal void RequestRefresh()
+    {
+        if (_uiDispatcher.CheckAccess())
+        {
+            var snapshot = ReadSnapshot();
+            if (snapshot is not null)
+            {
+                ApplySnapshot(snapshot);
+            }
+
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _refreshQueued, 1, 0) != 0)
+        {
+            return;
+        }
+
+        var queued = false;
+        try
+        {
+            _pendingSnapshot = ReadSnapshot();
+            if (_pendingSnapshot is null)
+            {
+                return;
+            }
+
+            queued = MarshalToUiThread(ApplyPendingSnapshot);
+        }
+        catch (Exception)
+        {
+            // Un fallo leyendo SQLite (BD bloqueada, disco) no debe dejar el refresco muerto:
+            // el siguiente tick del temporizador vuelve a intentarlo.
+        }
+        finally
+        {
+            if (!queued)
+            {
+                _pendingSnapshot = null;
+                Interlocked.Exchange(ref _refreshQueued, 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Refresco puntual desde el hilo de interfaz sin bloquearlo: la lectura de SQLite se va al
+    /// ThreadPool y solo la proyeccion vuelve aqui. Para los refrescos que dispara el temporizador
+    /// se usa <see cref="RequestRefresh"/>, que ademas los coalesce.
+    /// </summary>
+    private async Task RefreshAsync()
+    {
+        LiteGridSnapshot? snapshot;
+        try
+        {
+            // ConfigureAwait(false) a proposito: da igual en que hilo se reanude, porque la
+            // proyeccion se marshaliza explicitamente. Aplicarla en el hilo de la continuacion
+            // rompe la afinidad de hilo del CollectionView.
+            snapshot = await Task.Run(ReadSnapshot).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Igual que en RequestRefresh: un fallo de lectura no debe romper el flujo de la
+            // ejecucion ni tumbar la ventana.
+            return;
+        }
+
+        if (snapshot is not null)
+        {
+            MarshalToUiThread(() => ApplySnapshot(snapshot));
+        }
+    }
+
+    private void ApplyPendingSnapshot()
+    {
+        var snapshot = _pendingSnapshot;
+        _pendingSnapshot = null;
+
+        // Liberar el hueco antes de aplicar: mientras esta proyeccion corre, un tick posterior
+        // puede volver a leer y encolar datos mas frescos, pero nunca mas de uno.
+        Interlocked.Exchange(ref _refreshQueued, 0);
+
+        if (snapshot is not null)
+        {
+            ApplySnapshot(snapshot);
+        }
+    }
+
+    private bool MarshalToUiThread(Action action)
     {
         if (_uiDispatcher.CheckAccess())
         {
             action();
-            return;
+            return true;
         }
 
         try
         {
-            _uiDispatcher.BeginInvoke(action);
+            // Por debajo de Input y Render: si el refresco se retrasa se ve la rejilla algo mas
+            // tarde, pero la ventana nunca deja de pintarse ni de responder al raton.
+            _uiDispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, action);
+            return true;
         }
         catch
         {
             // El dispatcher pudo haberse cerrado (app cerrando) o no tener bucle de mensajes
             // activo (tests): no debe tumbar el hilo que dispara el refresco.
+            return false;
         }
     }
 
@@ -125,7 +226,7 @@ public partial class LiteMainViewModel
             config.SkipAlreadyProcessed, config.ForceReprocess, config.InternalBatchSize, cancellationToken),
             cancellationToken);
 
-        SafeRefreshRowsAndCounters();
+        await RefreshAsync();
         StatusMessage = scan.TotalFound == 0
             ? "No se encontraron documentos PDF."
             : $"{scan.TotalFound} documentos encontrados. Pulsa Ejecutar para procesar.";
@@ -186,7 +287,7 @@ public partial class LiteMainViewModel
                 execution.ExecutionId, paths, includeSubfolders,
                 config.SkipAlreadyProcessed, config.ForceReprocess, config.InternalBatchSize, ct), ct);
 
-            SafeRefreshRowsAndCounters();
+            await RefreshAsync();
 
             StatusMessage = "Procesando...";
             await engine.RunAsync(execution.ExecutionId, ct);
@@ -238,7 +339,7 @@ public partial class LiteMainViewModel
         SleepBlocker.PreventSleep();
 
         using var refreshTimer = new System.Threading.Timer(
-            _ => SafeRefreshRowsAndCounters(),
+            _ => RequestRefresh(),
             null,
             TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
@@ -265,7 +366,7 @@ public partial class LiteMainViewModel
             SleepBlocker.AllowSleep();
             IsRunning = false;
             IsPaused = false;
-            SafeRefreshRowsAndCounters();
+            await RefreshAsync();
             if (!preserveStatusMessage)
             {
                 StatusMessage = "Ejecucion finalizada.";

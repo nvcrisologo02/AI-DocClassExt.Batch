@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.IO;
 using System.Windows.Data;
 using DocumentIA.Batch.ClassificationLite.Data;
@@ -220,5 +221,136 @@ public class LiteMainViewModelTests : IDisposable
 
         var lines = File.ReadAllLines(path);
         Assert.DoesNotContain(lines, l => l.Contains("beta.pdf"));
+    }
+
+    /// <summary>
+    /// Un Reset de la vista obliga al DataGrid a regenerar sus contenedores y a recalcular el
+    /// desplazamiento. Emitirlo en cada refresco periodico, aunque no haya cambiado ninguna
+    /// fila, es la parte mas cara del tick y ademas hace saltar la rejilla mientras se mira.
+    /// </summary>
+    [Fact]
+    public void ReloadRows_SinCambios_NoReconstruyeLaVista()
+    {
+        _viewModel.ReloadRows();
+        var eventos = ObservarLaVista();
+
+        _viewModel.ReloadRows();
+
+        Assert.Empty(eventos);
+    }
+
+    [Fact]
+    public void ReloadRows_SoloCambiaElEstadoDeUnaFila_NoReconstruyeLaVistaSinFiltro()
+    {
+        _viewModel.ReloadRows();
+        var eventos = ObservarLaVista();
+
+        var beta = _repository.GetDocuments(_executionId).Single(d => d.FileName == "beta.pdf");
+        beta.Status = LiteDocumentStatus.Succeeded;
+        _repository.UpdateDocument(beta);
+        _viewModel.ReloadRows();
+
+        Assert.Empty(eventos);
+        Assert.Equal("Succeeded", _viewModel.Rows.Single(r => r.FileName == "beta.pdf").Status);
+    }
+
+    [Fact]
+    public void ReloadRows_ConFiltroDeEstadoActivo_ReconstruyeLaVistaCuandoUnaFilaCambiaDeEstado()
+    {
+        _viewModel.ReloadRows();
+        _viewModel.StatusFilter = LiteDocumentStatus.Pending;
+        Assert.Single(_viewModel.RowsView.Cast<LiteDocumentRow>());
+        var eventos = ObservarLaVista();
+
+        var beta = _repository.GetDocuments(_executionId).Single(d => d.FileName == "beta.pdf");
+        beta.Status = LiteDocumentStatus.Succeeded;
+        _repository.UpdateDocument(beta);
+        _viewModel.ReloadRows();
+
+        Assert.Contains(NotifyCollectionChangedAction.Reset, eventos);
+        Assert.Empty(_viewModel.RowsView.Cast<LiteDocumentRow>());
+    }
+
+    /// <summary>
+    /// Anadir las filas de una en una a la coleccion observable ligada al DataGrid cuesta un
+    /// evento por fila; con decenas de miles de documentos el primer refresco tras el escaneo
+    /// se lleva el hilo de interfaz durante minutos. Las altas deben viajar en un unico Reset.
+    /// </summary>
+    [Fact]
+    public void ReloadRows_ConMuchasFilasNuevas_LasAnadeEnUnUnicoReset()
+    {
+        _viewModel.ReloadRows();
+        _repository.InsertDocuments(Enumerable.Range(0, 50).Select(i => new LiteDocument
+        {
+            ExecutionId = _executionId,
+            FileName = $"nuevo-{i:D3}.pdf",
+            FullPath = $@"c:\docs\nuevo-{i:D3}.pdf",
+            FileSize = 1,
+            LastModifiedUtc = "x",
+            Status = LiteDocumentStatus.Pending
+        }).ToList());
+        var eventos = ObservarLaVista();
+
+        _viewModel.ReloadRows();
+
+        Assert.Equal(54, _viewModel.Rows.Count);
+        Assert.Equal(new[] { NotifyCollectionChangedAction.Reset }, eventos);
+    }
+
+    /// <summary>
+    /// El refresco periodico corre en un hilo del ThreadPool y marshaliza a la interfaz. Si cada
+    /// refresco tarda mas que el periodo del temporizador y los ticks se encolan sin control, la
+    /// cola del despachador crece sin limite y la ventana no vuelve a pintarse ni a atender el
+    /// raton. Solo debe haber un refresco pendiente en cada momento.
+    /// </summary>
+    [Fact]
+    public void SolicitarRefresco_DesdeOtroHilo_NoAcumulaMasDeUnoPendiente()
+    {
+        _viewModel.ReloadRows();
+
+        // Este hilo de test es el que construyo el ViewModel, asi que es el "hilo de interfaz":
+        // desde otro hilo el refresco pasa por el despachador, que aqui no tiene bucle de
+        // mensajes y por tanto no ejecuta la operacion encolada. Ese es exactamente el escenario
+        // del bloqueo, y lo que se comprueba es que los ticks siguientes se descartan.
+        var hilo = new Thread(() =>
+        {
+            for (var i = 0; i < 50; i++)
+            {
+                _viewModel.RequestRefresh();
+            }
+        });
+        hilo.Start();
+        hilo.Join();
+
+        Assert.Equal(1, _viewModel.QueuedRefreshCount);
+    }
+
+    /// <summary>
+    /// La lectura de SQLite del refresco (todas las filas de la ejecucion mas el recuento
+    /// agregado) no puede ejecutarse en el hilo de interfaz: con muchos documentos son cientos
+    /// de milisegundos de I/O y de materializacion de objetos por cada tick.
+    /// </summary>
+    [Fact]
+    public void RequestRefresh_DesdeOtroHilo_LeeLaBaseDeDatosAntesDeMarshalizar()
+    {
+        var hilo = new Thread(() => _viewModel.RequestRefresh());
+        hilo.Start();
+        hilo.Join();
+
+        // El despachador de este test no tiene bucle de mensajes, asi que la operacion encolada
+        // no ha corrido: si el snapshot ya esta leido, la consulta se hizo en el hilo llamante y
+        // no en el de interfaz. Las filas, en cambio, siguen sin aplicarse.
+        Assert.NotNull(_viewModel.PendingSnapshot);
+        Assert.Equal(4, _viewModel.PendingSnapshot!.Counters.Total);
+        Assert.Equal(4, _viewModel.PendingSnapshot.Documents.Count);
+        Assert.Empty(_viewModel.Rows);
+    }
+
+    /// <summary>Acciones que la vista emite; vacio significa que la rejilla no se ha tocado.</summary>
+    private List<NotifyCollectionChangedAction> ObservarLaVista()
+    {
+        var eventos = new List<NotifyCollectionChangedAction>();
+        ((INotifyCollectionChanged)_viewModel.RowsView).CollectionChanged += (_, e) => eventos.Add(e.Action);
+        return eventos;
     }
 }
