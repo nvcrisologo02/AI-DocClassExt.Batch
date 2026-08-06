@@ -5,6 +5,12 @@ using DocumentIA.Batch.ClassificationLite.Models;
 
 namespace DocumentIA.Batch.ClassificationLite.ViewModels;
 
+/// <summary>
+/// Fila de la rejilla. Todos los setters comparan antes de notificar: el refresco periodico
+/// vuelca la ejecucion completa sobre las filas una vez por segundo y casi ninguna ha cambiado,
+/// asi que notificar a ciegas multiplicaba el trabajo del hilo de interfaz por el numero de
+/// documentos hasta dejar la ventana sin responder.
+/// </summary>
 public class LiteDocumentRow : INotifyPropertyChanged
 {
     private string _status = string.Empty;
@@ -27,67 +33,67 @@ public class LiteDocumentRow : INotifyPropertyChanged
     public string Status
     {
         get => _status;
-        set { _status = value; OnPropertyChanged(); }
+        set { if (_status != value) { _status = value; OnPropertyChanged(); } }
     }
 
     public string PagesIncluded
     {
         get => _pagesIncluded;
-        set { _pagesIncluded = value; OnPropertyChanged(); }
+        set { if (_pagesIncluded != value) { _pagesIncluded = value; OnPropertyChanged(); } }
     }
 
     public string Pages
     {
         get => _pages;
-        set { _pages = value; OnPropertyChanged(); }
+        set { if (_pages != value) { _pages = value; OnPropertyChanged(); } }
     }
 
     public string Tdn1
     {
         get => _tdn1;
-        set { _tdn1 = value; OnPropertyChanged(); }
+        set { if (_tdn1 != value) { _tdn1 = value; OnPropertyChanged(); } }
     }
 
     public string Tdn2
     {
         get => _tdn2;
-        set { _tdn2 = value; OnPropertyChanged(); }
+        set { if (_tdn2 != value) { _tdn2 = value; OnPropertyChanged(); } }
     }
 
     public string Confidence
     {
         get => _confidence;
-        set { _confidence = value; OnPropertyChanged(); }
+        set { if (_confidence != value) { _confidence = value; OnPropertyChanged(); } }
     }
 
     public string ProcessDate
     {
         get => _processDate;
-        set { _processDate = value; OnPropertyChanged(); }
+        set { if (_processDate != value) { _processDate = value; OnPropertyChanged(); } }
     }
 
     public string TotalDurationMs
     {
         get => _totalDurationMs;
-        set { _totalDurationMs = value; OnPropertyChanged(); }
+        set { if (_totalDurationMs != value) { _totalDurationMs = value; OnPropertyChanged(); } }
     }
 
     public string? RequestJson
     {
         get => _requestJson;
-        set { _requestJson = value; OnPropertyChanged(); }
+        set { if (_requestJson != value) { _requestJson = value; OnPropertyChanged(); } }
     }
 
     public string? ResponseJson
     {
         get => _responseJson;
-        set { _responseJson = value; OnPropertyChanged(); }
+        set { if (_responseJson != value) { _responseJson = value; OnPropertyChanged(); } }
     }
 
     public string? ErrorMessage
     {
         get => _errorMessage;
-        set { _errorMessage = value; OnPropertyChanged(); }
+        set { if (_errorMessage != value) { _errorMessage = value; OnPropertyChanged(); } }
     }
 
     /// <summary>
@@ -98,7 +104,7 @@ public class LiteDocumentRow : INotifyPropertyChanged
     public string? Summary
     {
         get => _summary;
-        set { _summary = value; OnPropertyChanged(); }
+        set { if (_summary != value) { _summary = value; OnPropertyChanged(); } }
     }
 
     public string? Estado
@@ -106,6 +112,11 @@ public class LiteDocumentRow : INotifyPropertyChanged
         get => _estado;
         set
         {
+            if (_estado == value)
+            {
+                return;
+            }
+
             _estado = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ResultadoDisplay));

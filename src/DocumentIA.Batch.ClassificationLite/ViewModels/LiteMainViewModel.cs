@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Data;
@@ -48,7 +47,7 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
 
     public LiteConfig Config { get; private set; }
 
-    public ObservableCollection<LiteDocumentRow> Rows { get; } = new();
+    public LiteRowCollection Rows { get; } = new();
 
     public ICollectionView RowsView { get; }
 
@@ -93,58 +92,120 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
 
     public void ReloadRows()
     {
-        if (string.IsNullOrWhiteSpace(CurrentExecutionId))
+        var snapshot = ReadSnapshot();
+        if (snapshot is not null)
+        {
+            ApplyRows(snapshot);
+        }
+    }
+
+    public void RefreshCounters()
+    {
+        var snapshot = ReadSnapshot();
+        if (snapshot is not null)
+        {
+            ApplyCounters(snapshot);
+        }
+    }
+
+    /// <summary>
+    /// Lee de SQLite todo lo que necesita el refresco. Puede (y debe) llamarse desde un hilo
+    /// distinto al de interfaz: con muchos documentos son cientos de milisegundos entre la
+    /// consulta y la materializacion de las filas.
+    /// </summary>
+    internal LiteGridSnapshot? ReadSnapshot()
+    {
+        var executionId = CurrentExecutionId;
+        if (string.IsNullOrWhiteSpace(executionId))
+        {
+            return null;
+        }
+
+        return new LiteGridSnapshot(
+            executionId,
+            _repository.GetDocumentsForGrid(executionId),
+            _repository.GetCounters(executionId));
+    }
+
+    /// <summary>Proyecta el snapshot sobre la rejilla y los indicadores. Solo en el hilo de interfaz.</summary>
+    internal void ApplySnapshot(LiteGridSnapshot snapshot)
+    {
+        // Entre la lectura y esta proyeccion el usuario pudo arrancar otra ejecucion: aplicar un
+        // snapshot de la anterior haria parpadear la rejilla con filas que ya no corresponden.
+        if (!string.Equals(snapshot.ExecutionId, CurrentExecutionId, StringComparison.Ordinal))
         {
             return;
         }
 
-        if (!string.Equals(_loadedExecutionId, CurrentExecutionId, StringComparison.Ordinal))
+        ApplyRows(snapshot);
+        ApplyCounters(snapshot);
+    }
+
+    private void ApplyRows(LiteGridSnapshot snapshot)
+    {
+        if (!string.Equals(_loadedExecutionId, snapshot.ExecutionId, StringComparison.Ordinal))
         {
             Rows.Clear();
             _rowsById.Clear();
-            _loadedExecutionId = CurrentExecutionId;
+            _loadedExecutionId = snapshot.ExecutionId;
         }
 
-        var documents = _repository.GetDocumentsForGrid(CurrentExecutionId);
-        var seenIds = new HashSet<long>();
+        var seenIds = new HashSet<long>(snapshot.Documents.Count);
+        var added = new List<LiteDocumentRow>();
+        var filterRelevantChange = false;
 
-        foreach (var document in documents)
+        foreach (var document in snapshot.Documents)
         {
             seenIds.Add(document.Id);
 
             if (_rowsById.TryGetValue(document.Id, out var existingRow))
             {
+                var statusBefore = existingRow.Status;
+                var reviewableBefore = existingRow.IsLowConfidence;
                 existingRow.UpdateFrom(document);
+                filterRelevantChange = filterRelevantChange
+                    || !string.Equals(statusBefore, existingRow.Status, StringComparison.Ordinal)
+                    || reviewableBefore != existingRow.IsLowConfidence;
             }
             else
             {
                 var row = LiteDocumentRow.From(document);
                 _rowsById[document.Id] = row;
-                Rows.Add(row);
+                added.Add(row);
             }
         }
 
+        var removedIndexes = new List<int>();
         for (var i = Rows.Count - 1; i >= 0; i--)
         {
-            var id = Rows[i].Id;
-            if (!seenIds.Contains(id))
+            if (!seenIds.Contains(Rows[i].Id))
             {
-                Rows.RemoveAt(i);
-                _rowsById.Remove(id);
+                removedIndexes.Add(i);
             }
         }
 
-        RowsView.Refresh();
+        if (added.Count > 0 || removedIndexes.Count > 0)
+        {
+            foreach (var index in removedIndexes)
+            {
+                _rowsById.Remove(Rows[index].Id);
+            }
+
+            // Un unico Reset para todas las altas y bajas del refresco: ver LiteRowCollection.
+            Rows.ApplyBatch(removedIndexes, added);
+        }
+        else if (filterRelevantChange && HasActiveFilter)
+        {
+            // Reconstruir la vista solo cuando un cambio puede hacer entrar o salir filas del
+            // filtro activo. Hacerlo en cada refresco obliga al DataGrid a regenerar sus
+            // contenedores y hace saltar la rejilla mientras se esta mirando.
+            RowsView.Refresh();
+        }
     }
 
-    public void RefreshCounters()
+    private void ApplyCounters(LiteGridSnapshot snapshot)
     {
-        if (string.IsNullOrWhiteSpace(CurrentExecutionId))
-        {
-            return;
-        }
-
-        var counters = _repository.GetCounters(CurrentExecutionId);
+        var counters = snapshot.Counters;
         TotalFound = counters.Total;
         PendingCount = counters.Pending;
         InFlightCount = counters.InFlight;
@@ -152,6 +213,11 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
         DefinitiveErrorCount = counters.DefinitiveError;
         SkippedCount = counters.SkippedHistory;
     }
+
+    private bool HasActiveFilter
+        => !string.IsNullOrWhiteSpace(FilterText)
+           || !string.Equals(StatusFilter, "Todos", StringComparison.OrdinalIgnoreCase)
+           || ShowOnlyReview;
 
     /// <summary>
     /// Documento completo (incluyendo RequestJson/ResponseJson) para el dialogo de detalle,
@@ -173,11 +239,7 @@ public partial class LiteMainViewModel : INotifyPropertyChanged
         }
 
         var all = _repository.GetDocuments(CurrentExecutionId);
-        var hasFilter = !string.IsNullOrWhiteSpace(FilterText)
-            || !string.Equals(StatusFilter, "Todos", StringComparison.OrdinalIgnoreCase)
-            || ShowOnlyReview;
-
-        if (!hasFilter)
+        if (!HasActiveFilter)
         {
             return all;
         }
