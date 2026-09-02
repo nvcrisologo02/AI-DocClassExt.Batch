@@ -2,10 +2,13 @@
 documentos NO_TEXT (escaneados, sin texto extraible por pypdf) usando el markdown
 de Document Intelligence persistido en la BD de DEV.
 
-Obtiene el token Entra por subprocess (NUNCA lo imprime). Lee
-Documentos.NormalizacionMarkdownCompressed = base64(gzip(markdown)), lo descomprime
-y aplica los mismos marcadores del auditor base. Solo emite veredictos/evidencia,
-no el contenido del documento (que puede contener datos personales).
+Obtiene el token Entra por subprocess (NUNCA lo imprime). Lee el markdown de
+Documentos, que desde AB#100169 se guarda en NormalizacionMarkdownGzip = gzip(markdown)
+binario; la columna antigua NormalizacionMarkdownCompressed = base64(gzip(markdown))
+se sigue escribiendo en paralelo y cubre las filas aun sin migrar. Se prefiere la
+binaria y se cae a la Base64. Aplica los mismos marcadores del auditor base y solo
+emite veredictos/evidencia, no el contenido del documento (que puede contener datos
+personales).
 
 Requiere: pyodbc + ODBC Driver 18 + sesion `az login` activa con acceso de lectura
 a la BD DEV. Es de solo lectura.
@@ -50,6 +53,16 @@ def decompress(b64: str) -> str:
         return raw.decode("utf-8", "replace")
 
 
+def decompress_gzip(raw: bytes | None) -> str:
+    """Descomprime el GZip binario de Documentos.NormalizacionMarkdownGzip (AB#100169)."""
+    if not raw:
+        return ""
+    try:
+        return gzip.decompress(bytes(raw)).decode("utf-8", "replace")
+    except OSError:
+        return bytes(raw).decode("utf-8", "replace")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description="Audita NO_TEXT (escaneados) via markdown DI de BD DEV.")
     ap.add_argument("--run", required=True, help="Directorio del run con audit_groundtruth.csv")
@@ -74,20 +87,25 @@ def main() -> None:
         attrs_before={1256: token_struct()},
     )
     placeholders = ",".join("?" * len(names))
+    # AB#100169: el markdown vive ahora en NormalizacionMarkdownGzip (GZip binario). La columna
+    # antigua (Base64 en nvarchar) se sigue escribiendo en paralelo y es la unica forma de las
+    # filas aun sin migrar, asi que se piden las dos y se prefiere la binaria.
     rows = cn.cursor().execute(
-        f"SELECT NombreArchivo, NormalizacionMarkdownCompressed FROM Documentos "
-        f"WHERE NombreArchivo IN ({placeholders}) AND NormalizacionMarkdownCompressed IS NOT NULL",
+        f"SELECT NombreArchivo, NormalizacionMarkdownGzip, NormalizacionMarkdownCompressed "
+        f"FROM Documentos "
+        f"WHERE NombreArchivo IN ({placeholders}) "
+        f"  AND (NormalizacionMarkdownGzip IS NOT NULL OR NormalizacionMarkdownCompressed IS NOT NULL)",
         *names,
     ).fetchall()
 
     seen: set[str] = set()
     out = []
     summ: Counter = Counter()
-    for name, comp in rows:
+    for name, binario, base64_historico in rows:
         if name in seen:
             continue
         seen.add(name)
-        md = decompress(comp)
+        md = decompress_gzip(binario) if binario else decompress(base64_historico)
         r = by_name[name]
         exp, pred = r["expected_tdn1"], r["predicted_tdn1"].split("-")[0]
         eh = A.hits(markers.get(exp, []), md)
