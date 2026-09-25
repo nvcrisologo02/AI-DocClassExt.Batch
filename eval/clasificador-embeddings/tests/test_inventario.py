@@ -2,8 +2,11 @@ import hashlib
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from inventario import huella, hay_que_releer, parsear_etiqueta, particionar
+import inventario
+from inventario import huella, hay_que_releer, parsear_etiqueta, parsear_fila_checkpoint, particionar
 
 
 def test_etiqueta_completa():
@@ -69,3 +72,44 @@ def test_hay_que_releer_si_cambia_tamano_o_mtime():
     checkpoint = {"AAAA/f.pdf": {"tamano": 123, "mtime_ns": 456, "sha256": "x", "paginas": 1}}
     assert hay_que_releer(checkpoint, "AAAA/f.pdf", 999, 456) is True
     assert hay_que_releer(checkpoint, "AAAA/f.pdf", 123, 999) is True
+
+
+def test_parsear_fila_checkpoint_valida():
+    fila = {"rel_path": "AAAA/a.pdf", "tamano": "123", "mtime_ns": "456", "sha256": "abc123", "paginas": "2"}
+    assert parsear_fila_checkpoint(fila) == {"tamano": 123, "mtime_ns": 456, "sha256": "abc123", "paginas": 2}
+
+
+def test_parsear_fila_checkpoint_truncada_devuelve_none():
+    # Fila cortada a mitad de escritura: csv.DictReader rellena las columnas
+    # que faltan con None (restval por defecto).
+    fila = {"rel_path": "AAAA/b.pdf", "tamano": "789", "mtime_ns": None, "sha256": None, "paginas": None}
+    assert parsear_fila_checkpoint(fila) is None
+
+
+def test_parsear_fila_checkpoint_valor_no_numerico_devuelve_none():
+    fila = {"rel_path": "AAAA/c.pdf", "tamano": "no-es-un-numero", "mtime_ns": "456", "sha256": "abc", "paginas": "2"}
+    assert parsear_fila_checkpoint(fila) is None
+
+
+def test_cargar_checkpoint_descarta_solo_la_fila_truncada(tmp_path, monkeypatch):
+    ruta = tmp_path / "inventario_hashes.csv"
+    ruta.write_text(
+        "rel_path;tamano;mtime_ns;sha256;paginas\n"
+        "AAAA/a.pdf;123;456;abc123;2\n"
+        "AAAA/b.pdf;789;\n",
+        encoding="utf-8-sig",
+    )
+    monkeypatch.setattr(inventario, "CHECKPOINT_CSV", ruta)
+    checkpoint = inventario.cargar_checkpoint()
+    assert checkpoint == {"AAAA/a.pdf": {"tamano": 123, "mtime_ns": 456, "sha256": "abc123", "paginas": 2}}
+
+
+def test_leer_y_procesar_fichero_inexistente_lanza_excepcion(tmp_path):
+    # No hay forma razonable de probar sin E/S el manejo de errores por fichero
+    # dentro del pool de hilos de main() (excluidos, exclusión del checkpoint,
+    # continuar con el resto); esto confirma el modo de fallo que ese bloque
+    # try/except envuelve: un fichero movido o borrado lanza una excepción
+    # normal al leerlo, que fut.result() propaga.
+    inexistente = tmp_path / "no_existe.pdf"
+    with pytest.raises(OSError):
+        inventario.leer_y_procesar(inexistente, "AAAA/no_existe.pdf")

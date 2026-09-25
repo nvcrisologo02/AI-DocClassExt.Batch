@@ -80,18 +80,40 @@ def hay_que_releer(checkpoint: dict[str, dict], rel_path: str, tamano: int, mtim
     return previo["tamano"] != tamano or previo["mtime_ns"] != mtime_ns
 
 
+def parsear_fila_checkpoint(fila: dict) -> dict | None:
+    """Convierte una fila cruda del checkpoint (valores str, como los da csv.DictReader)
+    a tipos. Devuelve None si la fila está truncada o corrupta (columnas que faltan,
+    valores no numéricos, sha256 vacío) en vez de lanzar excepción: un corte de máquina
+    a mitad de escritura no debe tirar el checkpoint entero."""
+    try:
+        sha = fila["sha256"]
+        if not sha:
+            return None
+        return {
+            "tamano": int(fila["tamano"]),
+            "mtime_ns": int(fila["mtime_ns"]),
+            "sha256": sha,
+            "paginas": int(fila["paginas"]),
+        }
+    except (TypeError, ValueError, KeyError):
+        return None
+
+
 def cargar_checkpoint() -> dict[str, dict]:
     if not CHECKPOINT_CSV.exists():
         return {}
     checkpoint: dict[str, dict] = {}
+    descartadas = 0
     with CHECKPOINT_CSV.open(encoding="utf-8-sig", newline="") as f:
         for fila in csv.DictReader(f, delimiter=";"):
-            checkpoint[fila["rel_path"]] = {
-                "tamano": int(fila["tamano"]),
-                "mtime_ns": int(fila["mtime_ns"]),
-                "sha256": fila["sha256"],
-                "paginas": int(fila["paginas"]),
-            }
+            rel_path = fila.get("rel_path")
+            valores = parsear_fila_checkpoint(fila)
+            if not rel_path or valores is None:
+                descartadas += 1
+                continue
+            checkpoint[rel_path] = valores
+    if descartadas:
+        print(f"filas de checkpoint descartadas: {descartadas}", flush=True)
     return checkpoint
 
 
@@ -157,7 +179,8 @@ def main() -> None:
     print(f"a leer: {len(por_leer)} de {total} (resto ya en checkpoint)", flush=True)
 
     checkpoint_f, checkpoint_w = abrir_checkpoint_para_escritura()
-    hechos = len(resultados)
+    procesados = len(resultados)
+    fallidos: set[str] = set()
     gb_leidos = 0.0
     inicio = time.monotonic()
     try:
@@ -165,24 +188,39 @@ def main() -> None:
             futuros = {pool.submit(leer_y_procesar, pdf, rel): rel for pdf, rel in por_leer}
             for fut in as_completed(futuros):
                 rel = futuros[fut]
-                r = fut.result()
+                try:
+                    r = fut.result()
+                except Exception as exc:
+                    # Fichero individual ilegible (SMB transitorio, permiso, movido):
+                    # no se escribe en el checkpoint para que se reintente en la
+                    # siguiente ejecución, y no aborta el resto del inventario.
+                    fallidos.add(rel)
+                    excluidos.append({"rel_path": rel, "motivo": "error_lectura"})
+                    motivos["error_lectura"] += 1
+                    print(f"error de lectura en {rel}: {type(exc).__name__}: {exc}", flush=True)
+                    procesados += 1
+                    continue
                 resultados[rel] = r
                 checkpoint[rel] = r
                 checkpoint_w.writerow(r)
                 checkpoint_f.flush()
                 gb_leidos += r["tamano"] / (1024 ** 3)
-                hechos += 1
-                if hechos % 200 == 0:
+                procesados += 1
+                if procesados % 200 == 0:
                     minutos = (time.monotonic() - inicio) / 60
-                    print(f"progreso: {hechos}/{total} | {gb_leidos:.2f} GB leídos | {minutos:.1f} min", flush=True)
+                    print(f"progreso: {procesados}/{total} | {gb_leidos:.2f} GB leídos | {minutos:.1f} min", flush=True)
     finally:
         checkpoint_f.close()
 
     minutos = (time.monotonic() - inicio) / 60
-    print(f"lectura completa: {hechos}/{total} | {gb_leidos:.2f} GB leídos | {minutos:.1f} min", flush=True)
+    print(f"lectura completa: {procesados}/{total} | {gb_leidos:.2f} GB leídos | {minutos:.1f} min", flush=True)
+    if fallidos:
+        print(f"ficheros con error de lectura (reintentables): {len(fallidos)}", flush=True)
 
     por_hash: dict[str, list[dict]] = defaultdict(list)
     for pdf, rel, tdn1, tdn2, golden in candidatos:
+        if rel in fallidos:
+            continue
         r = resultados[rel]
         por_hash[r["sha256"]].append(
             {"rel_path": rel, "tdn1": tdn1, "tdn2": tdn2 or "", "golden": golden, "paginas": r["paginas"]})
