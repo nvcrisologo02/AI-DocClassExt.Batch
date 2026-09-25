@@ -63,7 +63,7 @@ Por cada documento se guarda `origen_texto` (`bd_dev` | `bd_pro` | `di_dev`) y e
 |---|---|---|
 | A | Embeddings + regresión logística jerárquica | Un modelo TDN1 y, por familia, un modelo TDN2 entre sus subtipos cubiertos. Probabilidades calibradas (Platt o isotónica, lo que mejor ECE dé en calibración). |
 | B | kNN sobre embeddings | Similitud coseno con k vecinos de entrenamiento. La confianza es el voto ponderado, calibrado igual que A. Devuelve los vecinos como explicación. |
-| C | gpt-4.1-mini con logprobs | Mismo prompt de fase 1 que usa DEV, pidiendo el código TDN1 con `logprobs`/`top_logprobs`. Solo sobre el golden. Se descarta si el prompt no se puede reproducir fuera del pipeline sin reescribirlo. |
+| C | gpt-4.1-mini con logprobs | Prompt compacto con el catálogo TDN1 de `eval/catalogotdn1.json` (código, nombre y descripción), pidiendo solo el código con `logprobs`. No reproduce el prompt de producción (vive en `PromptTemplates` y depende del pipeline): mide si las logprobs dan una confianza calibrada, no el acierto del prompt real. Umbral fijado con 300 documentos de calibración; evaluado en el golden. |
 | H | Híbrido | A (o B, el mejor de los dos) decide si su probabilidad es ≥ t. Si no, se toma la respuesta del baseline GPT (`BASELINE-GPT4OMINI-DEV/results.csv`). Se simula sin llamadas nuevas. |
 
 Embedding de un documento: los primeros ~8.000 tokens del markdown, que es el límite de entrada del modelo. Variante opcional si sobra tiempo: la media de los fragmentos.
