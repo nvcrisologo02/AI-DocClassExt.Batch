@@ -37,3 +37,4 @@ eval/vacios_p2.txt
 eval/pendientes_baseline_final.txt
 eval/pendientes_baseline_v3.txt
 eval/catalog_backup_PRO_*.json
+eval/clasificador-embeddings/.venv/
