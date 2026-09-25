@@ -1,22 +1,33 @@
 """Inventario del corpus validado: etiqueta por nombre, dedup por SHA256 y particiones.
 
-Uso: python inventario.py [--corpus H:/Documentia/ParaNacho/Class]
-Escribe CACHE/inventario.csv y CACHE/inventario_excluidos.csv."""
+Uso: python inventario.py [--corpus H:/Documentia/ParaNacho/Class] [--hilos 8]
+Escribe CACHE/inventario.csv y CACHE/inventario_excluidos.csv.
+
+Reanudable: cada fichero leído se registra al momento en CACHE/inventario_hashes.csv
+(checkpoint). Si el proceso se interrumpe, la siguiente ejecución no vuelve a leer
+los ficheros cuyo tamaño y mtime no han cambiado."""
 from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import io
 import random
 import re
+import time
 from collections import Counter, defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from pypdf import PdfReader
 
-from comun import CACHE, CORPUS, GOLDEN_CSV, sha256_fichero
+from comun import CACHE, CORPUS, GOLDEN_CSV
 
 RE_TDN1 = re.compile(r"^[A-Z]{4}$")
 RE_TDN2 = re.compile(r"^([A-Z]{4})-(\d{2})--")
+
+CHECKPOINT_CSV = CACHE / "inventario_hashes.csv"
+CHECKPOINT_CAMPOS = ["rel_path", "tamano", "mtime_ns", "sha256", "paginas"]
 
 
 def parsear_etiqueta(carpeta: str, nombre: str):
@@ -49,21 +60,78 @@ def particionar(filas, semilla: int = 42, frac_cal: float = 0.2):
     return out
 
 
-def paginas(p: Path) -> int:
+def huella(datos: bytes) -> tuple[str, int]:
+    """Sha256 hex en minúsculas y número de páginas (-1 si no es un PDF legible),
+    a partir de los bytes ya leídos una sola vez."""
+    sha = hashlib.sha256(datos).hexdigest()
     try:
-        return len(PdfReader(str(p)).pages)
+        paginas = len(PdfReader(io.BytesIO(datos)).pages)
     except Exception:
-        return -1
+        paginas = -1
+    return sha, paginas
+
+
+def hay_que_releer(checkpoint: dict[str, dict], rel_path: str, tamano: int, mtime_ns: int) -> bool:
+    """Dice si hace falta volver a leer un fichero dado el checkpoint ya cargado:
+    solo se reutiliza si rel_path, tamaño y mtime_ns coinciden exactamente."""
+    previo = checkpoint.get(rel_path)
+    if previo is None:
+        return True
+    return previo["tamano"] != tamano or previo["mtime_ns"] != mtime_ns
+
+
+def cargar_checkpoint() -> dict[str, dict]:
+    if not CHECKPOINT_CSV.exists():
+        return {}
+    checkpoint: dict[str, dict] = {}
+    with CHECKPOINT_CSV.open(encoding="utf-8-sig", newline="") as f:
+        for fila in csv.DictReader(f, delimiter=";"):
+            checkpoint[fila["rel_path"]] = {
+                "tamano": int(fila["tamano"]),
+                "mtime_ns": int(fila["mtime_ns"]),
+                "sha256": fila["sha256"],
+                "paginas": int(fila["paginas"]),
+            }
+    return checkpoint
+
+
+def abrir_checkpoint_para_escritura():
+    """Abre CACHE/inventario_hashes.csv en modo anexado, escribiendo cabecera si es nuevo."""
+    CACHE.mkdir(parents=True, exist_ok=True)
+    es_nuevo = not CHECKPOINT_CSV.exists() or CHECKPOINT_CSV.stat().st_size == 0
+    f = CHECKPOINT_CSV.open("a", newline="", encoding="utf-8-sig")
+    w = csv.DictWriter(f, CHECKPOINT_CAMPOS, delimiter=";")
+    if es_nuevo:
+        w.writeheader()
+        f.flush()
+    return f, w
+
+
+def leer_y_procesar(pdf: Path, rel: str) -> dict:
+    """Se ejecuta en el hilo del pool: una sola lectura de bytes, sha256 y páginas."""
+    datos = pdf.read_bytes()
+    sha, paginas = huella(datos)
+    return {
+        "rel_path": rel,
+        "tamano": len(datos),
+        "mtime_ns": pdf.stat().st_mtime_ns,
+        "sha256": sha,
+        "paginas": paginas,
+    }
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--corpus", default=str(CORPUS))
+    ap.add_argument("--hilos", type=int, default=8)
     args = ap.parse_args()
     raiz = Path(args.corpus)
     golden_rel = {r["rel_path"].lower() for r in csv.DictReader(GOLDEN_CSV.open(encoding="utf-8-sig"), delimiter=";")}
 
-    por_hash: dict[str, list[dict]] = defaultdict(list)
+    checkpoint = cargar_checkpoint()
+    print(f"checkpoint cargado: {len(checkpoint)} ficheros ya leídos", flush=True)
+
+    candidatos = []  # (pdf, rel, tdn1, tdn2, golden)
     excluidos, motivos = [], Counter()
     for pdf in sorted(raiz.glob("*/*")):
         if pdf.suffix.lower() != ".pdf":
@@ -74,8 +142,50 @@ def main() -> None:
         if tdn1 is None:
             excluidos.append({"rel_path": rel, "motivo": motivo})
             continue
-        por_hash[sha256_fichero(pdf)].append(
-            {"rel_path": rel, "tdn1": tdn1, "tdn2": tdn2 or "", "golden": rel.lower() in golden_rel, "ruta": pdf})
+        candidatos.append((pdf, rel, tdn1, tdn2, rel.lower() in golden_rel))
+
+    total = len(candidatos)
+    por_leer = []
+    resultados: dict[str, dict] = {}
+    for pdf, rel, tdn1, tdn2, golden in candidatos:
+        st = pdf.stat()
+        if hay_que_releer(checkpoint, rel, st.st_size, st.st_mtime_ns):
+            por_leer.append((pdf, rel))
+        else:
+            resultados[rel] = checkpoint[rel]
+
+    print(f"a leer: {len(por_leer)} de {total} (resto ya en checkpoint)", flush=True)
+
+    checkpoint_f, checkpoint_w = abrir_checkpoint_para_escritura()
+    hechos = len(resultados)
+    gb_leidos = 0.0
+    inicio = time.monotonic()
+    try:
+        with ThreadPoolExecutor(max_workers=args.hilos) as pool:
+            futuros = {pool.submit(leer_y_procesar, pdf, rel): rel for pdf, rel in por_leer}
+            for fut in as_completed(futuros):
+                rel = futuros[fut]
+                r = fut.result()
+                resultados[rel] = r
+                checkpoint[rel] = r
+                checkpoint_w.writerow(r)
+                checkpoint_f.flush()
+                gb_leidos += r["tamano"] / (1024 ** 3)
+                hechos += 1
+                if hechos % 200 == 0:
+                    minutos = (time.monotonic() - inicio) / 60
+                    print(f"progreso: {hechos}/{total} | {gb_leidos:.2f} GB leídos | {minutos:.1f} min", flush=True)
+    finally:
+        checkpoint_f.close()
+
+    minutos = (time.monotonic() - inicio) / 60
+    print(f"lectura completa: {hechos}/{total} | {gb_leidos:.2f} GB leídos | {minutos:.1f} min", flush=True)
+
+    por_hash: dict[str, list[dict]] = defaultdict(list)
+    for pdf, rel, tdn1, tdn2, golden in candidatos:
+        r = resultados[rel]
+        por_hash[r["sha256"]].append(
+            {"rel_path": rel, "tdn1": tdn1, "tdn2": tdn2 or "", "golden": golden, "paginas": r["paginas"]})
 
     filas = []
     for h, grupo in por_hash.items():
@@ -87,7 +197,7 @@ def main() -> None:
         tdn1, tdn2 = sorted(etiquetas)[-1]
         rep = next((g for g in grupo if g["golden"]), grupo[0])
         filas.append({"sha256": h, "rel_path": rep["rel_path"], "tdn1": tdn1, "tdn2": tdn2,
-                      "golden": any(g["golden"] for g in grupo), "paginas": paginas(rep["ruta"])})
+                      "golden": any(g["golden"] for g in grupo), "paginas": rep["paginas"]})
 
     filas = particionar(filas)
     CACHE.mkdir(parents=True, exist_ok=True)

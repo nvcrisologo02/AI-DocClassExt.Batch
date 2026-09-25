@@ -1,8 +1,9 @@
+import hashlib
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from inventario import parsear_etiqueta, particionar
+from inventario import huella, hay_que_releer, parsear_etiqueta, particionar
 
 
 def test_etiqueta_completa():
@@ -30,3 +31,41 @@ def test_particion_respeta_golden_y_estratifica():
     assert 15 <= len(cal) <= 25
     assert {f["tdn1"] for f in cal} == {"AAAA", "BBBB"}
     assert particionar(filas, semilla=1) == out  # determinista
+
+
+def test_huella_de_bytes_no_pdf():
+    datos = b"esto no es un pdf, son bytes cualquiera"
+    sha, paginas = huella(datos)
+    assert sha == hashlib.sha256(datos).hexdigest()
+    assert paginas == -1
+
+
+def test_huella_calcula_paginas_de_pdf_valido(tmp_path):
+    from pypdf import PdfWriter
+
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    writer.add_blank_page(width=72, height=72)
+    destino = tmp_path / "minimo.pdf"
+    with destino.open("wb") as f:
+        writer.write(f)
+    datos = destino.read_bytes()
+    sha, paginas = huella(datos)
+    assert sha == hashlib.sha256(datos).hexdigest()
+    assert paginas == 2
+
+
+def test_hay_que_releer_fichero_no_visto():
+    checkpoint = {}
+    assert hay_que_releer(checkpoint, "AAAA/f.pdf", 123, 456) is True
+
+
+def test_hay_que_releer_fichero_igual_no_se_relee():
+    checkpoint = {"AAAA/f.pdf": {"tamano": 123, "mtime_ns": 456, "sha256": "x", "paginas": 1}}
+    assert hay_que_releer(checkpoint, "AAAA/f.pdf", 123, 456) is False
+
+
+def test_hay_que_releer_si_cambia_tamano_o_mtime():
+    checkpoint = {"AAAA/f.pdf": {"tamano": 123, "mtime_ns": 456, "sha256": "x", "paginas": 1}}
+    assert hay_que_releer(checkpoint, "AAAA/f.pdf", 999, 456) is True
+    assert hay_que_releer(checkpoint, "AAAA/f.pdf", 123, 999) is True
