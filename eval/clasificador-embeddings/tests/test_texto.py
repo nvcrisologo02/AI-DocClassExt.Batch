@@ -20,6 +20,12 @@ def test_vacio():
     assert descomprimir(None, None) == ""
 
 
+def test_gzip_corrupto_no_lanza():
+    bueno = gzip.compress(b"contenido de prueba largo para que haya cuerpo")
+    corrupto = bueno[:10] + b"XYZBASURA" * 5 + bueno[-4:]  # cabecera gzip valida, cuerpo basura
+    assert descomprimir(corrupto, None) == ""
+
+
 def test_normalizar_sha256_pasa_a_minusculas_y_recorta():
     assert normalizar_sha256(" ABC123 ") == "abc123"
 

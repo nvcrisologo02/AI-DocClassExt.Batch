@@ -15,6 +15,7 @@ import base64
 import csv
 import gzip
 import struct
+import zlib
 from collections import Counter
 
 import pyodbc
@@ -39,6 +40,10 @@ def descomprimir(binario, base64_hist) -> str:
             return gzip.decompress(bytes(binario)).decode("utf-8", "replace")
         if base64_hist:
             return gzip.decompress(base64.b64decode(base64_hist)).decode("utf-8", "replace")
+    except (zlib.error, EOFError):
+        # Cabecera gzip válida pero cuerpo corrupto o truncado: no es texto plano
+        # recuperable, se degrada a sin_texto en lugar de tumbar la ejecución.
+        return ""
     except OSError:
         return (bytes(binario) if binario else base64.b64decode(base64_hist)).decode("utf-8", "replace")
     return ""
