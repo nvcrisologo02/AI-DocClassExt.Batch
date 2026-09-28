@@ -8,6 +8,8 @@ Ejecuciones de origen (no versionadas, en `eval/runs/`):
 - A, B, híbridos y GPT baseline: `20260928-180316-clasificador-embeddings/` (`metricas.json`, `resultados.csv`).
 - C (logprobs): `20260928-175630-logprobs-gpt/` (`metricas.json`, `resultados.csv`; 0 errores, 0 etiquetas fuera de catálogo).
 
+Procedencia de las cifras: las de A, B, híbridos, GPT y C salen de los `metricas.json` de los dos runs; las demás las regenera `eval/clasificador-embeddings/analisis_informe.py` (solo lee esos runs y la caché), salvo el coste GPT, que sale de `coste_gpt_golden.sql`. Cada tabla indica su fuente.
+
 Enfoques: **A** = embeddings + regresión logística jerárquica; **B** = kNN sobre embeddings; **H-A / H-B** = híbrido (el modelo decide si su probabilidad calibrada ≥ umbral de calibración; si no, respuesta del baseline GPT); **C** = gpt-4.1-mini con logprobs y prompt compacto de catálogo TDN1; **GPT** = baseline.
 
 ## 1. Resultado
@@ -15,6 +17,8 @@ Enfoques: **A** = embeddings + regresión logística jerárquica; **B** = kNN so
 **Decisión: PARA.** Falla O3 (cobertura con acierto TDN1 ≥ 90 %) en A y en B, y la regla de §5 dice "para" si falla O1 u O3. Además falla O2 en todos los enfoques y el híbrido no mejora a GPT (O4).
 
 ### Vista `todas` (n = 467)
+
+Fuente: `metricas.json` de los dos runs; McNemar de C y máximos de O3, `analisis_informe.py` (§1 y §4 de su salida); O5, §5 de este informe.
 
 | Objetivo | A | B | H-A | H-B | C | GPT baseline |
 |---|---|---|---|---|---|---|
@@ -26,6 +30,8 @@ Enfoques: **A** = embeddings + regresión logística jerárquica; **B** = kNN so
 
 ### Vista `sin_procedencia` (n = 395, sin los 72 documentos PROCEDENCIA)
 
+Fuente: `metricas.json` del run de A/B; C sin procedencia y su McNemar, `analisis_informe.py` (§1).
+
 | Objetivo | A | B | H-A | H-B | C | GPT baseline |
 |---|---|---|---|---|---|---|
 | O1 TDN1 / TDN2 | 55,19 % / 27,85 % — zona gris | 49,62 % / 25,32 % — ❌ | 61,27 % / 37,47 % — ✅ | 58,99 % / 33,42 % — ✅ | 66,58 % / n/a — ✅ (solo TDN1) | 63,80 % / 37,97 % — ✅ (referencia) |
@@ -34,12 +40,12 @@ Enfoques: **A** = embeddings + regresión logística jerárquica; **B** = kNN so
 | O4 frente a GPT (McNemar b/c, p) | n/a (3) | n/a (3) | −2,53 pp (25/35, p = 0,25) — ❌ | −4,81 pp (27/46, p = 0,034) — ❌ | +2,78 pp (42/31, p = 0,24), informativo | referencia |
 | O5 | igual que en `todas` | igual | n/a | n/a | no medido | referencia |
 
-Umbrales aplicados (los de §5, absolutos, en las dos vistas): O1 ✅ ≥ 53,9 % TDN1 y ≥ 31,4 % TDN2, ❌ < 50,9 % TDN1, zona gris entre medias; O2 ✅ ≤ 0,05, ❌ > 0,10; O3 ✅ ≥ 40 %, ❌ < 20 %; O4 ✅ ≥ +3 pp con p < 0,05, ❌ por debajo del baseline; O5 ✅ < 10 % del coste GPT y p95 < 1 s. En `sin_procedencia` el baseline sube a 63,80 %: medido contra ese baseline (−2 pp = 61,8 %, −5 pp = 58,8 %), A quedaría en fracaso de O1.
+Umbrales aplicados (los de §5, absolutos, en las dos vistas): O1 ✅ ≥ 53,9 % TDN1 y ≥ 31,4 % TDN2, ❌ < 50,9 % TDN1, zona gris entre medias (interpretación añadida: §5 define O1 solo para A o B; aquí se aplica también a H-A y H-B como referencia); O2 ✅ ≤ 0,05, ❌ > 0,10; O3 ✅ ≥ 40 %, ❌ < 20 %; O4 ✅ ≥ +3 pp con p < 0,05, ❌ por debajo del baseline; O5 ✅ < 10 % del coste GPT y p95 < 1 s. En `sin_procedencia` el baseline sube a 63,80 %: medido contra ese baseline (−2 pp = 61,8 %, −5 pp = 58,8 %), A quedaría en fracaso de O1.
 
 Notas:
 
 1. El híbrido no tiene una confianza propia única (mezcla la del modelo y la de GPT); O2 y O3 se miden en A y B, que son los que fijan el umbral.
-2. Con el umbral fijado en calibración (A 0,5; B 0,486) la cobertura es 75,2 % (A) y 66,4 % (B), pero el acierto cubierto es 56,4 % y 53,2 % (en `sin_procedencia`, 62,2 % y 59,6 %), lejos del 90 %. No hay ningún umbral que dé ≥ 90 % en el golden (tabla del §4): la cobertura válida es 0 %.
+2. Con el umbral fijado en calibración (A 0,5; B 0,486) la cobertura es 75,2 % (A) y 66,4 % (B), pero el acierto cubierto es 56,4 % y 53,2 % (en `sin_procedencia`, 62,2 % y 59,6 %), lejos del 90 %. No hay ningún umbral que dé ≥ 90 % en el golden: con cualquier umbral que cubra al menos 10 documentos, el máximo es 69,6 % (A) y 63,3 % (B); en `sin_procedencia`, 75,8 % y 69,1 % (`analisis_informe.py`, §4). La cobertura válida es 0 %.
 3. O4 se define sobre el híbrido. Signo: b = acierta el híbrido y falla GPT, c = al revés. H-B en `sin_procedencia` es significativamente **peor** que GPT.
 4. Ver §5 (coste real y latencia). La latencia es una cota superior pesimista y no es concluyente; O5 no bloquea la decisión.
 
@@ -47,7 +53,7 @@ Notas:
 
 Regla de §5: **sigue** si se cumplen O1, O2 y O3; **para** si falla O1 u O3; **zona gris** en otro caso.
 
-- **O3 falla sin ambigüedad** en A y B, en las dos vistas: el umbral fijado en calibración no transfiere al golden (56 % de acierto cubierto frente al 90 % exigido), y ni siquiera un umbral elegido a posteriori sobre el golden llega al 90 % (máximo 67 % en el tramo de confianza más alto).
+- **O3 falla sin ambigüedad** en A y B, en las dos vistas: el umbral fijado en calibración no transfiere al golden (56 % de acierto cubierto frente al 90 % exigido), y ni siquiera un umbral elegido a posteriori sobre el golden llega al 90 % (máximo 69,6 % para A con cualquier umbral que cubra al menos 10 documentos).
 - **O1**: A queda 0,06 pp por encima del fracaso en TDN1 y por debajo del éxito en TDN2 (zona gris); B fracasa.
 - **O2**: ningún enfoque está calibrado en el golden (ECE 0,19-0,39). El GPT baseline tampoco (0,324).
 - **O4**: los híbridos no mejoran a GPT; H-B empeora de forma significativa en `sin_procedencia`.
@@ -56,7 +62,7 @@ Lo que dice el **golden** es inequívoco: **para**. Lo que sugiere **calibració
 
 ## 3. Hallazgo: el golden y la distribución del corpus no son la misma población
 
-Reproducido con `diag_cal.py` (A reentrenado con la misma partición train):
+Fuente: `analisis_informe.py`, apartado §3 de su salida (A reentrenado con la misma partición train que `evaluar.py`):
 
 | Conjunto | n | Acierto TDN1 de A | Acierto 1-NN | Similitud máxima a train p50 / p90 | Con vecino ≥ 0,98 en train |
 |---|---|---|---|---|---|
@@ -72,6 +78,8 @@ Lectura:
 - **No hay medición de GPT sobre cal**, así que no se puede comparar A con GPT en la distribución del corpus. Es posible que en esa distribución A esté cerca de GPT; con los datos actuales no se puede afirmar.
 
 ## 4. Detalle de A en el golden (todas)
+
+Fuente de todo este apartado: `analisis_informe.py`, §4 de su salida.
 
 Fiabilidad (confianza calibrada por intervalos):
 
@@ -93,6 +101,7 @@ Cobertura frente a acierto (umbrales descriptivos sobre el golden; no sirven par
 | Umbral | Cobertura | Acierto cubierto |
 |---|---|---|
 | 0,50 (el de calibración) | 75,2 % | 56,4 % |
+| 0,60 | 60,6 % | 59,7 % |
 | 0,70 | 53,3 % | 61,0 % |
 | 0,80 | 42,4 % | 66,2 % |
 | 0,90 | 22,3 % | 67,3 % |
@@ -111,13 +120,15 @@ Los 10 pares de confusión TDN1 más frecuentes de A (esperado → predicho; ent
 | 7 | PBLO → SERE | 8 | 1 |
 | 8 | FOTO → DOSS | 7 | 0 |
 | 9 | NOVA → CNCV | 6 | 1 |
-| 10 | empate a 4: ACUI → PRPE, CEDU → CERT, CUAD → CERA, DOCA → COMU, NOVA → ESCR | 4 cada uno | — |
+| 10 | empate a 4: ACUI → PRPE, CEDU → CERT, CUAD → CERA, DOCA → COMU, NOVA → ESCR | 4 cada uno | 4, 0, 0, 2, 2 |
 
 INRG → NOTS y PRPI → ESIN son los conflictos de etiqueta y de familia por procedencia ya conocidos, compartidos con GPT. FICH → CERJ, DEAC → DOCA, PBLO → SERE y FOTO → DOSS son propios de A: familias con contenido parecido que el modelo resuelve por vecindad temática.
 
 Familias excluidas del entrenamiento por tener menos de 5 ejemplos en train (12): ACUI, BORR, DOCT, DOCU, ESTT, FIAV, INCO, INGR, INLI, MEMO, PLAO, SEGU. Afectan a 12 documentos del golden (ACUI 9, PLAO 2, INLI 1), que A y B fallan siempre (2,6 pp del golden).
 
 ## 5. Coste real y latencia (O5)
+
+Fuente: `analisis_informe.py` (§5 de su salida) para tokens, relación de coste y latencia; `coste_gpt_golden.sql` para el coste GPT.
 
 **Embeddings** (`CACHE/embeddings_uso.csv`, una fila por llamada): 523 llamadas, 8.356 textos (522 lotes de 16 y uno de 4), **20.085.002 tokens**, 2.403,7 tokens por documento. El fichero contiene exactamente los 8.356 documentos con texto una vez: no aparecen filas de intentos abortados (antes de la corrección del volcado del CSV de uso, esos intentos no llegaban a escribirse).
 
@@ -131,13 +142,15 @@ Familias excluidas del entrenamiento por tener menos de 5 ejemplos en train (12)
 | gpt 4.1 mini Outp regnl | ídem | Standard | 0,002112 | 0,0018 |
 
 - Coste de embeddings: 20.085.002 × 0,00013 / 1.000 = **2,61 USD** en total; **0,00031 USD por documento** (0,00024 EUR con el precio en EUR de la API).
-- **Coste GPT de clasificación** del baseline: medido en `DocumentoEjecuciones` de DEV (AB#100224), `SELECT` sobre la ventana de la golden del 22/09 (10:12-11:36 UTC, `SubmittedBy` de la consola de evaluación): 459 ejecuciones de 467 (8 sin fila, no investigado), `CosteEstimado = 0` en todas, `CosteClasificacionEur` total 2,6357 EUR, **media 0,00574 EUR por documento**, mediana 0,00460 EUR, 24.665 `TokensIA` de media.
-- Relación: 0,00024 / 0,00574 = **4,2 %** (precio EUR de la API); tratando los USD como EUR, 5,4 % (7 % frente a la mediana). **< 10 % → ✅**.
+- **Coste GPT de clasificación** del baseline: medido en `DocumentoEjecuciones` de DEV (AB#100224), `SELECT` sobre la ventana de la golden del 22/09 (10:12-11:36 UTC, `SubmittedBy` de la consola de evaluación): 459 ejecuciones de 467 (8 sin fila, no investigado), `CosteEstimado = 0` en todas, `CosteClasificacionEur` total 2,6357 EUR, **media 0,00574 EUR por documento**, mediana 0,00460 EUR, 24.665 `TokensIA` de media (11.321.259 / 459).
+- Relación: 0,00024 / 0,00574 = **4,2 %** (precio EUR de la API); tratando los USD como EUR, 5,4 % (6,8 % frente a la mediana). **< 10 % → ✅**.
 - No verificado: `CosteClasificacionEur` incluye todas las llamadas de clasificación (TDN1 y TDN2), no solo la de fase 1; el desglose por fase no está en la tabla. Si la fase 1 fuera bastante menos de la mitad del total, la relación podría pasar del 10 %. Los precios del catálogo de DEV no se han contrastado con la factura en esta prueba.
 
 **Latencia** (resolución del controlador: p95 de la llamada de embeddings + p95 del modelo): p95 por llamada 48,88 s (p50 1,72 s, máximo 59,36 s) + p95 del modelo (A 0,0017 s; B 0,0043 s) = **48,9 s → ❌** con esa medida. Es una cota superior muy pesimista: cada llamada es un lote de 16 documentos de hasta 24.000 caracteres y el tiempo incluye las esperas por 429 (`Retry-After`) de una carga masiva de 20 M tokens contra 250K TPM. **La latencia de un documento aislado no se ha medido**: O5-latencia queda no concluyente.
 
 ## 6. Origen del texto y acierto por origen (golden)
+
+Fuente: `analisis_informe.py`, §6 de su salida.
 
 | origen_texto | Documentos | A | B | GPT |
 |---|---|---|---|---|
@@ -150,7 +163,7 @@ Corpus completo (8.358 únicos por hash): bd_dev 4.540, bd_pro 1.352, di_dev 2.4
 
 ## 7. Desviaciones de la especificación
 
-- **Prompt de C**: no es el de producción (vive en `PromptTemplates` de BD y depende del pipeline). Es un prompt compacto con el catálogo TDN1 de `eval/catalogotdn1.json` (código, nombre y descripción), markdown recortado a 40.000 caracteres, pidiendo solo el código con logprobs. C mide si las logprobs dan una confianza calibrada, no el acierto del prompt real. Resultado: su confianza está concentrada en 1,0 (71 % de los documentos), ECE bruta 0,387 y 0,145 tras calibrar; no hay umbral con acierto ≥ 90 %.
+- **Prompt de C**: no es el de producción (vive en `PromptTemplates` de BD y depende del pipeline). Es un prompt compacto con el catálogo TDN1 de `eval/catalogotdn1.json` (código, nombre y descripción), markdown recortado a 40.000 caracteres, pidiendo solo el código con logprobs. C mide si las logprobs dan una confianza calibrada, no el acierto del prompt real. Resultado: su confianza está concentrada en 1,0 (71 % de los documentos, `analisis_informe.py` §1), ECE bruta 0,387 y 0,145 tras calibrar; no hay umbral con acierto ≥ 90 %.
 - **Documentos sin texto**: 2 PDF de train (ESIN) devuelven HTTP 400 en DI y son ilegibles también para el inventario; se quedan sin texto y fuera del entrenamiento. En el golden no hay ninguno.
 - **Alcance de DI autorizado**: la especificación preveía DI solo tras enseñar recuento y coste. El usuario autorizó el 2026-09-28 DI de todo el corpus sin texto (2.466 documentos) con recorte de 3 páginas en el DI de DEV (`srbdidevdocai`), con una estimación de 6.596 páginas y 65,96 USD (10 USD / 1K páginas, S0 westeurope). Se procesaron 2.464 (dos ejecuciones: 1.615 + 849; la primera perdió 851 por caducidad del token, los 401 no se facturan). **Páginas y coste facturados reales: no verificados.** El recorte de 3 páginas es el de código y `appsettings.json`; un posible override en las app settings de DEV no se pudo leer (sin permiso). El baseline se ejecutó con 10 páginas.
 - **Embedding**: se usa el markdown normalizado y recortado a 24.000 caracteres (media 2.404 tokens), no "los primeros ~8.000 tokens"; no se probó la variante de media de fragmentos.
