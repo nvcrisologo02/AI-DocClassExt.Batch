@@ -109,7 +109,7 @@ def correr(s, sistema, filas):
     no tumba la ejecución: el documento queda con C_tdn1 = "" y C_conf = 0.0 y el error
     se registra con su ruta relativa y código HTTP, nunca con el contenido."""
     out, errores = [], []
-    for r in filas:
+    for i, r in enumerate(filas, start=1):
         md = leer_md(r["sha256"])
         cod, conf = "", 0.0
         if md:
@@ -118,6 +118,8 @@ def correr(s, sistema, filas):
             except FalloDocumento as e:
                 errores.append({"rel_path": r["rel_path"], "status_code": e.status_code})
         out.append({"rel_path": r["rel_path"], "exp_tdn1": r["tdn1"], "C_tdn1": cod, "C_conf": conf})
+        if i % 50 == 0 or i == len(filas):
+            print(f"progreso {i}/{len(filas)}", flush=True)
     return out, errores
 
 
@@ -127,10 +129,13 @@ def main() -> None:
     cal = random.Random(42).sample(cal, min(300, len(cal)))
     golden = [r for r in inv if r["particion"] == "golden"]
     s, sistema = sesion_http(), prompt_sistema()
+    print(f"cal {len(cal)} | golden {len(golden)}", flush=True)
+    print("fase cal", flush=True)
     rc, errores_cal = correr(s, sistema, cal)
     calib = Calibrador().fit([f["C_conf"] for f in rc], [f["C_tdn1"] == f["exp_tdn1"] for f in rc])
     t = umbral_para_acierto(calib.aplicar([f["C_conf"] for f in rc]), [f["C_tdn1"] == f["exp_tdn1"] for f in rc], 0.90)
     s = sesion_http()
+    print("fase golden", flush=True)
     rg, errores_golden = correr(s, sistema, golden)
     conf = calib.aplicar([f["C_conf"] for f in rg])
     corr = [f["C_tdn1"] == f["exp_tdn1"] for f in rg]
