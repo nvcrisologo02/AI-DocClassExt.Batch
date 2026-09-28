@@ -1,7 +1,7 @@
 """DI Layout de DEV sobre los PDF sin markdown en BD. Dos modos:
   --estimar   solo recuento de documentos y páginas facturables (no llama a DI)
   --lanzar    llama a DI; solo tras autorización explícita del usuario
-Uso: python di_layout.py --estimar | --lanzar [--max-paginas 5] [--solo-golden]"""
+Uso: python di_layout.py --estimar | --lanzar [--corpus RUTA] [--max-paginas 5] [--solo-golden]"""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +9,7 @@ import base64
 import csv
 import os
 import time
+from pathlib import Path
 
 from comun import CACHE, CORPUS, DI_ENDPOINT, sesion_http
 from texto import guardar_md, leer_md, ruta_md
@@ -64,6 +65,7 @@ def main() -> None:
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--estimar", action="store_true")
     g.add_argument("--lanzar", action="store_true")
+    ap.add_argument("--corpus", default=str(CORPUS))
     ap.add_argument("--max-paginas", type=int, default=5)
     ap.add_argument("--solo-golden", action="store_true")
     args = ap.parse_args()
@@ -76,6 +78,11 @@ def main() -> None:
     print(f"documentos: {len(pend)} | páginas facturables (recorte {args.max_paginas}): {total}")
     if args.estimar:
         return
+
+    corpus_path = Path(args.corpus)
+    if not corpus_path.is_dir():
+        print(f"corpus no accesible: {corpus_path}")
+        raise SystemExit(2)
 
     s = sesion_http()
     origen_csv = CACHE / "texto_origen.csv"
@@ -93,7 +100,7 @@ def main() -> None:
             reutilizados += 1
         else:
             try:
-                md = analizar(s, (CORPUS / p["rel_path"]).read_bytes(), rango_paginas(int(p["paginas"]), args.max_paginas))
+                md = analizar(s, (corpus_path / p["rel_path"]).read_bytes(), rango_paginas(int(p["paginas"]), args.max_paginas))
                 if md.strip():
                     guardar_md(sha, md)
                     fila.update(origen_texto="di_dev", caracteres=str(len(md)))

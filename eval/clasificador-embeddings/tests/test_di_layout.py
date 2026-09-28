@@ -48,7 +48,9 @@ def test_escribir_origen_csv_valido(tmp_path):
 
 def test_pendiente_en_cache_no_llama_a_di(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
+    corpus = tmp_path / "corpus"
     (cache / "md").mkdir(parents=True)
+    corpus.mkdir()
     monkeypatch.setattr(texto, "CACHE", cache)
     monkeypatch.setattr(di_layout, "CACHE", cache)
 
@@ -71,7 +73,7 @@ def test_pendiente_en_cache_no_llama_a_di(tmp_path, monkeypatch):
 
     monkeypatch.setattr(di_layout, "analizar", analizar_falso)
     monkeypatch.setattr(di_layout, "sesion_http", lambda: object())
-    monkeypatch.setattr(sys, "argv", ["di_layout.py", "--lanzar"])
+    monkeypatch.setattr(sys, "argv", ["di_layout.py", "--lanzar", "--corpus", str(corpus)])
 
     di_layout.main()
 
@@ -86,7 +88,9 @@ def test_pendiente_ya_marcado_di_dev_no_llama_a_di(tmp_path, monkeypatch, capsys
     en caché; --lanzar no debe volver a facturar DI por él (pendientes_di.csv es
     estático entre invocaciones, así que esta fila sigue apareciendo como pendiente)."""
     cache = tmp_path / "cache"
+    corpus = tmp_path / "corpus"
     (cache / "md").mkdir(parents=True)
+    corpus.mkdir()
     monkeypatch.setattr(texto, "CACHE", cache)
     monkeypatch.setattr(di_layout, "CACHE", cache)
 
@@ -109,7 +113,7 @@ def test_pendiente_ya_marcado_di_dev_no_llama_a_di(tmp_path, monkeypatch, capsys
 
     monkeypatch.setattr(di_layout, "analizar", analizar_falso)
     monkeypatch.setattr(di_layout, "sesion_http", lambda: object())
-    monkeypatch.setattr(sys, "argv", ["di_layout.py", "--lanzar"])
+    monkeypatch.setattr(sys, "argv", ["di_layout.py", "--lanzar", "--corpus", str(corpus)])
 
     di_layout.main()
 
@@ -119,3 +123,39 @@ def test_pendiente_ya_marcado_di_dev_no_llama_a_di(tmp_path, monkeypatch, capsys
     filas = list(csv.DictReader((cache / "texto_origen.csv").open(encoding="utf-8-sig"), delimiter=";"))
     assert filas[0]["origen_texto"] == "di_dev"
     assert filas[0]["caracteres"] == str(len(contenido))
+
+
+def test_lanzar_corpus_inexistente_sale_con_codigo_2(tmp_path, monkeypatch, capsys):
+    """--lanzar con --corpus inexistente debe salir con código 2 sin crear sesion_http ni escribir."""
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    monkeypatch.setattr(texto, "CACHE", cache)
+    monkeypatch.setattr(di_layout, "CACHE", cache)
+
+    corpus_inexistente = tmp_path / "corpus_fantasma"
+    sha = "a" * 64
+    (cache / "pendientes_di.csv").write_text(
+        f"sha256;rel_path;paginas\n{sha};doc.pdf;3\n", encoding="utf-8-sig"
+    )
+    (cache / "texto_origen.csv").write_text(
+        f"sha256;origen_texto;caracteres\n{sha};sin_texto;0\n", encoding="utf-8-sig"
+    )
+
+    llamadas_sesion = []
+
+    def sesion_http_falso():
+        llamadas_sesion.append("llamada")
+        raise AssertionError("no debería llamarse a sesion_http si corpus no es accesible")
+
+    monkeypatch.setattr(di_layout, "sesion_http", sesion_http_falso)
+    monkeypatch.setattr(sys, "argv", ["di_layout.py", "--lanzar", "--corpus", str(corpus_inexistente)])
+
+    try:
+        di_layout.main()
+        assert False, "debería lanzar SystemExit"
+    except SystemExit as e:
+        assert e.code == 2, f"expected code 2, got {e.code}"
+
+    assert llamadas_sesion == [], "sesion_http no debería haber sido llamada"
+    salida = capsys.readouterr().out
+    assert f"corpus no accesible: {corpus_inexistente}" in salida
