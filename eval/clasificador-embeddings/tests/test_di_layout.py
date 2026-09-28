@@ -400,3 +400,51 @@ def test_renovacion_preventiva_antes_de_cada_documento(tmp_path, monkeypatch, ca
 
     # 1 llamada inicial (arranque de main) + 1 llamada de renovación antes de doc2
     assert len(llamadas_sesion) == 2
+
+
+def test_401_en_sondeo_no_repite_el_post_y_el_documento_acaba_ok(monkeypatch):
+    """Ronda de corrección 1 (Critical): un 401 en el GET de sondeo (Operation-Location
+    ya obtenida, DI ya factura el POST) debe renovar sesión y seguir sondeando la MISMA
+    Operation-Location, sin volver a hacer POST."""
+    resp_post_ok = FakeResponse(status_code=200, headers={"Operation-Location": "https://op/get401"})
+    resp_get_401 = FakeResponse(status_code=401)
+    s1 = FakeSession(respuestas_post=[resp_post_ok], respuestas_get=[resp_get_401])
+
+    resp_get_ok = FakeResponse(
+        status_code=200,
+        json_data={"status": "succeeded", "analyzeResult": {"content": "contenido tras 401 en sondeo"}},
+    )
+    s2 = FakeSession(respuestas_get=[resp_get_ok])  # sin respuestas_post: no debe recibir ningún POST
+
+    monkeypatch.setattr(di_layout, "sesion_http", lambda: s2)
+    monkeypatch.setattr(di_layout.time, "sleep", lambda segundos: None)
+
+    contenido, s_final = di_layout.analizar_con_reintentos(s1, b"pdf", "1-1")
+
+    assert contenido == "contenido tras 401 en sondeo"
+    assert s_final is s2
+    assert s1.llamadas_post == 1
+    assert s2.llamadas_post == 0  # el reintento del 401 en sondeo no repite el POST
+    assert s1.llamadas_get == 1
+    assert s2.llamadas_get == 1
+
+
+def test_429_en_sondeo_no_repite_el_post_y_el_documento_acaba_ok(monkeypatch):
+    """Ronda de corrección 1 (Critical): un 429 en el GET de sondeo reintenta el sondeo,
+    no el envío; el documento acaba bien con un único POST."""
+    resp_post_ok = FakeResponse(status_code=200, headers={"Operation-Location": "https://op/get429"})
+    resp_get_429 = FakeResponse(status_code=429)
+    resp_get_ok = FakeResponse(
+        status_code=200, json_data={"status": "succeeded", "analyzeResult": {"content": "ok tras 429 en sondeo"}}
+    )
+    s = FakeSession(respuestas_post=[resp_post_ok], respuestas_get=[resp_get_429, resp_get_ok])
+
+    esperas = []
+    monkeypatch.setattr(di_layout.time, "sleep", lambda segundos: None)
+
+    contenido, s_final = di_layout.analizar_con_reintentos(s, b"pdf", "1-1", dormir=esperas.append)
+
+    assert contenido == "ok tras 429 en sondeo"
+    assert s_final is s
+    assert s.llamadas_post == 1  # el 429 en el sondeo nunca repite el POST
+    assert esperas == [5]

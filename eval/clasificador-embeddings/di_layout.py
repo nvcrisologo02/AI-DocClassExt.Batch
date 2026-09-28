@@ -63,13 +63,15 @@ def escribir_origen(ruta, filas) -> None:
     os.replace(tmp, ruta)
 
 
-def analizar(s, pdf_bytes: bytes, rango: str) -> str:
-    """Un único intento: POST + sondeo. Un 401 (token caducado) se señaliza con
-    Autenticacion401 en vez de dejar que raise_for_status lo convierta en HTTPError,
-    para que analizar_con_reintentos sepa que toca sesión nueva. Una respuesta sin los
-    campos esperados (Operation-Location, status, analyzeResult.content) lanza ErrorDI
-    (subclase de RuntimeError) con el código HTTP y como mucho 200 caracteres del
-    cuerpo, en vez de un KeyError opaco."""
+def enviar(s, pdf_bytes: bytes, rango: str) -> str:
+    """Fase de envío: un único POST. Devuelve Operation-Location. Un 401 (token
+    caducado) se señaliza con Autenticacion401 en vez de dejar que raise_for_status lo
+    convierta en HTTPError, para que analizar_con_reintentos sepa que toca sesión nueva.
+    Si la respuesta no trae Operation-Location, lanza ErrorDI (subclase de RuntimeError)
+    con el código HTTP y como mucho 200 caracteres del cuerpo, en vez de un KeyError
+    opaco. analizar_con_reintentos solo repite este POST en la fase de envío; una vez
+    hay Operation-Location (DI ya factura el documento), los reintentos son solo de
+    sondeo y nunca vuelven a llamar aquí."""
     url = (f"{DI_ENDPOINT}/documentintelligence/documentModels/prebuilt-layout:analyze"
            f"?api-version={API}&outputContentFormat=markdown&pages={rango}")
     r = s.post(url, json={"base64Source": base64.b64encode(pdf_bytes).decode()}, timeout=120)
@@ -79,6 +81,14 @@ def analizar(s, pdf_bytes: bytes, rango: str) -> str:
     op = r.headers.get("Operation-Location")
     if not op:
         raise ErrorDI(f"sin Operation-Location: {r.text[:200]!r}", codigo=r.status_code)
+    return op
+
+
+def sondear(s, op: str) -> str:
+    """Fase de sondeo: sondea una Operation-Location ya obtenida (sin volver a hacer
+    POST). Un 401 se señaliza con Autenticacion401. Si el JSON no trae status o
+    analyzeResult.content, lanza ErrorDI con el código HTTP y como mucho 200 caracteres
+    del cuerpo, en vez de un KeyError opaco."""
     for _ in range(120):
         time.sleep(2)
         resp = s.get(op, timeout=60)
@@ -97,6 +107,12 @@ def analizar(s, pdf_bytes: bytes, rango: str) -> str:
         if estado == "failed":
             raise ErrorDI(str(j.get("error")), codigo=resp.status_code)
     raise TimeoutError(op)
+
+
+def analizar(s, pdf_bytes: bytes, rango: str) -> str:
+    """Un único intento sin reintentos: envío + sondeo. Ver enviar() y sondear()."""
+    op = enviar(s, pdf_bytes, rango)
+    return sondear(s, op)
 
 
 def _es_transitorio(exc: Exception) -> bool:
@@ -122,29 +138,58 @@ def _espera_transitoria(exc: Exception, intento: int) -> float:
 
 
 def analizar_con_reintentos(s, pdf_bytes: bytes, rango: str, dormir=None):
-    """Envoltura de analizar() para un documento:
-    - 401 (POST o GET de sondeo): sesión nueva vía sesion_http() y reintento del
-      documento completo, como mucho 1 vez.
-    - 429, 5xx, ConnectionError o Timeout: hasta 3 reintentos con espera creciente
-      (inyectable por `dormir`, por defecto time.sleep, para no dormir de verdad en tests).
-    Devuelve (contenido, sesión a usar en los siguientes documentos del bucle)."""
+    """Envoltura de enviar()/sondear() para un documento, en dos fases independientes
+    para no facturar dos veces un documento cuyo POST ya fue aceptado por DI:
+
+    - Fase de envío (POST): ante 401 crea sesión nueva vía sesion_http() y repite el
+      POST, como mucho 1 vez; ante 429/5xx/ConnectionError/Timeout reintenta el POST
+      hasta 3 veces con espera creciente.
+    - Fase de sondeo (GET, ya con Operation-Location): ante 401 crea sesión nueva y
+      SIGUE SONDEANDO la misma Operation-Location, como mucho 1 vez; ante errores
+      transitorios reintenta el sondeo hasta 3 veces con espera creciente. Nunca vuelve
+      a hacer POST.
+
+    La espera es inyectable por `dormir` (por defecto time.sleep, para no dormir de
+    verdad en tests). Devuelve (contenido, sesión a usar en los siguientes documentos
+    del bucle)."""
     if dormir is None:
         dormir = time.sleep
-    reintento_401_usado = False
-    intento_transitorio = 0
+
+    # Fase de envío: los reintentos repiten el POST.
+    reintento_401_envio = False
+    intento_transitorio_envio = 0
     while True:
         try:
-            return analizar(s, pdf_bytes, rango), s
+            op = enviar(s, pdf_bytes, rango)
+            break
         except Autenticacion401:
-            if reintento_401_usado:
+            if reintento_401_envio:
                 raise
-            reintento_401_usado = True
+            reintento_401_envio = True
             s = sesion_http()
         except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
-            if not _es_transitorio(e) or intento_transitorio >= len(ESPERAS_TRANSITORIAS):
+            if not _es_transitorio(e) or intento_transitorio_envio >= len(ESPERAS_TRANSITORIAS):
                 raise
-            dormir(_espera_transitoria(e, intento_transitorio))
-            intento_transitorio += 1
+            dormir(_espera_transitoria(e, intento_transitorio_envio))
+            intento_transitorio_envio += 1
+
+    # Fase de sondeo: los reintentos repiten el sondeo de la misma Operation-Location,
+    # nunca el POST.
+    reintento_401_sondeo = False
+    intento_transitorio_sondeo = 0
+    while True:
+        try:
+            return sondear(s, op), s
+        except Autenticacion401:
+            if reintento_401_sondeo:
+                raise
+            reintento_401_sondeo = True
+            s = sesion_http()
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+            if not _es_transitorio(e) or intento_transitorio_sondeo >= len(ESPERAS_TRANSITORIAS):
+                raise
+            dormir(_espera_transitoria(e, intento_transitorio_sondeo))
+            intento_transitorio_sondeo += 1
 
 
 def _codigo_http(exc: Exception) -> str:
