@@ -28,6 +28,8 @@ public static class RunCommand
         var parallel = parsed.GetIntOrDefault("parallel", DefaultParallel);
         var configPath = parsed.GetOrDefault("config", Path.Combine(AppContext.BaseDirectory, "config.json"));
         var maxPagesClassification = parsed.GetIntOrDefault("max-pages", DefaultMaxPagesClassification);
+        var listPath = parsed.GetOrDefault("list", string.Empty);
+        var resumeDir = parsed.GetOrDefault("resume", string.Empty);
 
         if (parallel < 1)
         {
@@ -40,7 +42,7 @@ public static class RunCommand
         }
 
         var evalDir = EvalPaths.FindEvalDirectory();
-        var documents = LoadDocuments(set, evalDir);
+        var documents = LoadDocuments(set, evalDir, listPath);
 
         // Filtro opcional por familia TDN1 esperada (p.ej. --only-tdn1 COMU,CORR,CUAD,NOTS,CERA)
         // para re-evaluar solo unas familias tras un cambio de catalogo, sin reprocesar todo el set.
@@ -111,9 +113,36 @@ public static class RunCommand
         var classifier = new EvaluationClassifier(backend, evalConfig, maxPagesClassification);
 
         var startedAt = DateTime.UtcNow;
-        var runDirName = $"{startedAt:yyyyMMdd-HHmmss}" + (string.IsNullOrWhiteSpace(label) ? string.Empty : $"-{label}");
-        var runDir = Path.Combine(evalDir, "runs", runDirName);
-        Directory.CreateDirectory(runDir);
+        var allDocuments = documents;
+        var previous = new List<EvaluationResultRow>();
+        string runDir;
+        if (!string.IsNullOrWhiteSpace(resumeDir))
+        {
+            // Reanudacion: se reutiliza el directorio del run anterior, se leen sus filas (las
+            // anexadas fila a fila sobreviven a una interrupcion) y solo se reprocesa lo no OK.
+            runDir = Path.GetFullPath(resumeDir);
+            if (!Directory.Exists(runDir))
+            {
+                throw new EvaluationUsageException($"--resume: no existe el directorio '{runDir}'.");
+            }
+
+            var previousPath = Path.Combine(runDir, "results.csv");
+            if (File.Exists(previousPath))
+            {
+                previous = ResultsCsv.Read(previousPath);
+            }
+
+            documents = ResumePlanner.Pending(allDocuments, previous);
+            Console.WriteLine($"Reanudando {runDir}: {allDocuments.Count - documents.Count} ya OK, {documents.Count} pendientes.");
+        }
+        else
+        {
+            var runDirName = $"{startedAt:yyyyMMdd-HHmmss}" + (string.IsNullOrWhiteSpace(label) ? string.Empty : $"-{label}");
+            runDir = Path.Combine(evalDir, "runs", runDirName);
+            Directory.CreateDirectory(runDir);
+        }
+
+        var resultsPath = Path.Combine(runDir, "results.csv");
 
         Console.WriteLine($"Set: {set} ({documents.Count} documentos) | Entorno: {environment.Name} ({environment.BackendUrl})");
         Console.WriteLine($"Corpus: {corpusRoot} | Paralelismo: {parallel} | Max paginas clasificacion: {maxPagesClassification} | Salida: {runDir}");
@@ -128,7 +157,14 @@ public static class RunCommand
             await semaphore.WaitAsync();
             try
             {
-                results[i] = await classifier.ClassifyAsync(corpusRoot, doc, CancellationToken.None);
+                var row = await classifier.ClassifyAsync(corpusRoot, doc, CancellationToken.None);
+                results[i] = row;
+                // Cada resultado va a disco en cuanto llega: si el proceso muere a mitad, el
+                // results.csv parcial permite reanudar con --resume sin repetir lo clasificado.
+                lock (gate)
+                {
+                    ResultsCsv.Append(resultsPath, row);
+                }
             }
             finally
             {
@@ -147,7 +183,9 @@ public static class RunCommand
         await Task.WhenAll(tasks);
 
         var completedAt = DateTime.UtcNow;
-        ResultsCsv.Write(Path.Combine(runDir, "results.csv"), results);
+        // Consolidado en el orden del set: pasadas anteriores mas esta, sin filas repetidas.
+        var consolidated = ResumePlanner.Merge(allDocuments, previous, results);
+        ResultsCsv.Write(resultsPath, consolidated);
 
         var runInfo = new RunInfo
         {
@@ -158,10 +196,10 @@ public static class RunCommand
             AppVersion = typeof(RunCommand).Assembly.GetName().Version?.ToString() ?? "unknown",
             StartedAtUtc = startedAt,
             CompletedAtUtc = completedAt,
-            Total = results.Length,
-            Ok = results.Count(r => r.Estado == EvaluationEstado.Ok),
-            Error = results.Count(r => r.Estado == EvaluationEstado.Error),
-            Timeout = results.Count(r => r.Estado == EvaluationEstado.Timeout),
+            Total = consolidated.Count,
+            Ok = consolidated.Count(r => r.Estado == EvaluationEstado.Ok),
+            Error = consolidated.Count(r => r.Estado == EvaluationEstado.Error),
+            Timeout = consolidated.Count(r => r.Estado == EvaluationEstado.Timeout),
             Parallel = parallel,
             MaxPagesClassification = maxPagesClassification
         };
@@ -175,10 +213,22 @@ public static class RunCommand
         return 0;
     }
 
-    private static List<ManifestRow> LoadDocuments(EvaluationSet set, string evalDir)
+    private static List<ManifestRow> LoadDocuments(EvaluationSet set, string evalDir, string listPath)
     {
         switch (set)
         {
+            case EvaluationSet.List:
+                if (string.IsNullOrWhiteSpace(listPath))
+                {
+                    throw new EvaluationUsageException("--set list requiere --list <csv> (rel_path;expected_tdn1;expected_tdn2).");
+                }
+
+                if (!File.Exists(listPath))
+                {
+                    throw new EvaluationUsageException($"--list: no existe el fichero '{listPath}'.");
+                }
+
+                return ListCsvReader.Read(listPath);
             case EvaluationSet.Golden:
                 return ManifestCsvReader.Read(Path.Combine(evalDir, "golden.csv"));
             case EvaluationSet.Full:

@@ -52,11 +52,14 @@ public static class Program
             DocumentIA.Batch.Evaluation — harness headless de evaluacion de clasificacion.
 
             Uso:
-              run --set golden|full|half-a|half-b|cata100 [--corpus-root <ruta>] [--env <ENV>] [--label <texto>] [--parallel <n>] [--config <ruta>]
+              run --set golden|full|half-a|half-b|cata100|list [--list <csv>] [--corpus-root <ruta>] [--env <ENV>] [--label <texto>] [--parallel <n>] [--max-pages <n>] [--config <ruta>] [--only-tdn1 <fams>] [--only-files <ruta>] [--resume <dir-de-run>]
               report --run <dir-de-run>
               compare --a <dirA> --b <dirB>
 
-            Defaults: --corpus-root H:\Documentia\ParaNacho\Class | --env DEV | --parallel 2
+            Defaults: --corpus-root H:\Documentia\ParaNacho\Class | --env DEV | --parallel 2 | --max-pages 10
+            --set list lee un CSV rel_path;expected_tdn1;expected_tdn2 (--list). --resume reutiliza
+            un run anterior: salta los documentos ya OK de su results.csv y reprocesa el resto.
+            results.csv se anexa fila a fila, asi que un run interrumpido se reanuda sin perder nada.
             """);
     }
 }

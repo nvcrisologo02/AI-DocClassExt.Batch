@@ -10,7 +10,10 @@ public enum EvaluationSet
     Full,
     HalfA,
     HalfB,
-    Cata100
+    Cata100,
+    /// <summary>Lista explicita de documentos (--list &lt;csv&gt;) fuera del manifest, p.ej. la
+    /// particion 'cal' del clasificador por embeddings.</summary>
+    List
 }
 
 /// <summary>
@@ -43,6 +46,7 @@ public static class DatasetSelector
         "half-a" => EvaluationSet.HalfA,
         "half-b" => EvaluationSet.HalfB,
         "cata100" => EvaluationSet.Cata100,
-        _ => throw new EvaluationUsageException($"--set desconocido: '{value}'. Valores validos: golden, full, half-a, half-b, cata100.")
+        "list" => EvaluationSet.List,
+        _ => throw new EvaluationUsageException($"--set desconocido: '{value}'. Valores validos: golden, full, half-a, half-b, cata100, list.")
     };
 }
