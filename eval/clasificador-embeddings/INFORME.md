@@ -205,3 +205,24 @@ Con la decisión "para", según §7 de la especificación:
 - La rama queda como registro o se borra, con confirmación.
 
 Propuesta opcional, sin crear nada: si se quiere saber si el resultado cambia en la distribución real del corpus, medir el GPT baseline sobre una muestra de cal (o sobre ejecuciones operativas) y comparar con A en esa misma muestra. Solo tendría sentido junto con la revisión de la divergencia golden/operación de AB#100003; no cambia la decisión de esta prueba.
+
+## 10. Anexo: C frente a A sobre todo cal (2026-09-28, posterior a la decisión)
+
+A petición del usuario, tras el informe, se midió el enfoque C sobre los 1.576 documentos de cal (solo inferencia en DEV, 0 errores) para comparar A con un GPT en la distribución del corpus. Fuentes: `logprobs_cal.py` (ejecución, reanudable; salida en `eval/runs/cal-logprobs-gpt/resultados.csv`) y `comparar_cal.py` (comparación; A reentrenado con la partición train de `evaluar.py`).
+
+| cal (n = 1.576) | A | C |
+|---|---|---|
+| Acierto TDN1 | **0,872** | 0,789 |
+| ECE bruta | **0,029** | 0,192 |
+| Confianza ≥ 0,9: cobertura / acierto | **61,7 % / 97,9 %** | 94,0 % / 81,0 % |
+| Confianza ≥ 0,99: cobertura / acierto | 13,8 % / 100 % | 87,6 % / 83,5 % |
+
+- McNemar A frente a C: solo A acierta en 203 documentos y solo C en 72; p = 1,3·10⁻¹⁵.
+- Sin casi duplicados de train (vecino < 0,98, n = 1.417): A 0,863 y C 0,784; A con confianza ≥ 0,9 cubre el 60,1 % con un 97,9 % de acierto. Con vecino < 0,95 (n = 1.197): A 0,845, C 0,775, cobertura 57,4 % al 97,4 %.
+- Familias con n ≥ 10 donde más gana A: ESCR (97 % frente a 66 %), TASA (98 % frente a 73 %), DOCN (97 % frente a 69 %), CERJ (74 % frente a 55 %), DOCA (62 % frente a 6 %). C no supera a A en más de 4 pp en ninguna.
+
+Lectura:
+
+- En la distribución del corpus, A cumple lo que O2 y O3 piden (ECE ≤ 0,05; cobertura ≥ 40 % con acierto ≥ 90 %) y supera a C. En el golden no: la decisión de §2 (**para**, con el árbitro acordado) no cambia, pero queda acotada al golden.
+- Límites: C es el prompt compacto, no el GPT de producción (cuya medición operativa ronda el 86 % en AB#100003, otro conjunto y no comparable directamente); las etiquetas de cal y de train salen de la misma fuente (carpeta), así que A puede estar aprendiendo en parte el criterio de archivo; los umbrales 0,9 y 0,99 se aplican sobre la confianza bruta de A, sin calibrador.
+- Siguiente paso acordado: medir el GPT de producción (pipeline completo en DEV) sobre cal y comparar con A en los mismos documentos, en una prueba aparte.
