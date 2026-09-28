@@ -1,9 +1,9 @@
-"""Enfoque C: gpt-4.1-mini (deployment 'gpt-4o-mini' de DEV) con logprobs, prompt compacto
+"""Enfoque C: el chat de DEV (CHAT_DEPLOYMENT de comun.py) con logprobs, prompt compacto
 con el catálogo TDN1. Calibra y fija umbral con 300 documentos de 'cal' y evalúa en 'golden'.
 
 Desviación de la especificación (se señala en el informe): no se reproduce el prompt de
 producción, que vive en PromptTemplates de BD y depende del pipeline. Mide si las logprobs
-de gpt-4.1-mini dan una confianza calibrada, no su acierto frente al prompt real.
+del chat dan una confianza calibrada, no su acierto frente al prompt real.
 
 Reintentos: mismo patrón que embeddings.py (401 renueva el token de la MISMA sesión y
 reintenta una vez; un segundo 401 seguido propaga Autenticacion401; 429 respeta
