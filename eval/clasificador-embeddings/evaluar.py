@@ -16,6 +16,22 @@ from metricas import acierto, cobertura_y_acierto, ece, mcnemar, umbral_para_aci
 from modelos import ClasificadorKNN, ClasificadorLR, Prediccion, calibrar
 
 
+def familias_excluidas(t1_tr: list[str]) -> list[str]:
+    """Calcula familias TDN1 de train con menos de 5 ejemplos.
+    Retorna lista ordenada de familias excluidas.
+    """
+    conteo = {}
+    for tdn1 in t1_tr:
+        conteo[tdn1] = conteo.get(tdn1, 0) + 1
+    return sorted([f for f, c in conteo.items() if c < 5])
+
+
+def contar_familias_en_golden(golden: list[dict], familias_excluidas_set: set[str]) -> int:
+    """Cuenta documentos del golden cuya familia TDN1 está en familias_excluidas.
+    """
+    return sum(1 for r in golden if r["tdn1"] in familias_excluidas_set)
+
+
 def hibrido(pred: Prediccion, conf_cal: float, t: float, gpt_tdn1: str, gpt_tdn2: str):
     if conf_cal < t:
         return gpt_tdn1, gpt_tdn2, False
@@ -25,6 +41,11 @@ def hibrido(pred: Prediccion, conf_cal: float, t: float, gpt_tdn1: str, gpt_tdn2
 
 def leer(p):
     return list(csv.DictReader(p.open(encoding="utf-8-sig"), delimiter=";"))
+
+
+def percentil_seguro(valores: list[float], p: float) -> float | None:
+    """Calcula percentil, retorna None si la lista está vacía."""
+    return float(np.percentile(valores, p)) if valores else None
 
 
 def metricas_vista(filas, clave):
@@ -69,6 +90,7 @@ def main() -> None:
     h_tr, X_tr, t1_tr, t2_tr = conjunto("train")
     h_ca, X_ca, t1_ca, _ = conjunto("cal")
     print(f"train {len(h_tr)} | cal {len(h_ca)}")
+    fam_excluidas = familias_excluidas(t1_tr)
     modelos, cal, umbral, lat = {}, {}, {}, {}
     for nombre, m in (("A", ClasificadorLR()), ("B", ClasificadorKNN())):
         modelos[nombre] = m.fit(X_tr, t1_tr, t2_tr)
@@ -101,11 +123,14 @@ def main() -> None:
         filas.append(f)
 
     clave = {m: {"umbral": umbral[m]} for m in modelos}
+    fam_excluidas_set = set(fam_excluidas)
+    n_golden_excluidas = contar_familias_en_golden(golden, fam_excluidas_set)
     res = {"golden_evaluados": len(filas), "golden_inventario": len(golden),
            "todas": metricas_vista(filas, clave),
            "sin_procedencia": metricas_vista([f for f in filas if not f["procedencia"]], clave),
-           "latencia_p95_s": {m: float(np.percentile(v, 95)) for m, v in lat.items()},
-           "origen_texto_golden": {o: sum(f["origen_texto"] == o for f in filas) for o in {f["origen_texto"] for f in filas}}}
+           "latencia_p95_s": {m: percentil_seguro(v, 95) for m, v in lat.items()},
+           "origen_texto_golden": {o: sum(f["origen_texto"] == o for f in filas) for o in {f["origen_texto"] for f in filas}},
+           "familias_excluidas": {"lista": fam_excluidas, "documentos_golden": n_golden_excluidas}}
     salida = EVAL / "runs" / f"{datetime.now():%Y%m%d-%H%M%S}-clasificador-embeddings"
     salida.mkdir(parents=True)
     with (salida / "resultados.csv").open("w", newline="", encoding="utf-8-sig") as fh:
