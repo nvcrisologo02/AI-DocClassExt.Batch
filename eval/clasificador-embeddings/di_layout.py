@@ -11,10 +11,29 @@ import os
 import time
 from pathlib import Path
 
+import requests
+
 from comun import CACHE, CORPUS, DI_ENDPOINT, sesion_http
 from texto import guardar_md, leer_md, ruta_md
 
 API = "2024-11-30"
+RENOVACION_INTERVALO_SEGUNDOS = 20 * 60
+ESPERAS_TRANSITORIAS = (5, 15, 45)  # 429/5xx/ConnectionError/Timeout: hasta 3 reintentos
+
+
+class ErrorDI(RuntimeError):
+    """Error de DI con código HTTP explícito (o None), para la línea de error del log."""
+
+    def __init__(self, mensaje: str, codigo: int | None = None):
+        super().__init__(mensaje)
+        self.codigo = codigo
+
+
+class Autenticacion401(ErrorDI):
+    """Señal interna de 401: nunca lleva token ni cabeceras, solo el código."""
+
+    def __init__(self):
+        super().__init__("401 no autorizado", codigo=401)
 
 
 def paginas_facturables(paginas: int, max_paginas: int) -> int:
@@ -45,19 +64,95 @@ def escribir_origen(ruta, filas) -> None:
 
 
 def analizar(s, pdf_bytes: bytes, rango: str) -> str:
+    """Un único intento: POST + sondeo. Un 401 (token caducado) se señaliza con
+    Autenticacion401 en vez de dejar que raise_for_status lo convierta en HTTPError,
+    para que analizar_con_reintentos sepa que toca sesión nueva. Una respuesta sin los
+    campos esperados (Operation-Location, status, analyzeResult.content) lanza ErrorDI
+    (subclase de RuntimeError) con el código HTTP y como mucho 200 caracteres del
+    cuerpo, en vez de un KeyError opaco."""
     url = (f"{DI_ENDPOINT}/documentintelligence/documentModels/prebuilt-layout:analyze"
            f"?api-version={API}&outputContentFormat=markdown&pages={rango}")
     r = s.post(url, json={"base64Source": base64.b64encode(pdf_bytes).decode()}, timeout=120)
+    if r.status_code == 401:
+        raise Autenticacion401()
     r.raise_for_status()
-    op = r.headers["Operation-Location"]
+    op = r.headers.get("Operation-Location")
+    if not op:
+        raise ErrorDI(f"sin Operation-Location: {r.text[:200]!r}", codigo=r.status_code)
     for _ in range(120):
         time.sleep(2)
-        j = s.get(op, timeout=60).json()
-        if j["status"] == "succeeded":
-            return j["analyzeResult"]["content"]
-        if j["status"] == "failed":
-            raise RuntimeError(j.get("error"))
+        resp = s.get(op, timeout=60)
+        if resp.status_code == 401:
+            raise Autenticacion401()
+        resp.raise_for_status()
+        j = resp.json()
+        estado = j.get("status")
+        if estado is None:
+            raise ErrorDI(f"sin status: {resp.text[:200]!r}", codigo=resp.status_code)
+        if estado == "succeeded":
+            contenido = (j.get("analyzeResult") or {}).get("content")
+            if contenido is None:
+                raise ErrorDI(f"sin analyzeResult.content: {resp.text[:200]!r}", codigo=resp.status_code)
+            return contenido
+        if estado == "failed":
+            raise ErrorDI(str(j.get("error")), codigo=resp.status_code)
     raise TimeoutError(op)
+
+
+def _es_transitorio(exc: Exception) -> bool:
+    if isinstance(exc, (requests.ConnectionError, requests.Timeout)):
+        return True
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        codigo = exc.response.status_code
+        return codigo == 429 or 500 <= codigo < 600
+    return False
+
+
+def _espera_transitoria(exc: Exception, intento: int) -> float:
+    """Espera creciente (5, 15, 45 s) salvo que la respuesta traiga Retry-After
+    numérico, que manda sobre la espera por defecto."""
+    if isinstance(exc, requests.HTTPError) and exc.response is not None:
+        retry_after = exc.response.headers.get("Retry-After")
+        if retry_after is not None:
+            try:
+                return float(retry_after)
+            except ValueError:
+                pass
+    return ESPERAS_TRANSITORIAS[intento]
+
+
+def analizar_con_reintentos(s, pdf_bytes: bytes, rango: str, dormir=None):
+    """Envoltura de analizar() para un documento:
+    - 401 (POST o GET de sondeo): sesión nueva vía sesion_http() y reintento del
+      documento completo, como mucho 1 vez.
+    - 429, 5xx, ConnectionError o Timeout: hasta 3 reintentos con espera creciente
+      (inyectable por `dormir`, por defecto time.sleep, para no dormir de verdad en tests).
+    Devuelve (contenido, sesión a usar en los siguientes documentos del bucle)."""
+    if dormir is None:
+        dormir = time.sleep
+    reintento_401_usado = False
+    intento_transitorio = 0
+    while True:
+        try:
+            return analizar(s, pdf_bytes, rango), s
+        except Autenticacion401:
+            if reintento_401_usado:
+                raise
+            reintento_401_usado = True
+            s = sesion_http()
+        except (requests.ConnectionError, requests.Timeout, requests.HTTPError) as e:
+            if not _es_transitorio(e) or intento_transitorio >= len(ESPERAS_TRANSITORIAS):
+                raise
+            dormir(_espera_transitoria(e, intento_transitorio))
+            intento_transitorio += 1
+
+
+def _codigo_http(exc: Exception) -> str:
+    codigo = getattr(exc, "codigo", None)
+    if codigo is None:
+        resp = getattr(exc, "response", None)
+        codigo = getattr(resp, "status_code", None) if resp is not None else None
+    return str(codigo) if codigo is not None else "-"
 
 
 def main() -> None:
@@ -99,8 +194,14 @@ def main() -> None:
             fila.update(origen_texto="di_dev", caracteres=str(len(md)))
             reutilizados += 1
         else:
+            ahora = time.monotonic()
+            if ahora - ultima_renovacion > RENOVACION_INTERVALO_SEGUNDOS:
+                s = sesion_http()  # renovación preventiva: comprobada antes de cada documento
+                ultima_renovacion = ahora
             try:
-                md = analizar(s, (corpus_path / p["rel_path"]).read_bytes(), rango_paginas(int(p["paginas"]), args.max_paginas))
+                md, s = analizar_con_reintentos(
+                    s, (corpus_path / p["rel_path"]).read_bytes(), rango_paginas(int(p["paginas"]), args.max_paginas)
+                )
                 if md.strip():
                     guardar_md(sha, md)
                     fila.update(origen_texto="di_dev", caracteres=str(len(md)))
@@ -109,7 +210,7 @@ def main() -> None:
                     vacios += 1
             except Exception as e:  # se registra y se sigue; el documento queda sin_texto
                 err += 1
-                print("error", p["rel_path"], type(e).__name__)
+                print("error", p["rel_path"], type(e).__name__, _codigo_http(e))
         procesados = ok + reutilizados + err + vacios
         if procesados % 100 == 0:
             print(
@@ -118,10 +219,6 @@ def main() -> None:
                 flush=True,
             )
             escribir_origen(origen_csv, filas)  # checkpoint: como mucho se pierden 100 marcas si se corta
-            ahora = time.monotonic()
-            if ahora - ultima_renovacion > 30 * 60:
-                s = sesion_http()  # renueva el token en ejecuciones largas (cada 30 minutos)
-                ultima_renovacion = ahora
     escribir_origen(origen_csv, filas)
     print(f"DI ok {ok} | reutilizados {reutilizados} | vacíos {vacios} | errores {err}")
 
