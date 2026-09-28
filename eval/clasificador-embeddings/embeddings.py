@@ -12,8 +12,10 @@ Uso: python embeddings.py"""
 from __future__ import annotations
 
 import csv
+import os
 import re
 import time
+from pathlib import Path
 
 import numpy as np
 import requests
@@ -24,6 +26,7 @@ from texto import leer_md
 API = "2024-10-21"
 LOTE = 16
 NPZ = CACHE / "embeddings.npz"
+GUARDAR_CADA_LOTES = 50  # guardado intermedio cada 50 lotes (800 documentos si ninguno va vacío)
 ESPERAS_TRANSITORIAS = (5, 15, 45)  # 5xx/ConnectionError/Timeout: hasta 3 reintentos
 
 
@@ -46,6 +49,22 @@ def recortar(md: str, max_chars: int = 24000) -> str:
 def cargar():
     d = np.load(NPZ, allow_pickle=False)
     return list(d["shas"]), d["X"]
+
+
+def guardar_npz(ruta: Path, shas: list[str], X: np.ndarray) -> None:
+    """Escritura atómica: se escribe un temporal en la misma carpeta y se sustituye con
+    os.replace. Una caída a mitad de escritura deja intacto el embeddings.npz anterior."""
+    tmp = ruta.with_name(ruta.stem + ".tmp.npz")
+    with tmp.open("wb") as fh:
+        np.savez(fh, shas=np.array(shas), X=X)
+    os.replace(tmp, ruta)
+
+
+def toca_guardar(lotes_pendientes: int, ultimo: bool) -> bool:
+    """Guardado intermedio por número de lotes procesados desde el último guardado, no por
+    número de vectores: un lote con textos vacíos deja de aportar 16 y un contador de
+    vectores múltiplo de 800 dejaría de dispararse."""
+    return ultimo or lotes_pendientes >= GUARDAR_CADA_LOTES
 
 
 def _con_texto(filas):
@@ -153,6 +172,7 @@ def main() -> None:
     vacios_total = []
     uso = (CACHE / "embeddings_uso.csv").open("a", newline="", encoding="utf-8")
     procesados = 0
+    lotes_pendientes = 0
     for i in range(0, len(faltan), LOTE):
         lote = faltan[i:i + LOTE]
         textos = {h: recortar(leer_md(h) or "") for h in lote}
@@ -170,12 +190,13 @@ def main() -> None:
         procesados += len(lote)
         if procesados % (LOTE * 20) == 0 or i + LOTE >= len(faltan):
             print(f"progreso {procesados}/{len(faltan)}", flush=True)
-        if nuevos and (len(nuevos) % 800 == 0 or i + LOTE >= len(faltan)):
+        lotes_pendientes += 1
+        if nuevos and toca_guardar(lotes_pendientes, i + LOTE >= len(faltan)):
             V = np.asarray(vecs, np.float32)
             V /= np.linalg.norm(V, axis=1, keepdims=True)
             shas, X = shas + nuevos, np.vstack([X, V])
-            np.savez(NPZ, shas=np.array(shas), X=X)
-            nuevos, vecs = [], []
+            guardar_npz(NPZ, shas, X)
+            nuevos, vecs, lotes_pendientes = [], [], 0
             s = sesion_http()
             print("guardados:", len(shas), flush=True)
     uso.close()

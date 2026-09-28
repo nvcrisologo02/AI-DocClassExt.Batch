@@ -204,3 +204,35 @@ def test_connectionerror_transitorio_reintenta_y_acaba_ok(monkeypatch):
     assert emb == [[0.3]]
     assert esperas == [5]
     assert s.llamadas == 2
+
+
+def test_toca_guardar_por_lotes_aunque_haya_vacios():
+    # Con vacíos el número de vectores deja de ser múltiplo de 16; el disparo va por lotes.
+    assert not embeddings.toca_guardar(embeddings.GUARDAR_CADA_LOTES - 1, False)
+    assert embeddings.toca_guardar(embeddings.GUARDAR_CADA_LOTES, False)
+    assert embeddings.toca_guardar(1, True)
+
+
+def test_guardar_npz_atomico_sustituye_y_no_deja_temporal(tmp_path):
+    import numpy as np
+    ruta = tmp_path / "embeddings.npz"
+    embeddings.guardar_npz(ruta, ["a"], np.ones((1, 3), np.float32))
+    embeddings.guardar_npz(ruta, ["a", "b"], np.zeros((2, 3), np.float32))
+    d = np.load(ruta, allow_pickle=False)
+    assert list(d["shas"]) == ["a", "b"] and d["X"].shape == (2, 3)
+    assert [p.name for p in tmp_path.iterdir()] == ["embeddings.npz"]
+
+
+def test_guardar_npz_fallo_a_mitad_deja_el_anterior_intacto(tmp_path, monkeypatch):
+    import numpy as np
+    ruta = tmp_path / "embeddings.npz"
+    embeddings.guardar_npz(ruta, ["a"], np.ones((1, 3), np.float32))
+
+    def rompe(*a, **k):
+        raise OSError("disco lleno")
+    monkeypatch.setattr(embeddings.np, "savez", rompe)
+    with pytest.raises(OSError):
+        embeddings.guardar_npz(ruta, ["a", "b"], np.zeros((2, 3), np.float32))
+    monkeypatch.undo()
+    d = np.load(ruta, allow_pickle=False)
+    assert list(d["shas"]) == ["a"]
