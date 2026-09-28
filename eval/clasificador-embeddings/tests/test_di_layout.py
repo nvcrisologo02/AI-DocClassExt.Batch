@@ -79,3 +79,43 @@ def test_pendiente_en_cache_no_llama_a_di(tmp_path, monkeypatch):
     filas = list(csv.DictReader((cache / "texto_origen.csv").open(encoding="utf-8-sig"), delimiter=";"))
     assert filas[0]["origen_texto"] == "di_dev"
     assert filas[0]["caracteres"] == str(len(contenido))
+
+
+def test_pendiente_ya_marcado_di_dev_no_llama_a_di(tmp_path, monkeypatch, capsys):
+    """Reanudación: un checkpoint anterior ya dejó la fila en di_dev y el .md.gz sigue
+    en caché; --lanzar no debe volver a facturar DI por él (pendientes_di.csv es
+    estático entre invocaciones, así que esta fila sigue apareciendo como pendiente)."""
+    cache = tmp_path / "cache"
+    (cache / "md").mkdir(parents=True)
+    monkeypatch.setattr(texto, "CACHE", cache)
+    monkeypatch.setattr(di_layout, "CACHE", cache)
+
+    sha = "e" * 64
+    contenido = "markdown de un checkpoint anterior"
+    texto.guardar_md(sha, contenido)
+
+    (cache / "pendientes_di.csv").write_text(
+        "sha256;rel_path;paginas\n" f"{sha};doc.pdf;3\n", encoding="utf-8-sig"
+    )
+    (cache / "texto_origen.csv").write_text(
+        "sha256;origen_texto;caracteres\n" f"{sha};di_dev;{len(contenido)}\n", encoding="utf-8-sig"
+    )
+
+    llamadas = []
+
+    def analizar_falso(*a, **k):
+        llamadas.append(a)
+        raise AssertionError("no debería llamarse a DI para un pendiente ya marcado di_dev")
+
+    monkeypatch.setattr(di_layout, "analizar", analizar_falso)
+    monkeypatch.setattr(di_layout, "sesion_http", lambda: object())
+    monkeypatch.setattr(sys, "argv", ["di_layout.py", "--lanzar"])
+
+    di_layout.main()
+
+    assert llamadas == []
+    salida = capsys.readouterr().out
+    assert "DI ok 0 | reutilizados 1 | vacíos 0 | errores 0" in salida
+    filas = list(csv.DictReader((cache / "texto_origen.csv").open(encoding="utf-8-sig"), delimiter=";"))
+    assert filas[0]["origen_texto"] == "di_dev"
+    assert filas[0]["caracteres"] == str(len(contenido))

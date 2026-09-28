@@ -25,7 +25,10 @@ def rango_paginas(paginas: int, max_paginas: int) -> str:
 
 
 def ya_en_cache(sha: str) -> bool:
-    """True si el markdown de sha ya está en CACHE/md (evita pagar DI otra vez)."""
+    """True si el markdown de sha ya está en CACHE/md: reanudar --lanzar no debe
+    volver a facturar DI por un documento cuyo .md.gz ya existe (venga de un checkpoint
+    anterior marcado di_dev o de una reutilización previa), da igual qué diga
+    origen_texto en texto_origen.csv."""
     return ruta_md(sha).exists()
 
 
@@ -84,7 +87,7 @@ def main() -> None:
     for p in pend:
         sha = p["sha256"]
         fila = idx[sha]
-        if fila["origen_texto"] == "sin_texto" and ya_en_cache(sha):
+        if ya_en_cache(sha):
             md = leer_md(sha)
             fila.update(origen_texto="di_dev", caracteres=str(len(md)))
             reutilizados += 1
