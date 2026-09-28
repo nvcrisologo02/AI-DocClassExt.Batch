@@ -87,7 +87,10 @@ def _llamar(s, textos):
         if r.status_code == 429:
             time.sleep(int(r.headers.get("retry-after", 10)))
             continue
-        if r.status_code == 400 and "maximum context length" in r.text:
+        if r.status_code == 400 and ("maximum context length" in r.text or "maximum input length" in r.text):
+            # El endpoint de DEV (verificado el 2026-09-28) no devuelve literalmente
+            # "maximum context length" sino "maximum input length is 8192 tokens".
+            # Se comprueban ambas cadenas: la del plan y la real observada.
             raise ContextoExcedido(r.text[:200])
         if 500 <= r.status_code < 600:
             if intento_transitorio >= len(ESPERAS_TRANSITORIAS):

@@ -88,12 +88,15 @@ def test_maximum_context_length_reintenta_texto_a_texto_y_recorta_solo_el_que_ex
     """Resolución 2: ante 400 'maximum context length' no se recorta el lote entero;
     se reintenta texto a texto y solo el texto que excede se parte a la mitad hasta
     que entra. El recorte de un documento no depende del lote en que cae."""
+    # Mensaje real verificado contra el endpoint de DEV el 2026-09-28: no dice
+    # "maximum context length" (la cadena del plan) sino "maximum input length".
+    texto_400 = '{"error": {"message": "Invalid \'input[1]\': maximum input length is 8192 tokens."}}'
     largo = "x" * 100
-    resp_400_lote = FakeResponse(status_code=400, text="exceeds the maximum context length")
+    resp_400_lote = FakeResponse(status_code=400, text=texto_400)
     resp_ok_corto = FakeResponse(
         status_code=200, json_data={"data": [{"index": 0, "embedding": [0.1]}], "usage": {"prompt_tokens": 3}}
     )
-    resp_400_largo = FakeResponse(status_code=400, text="exceeds the maximum context length")
+    resp_400_largo = FakeResponse(status_code=400, text=texto_400)
     resp_ok_largo = FakeResponse(
         status_code=200, json_data={"data": [{"index": 0, "embedding": [0.2]}], "usage": {"prompt_tokens": 4}}
     )
