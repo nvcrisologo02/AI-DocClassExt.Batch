@@ -145,6 +145,7 @@ def main() -> None:
     nuevos, vecs = [], []
     vacios_total = []
     uso = (CACHE / "embeddings_uso.csv").open("a", newline="", encoding="utf-8")
+    procesados = 0
     for i in range(0, len(faltan), LOTE):
         lote = faltan[i:i + LOTE]
         textos = {h: recortar(leer_md(h) or "") for h in lote}
@@ -154,8 +155,14 @@ def main() -> None:
             t0 = time.perf_counter()
             emb, tokens = pedir(s, [textos[h] for h in con])
             uso.write(f"{len(con)};{tokens};{time.perf_counter() - t0:.3f}\n")
+            uso.flush()  # visibilidad en ejecuciones largas (>=70 min): sin esto los
+            # tiempos de lote quedan en el buffer de Python y no se pueden auditar en
+            # vivo, el mismo tipo de opacidad que tumbó 851 documentos en la tarea 3.
             nuevos += con
             vecs += emb
+        procesados += len(lote)
+        if procesados % (LOTE * 20) == 0 or i + LOTE >= len(faltan):
+            print(f"progreso {procesados}/{len(faltan)}", flush=True)
         if nuevos and (len(nuevos) % 800 == 0 or i + LOTE >= len(faltan)):
             V = np.asarray(vecs, np.float32)
             V /= np.linalg.norm(V, axis=1, keepdims=True)
