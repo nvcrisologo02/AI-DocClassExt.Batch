@@ -32,12 +32,17 @@ class ClasificadorLR:
         cubiertos = _subtipos_cubiertos(tdn1, tdn2, min_ejemplos)
         self.m2 = {}
         for fam in self.m1.classes_:
-            idx = [i for i, (a, b) in enumerate(zip(tdn1, tdn2)) if a == fam and b in cubiertos]
-            subt = sorted({tdn2[i] for i in idx})
+            # Solo documentos de la familia con tdn2 no vacío en la entrada
+            idx = [i for i, (a, b) in enumerate(zip(tdn1, tdn2)) if a == fam and b]
+            if not idx:
+                continue
+            # Etiqueta: tdn2 si está cubierto, "" si no
+            etiquetas = [tdn2[i] if tdn2[i] in cubiertos else "" for i in idx]
+            subt = sorted(set(etiquetas))
             if len(subt) == 1:
                 self.m2[fam] = subt[0]
             elif len(subt) > 1:
-                self.m2[fam] = LogisticRegression(C=self.C, max_iter=3000).fit(X[idx], [tdn2[i] for i in idx])
+                self.m2[fam] = LogisticRegression(C=self.C, max_iter=3000).fit(X[idx], etiquetas)
         return self
 
     def predecir(self, X):
@@ -60,20 +65,27 @@ class ClasificadorKNN:
         self.X = X
         self.t1 = np.array(tdn1)
         cub = _subtipos_cubiertos(tdn1, tdn2, min_ejemplos)
-        self.t2 = np.array([t if t in cub else "" for t in tdn2])
+        # Marca: None = vacío en entrada (no vota); "" = no cubierto (sí vota); otro = cubierto
+        self.t2 = np.array([t if t in cub else ("" if t else None) for t in tdn2])
         return self
 
     def predecir(self, X):
         S = X @ self.X.T  # vectores normalizados: coseno
         out = []
         for s in S:
-            vec = np.argpartition(-s, self.k)[: self.k]
+            # k efectivo: min(k, n) para evitar ValueError en argpartition
+            k_eff = min(self.k, len(s))
+            if k_eff == len(s):
+                vec = np.argsort(-s)  # todos ordenados si k >= n
+            else:
+                vec = np.argpartition(-s, k_eff)[:k_eff]
             pesos = Counter()
             for i in vec:
                 pesos[self.t1[i]] += max(float(s[i]), 0.0)
             fam, w = pesos.most_common(1)[0]
             total = sum(pesos.values()) or 1.0
-            subs = Counter(self.t2[i] for i in vec if self.t1[i] == fam and self.t2[i])
+            # Entre vecinos de la familia con tdn2 conocido (no None), vota el más frecuente
+            subs = Counter(self.t2[i] for i in vec if self.t1[i] == fam and self.t2[i] is not None)
             out.append(Prediccion(str(fam), subs.most_common(1)[0][0] if subs else "", w / total))
         return out
 
