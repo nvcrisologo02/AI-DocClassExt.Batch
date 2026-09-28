@@ -50,7 +50,10 @@ class FakeSession:
         self.llamadas += 1
         self.autorizaciones_vistas.append(self.headers.get("Authorization"))
         self.pedidos.append(json)
-        return self._respuestas.pop(0)
+        efecto = self._respuestas.pop(0)
+        if isinstance(efecto, Exception):
+            raise efecto
+        return efecto
 
 
 def test_401_renueva_token_en_la_misma_sesion_y_reintenta_una_vez(monkeypatch):
@@ -119,3 +122,85 @@ def test_separar_vacios_deja_fuera_los_textos_vacios_tras_recortar():
 
     assert con == ["a", "c"]
     assert vacios == ["b"]
+
+
+def test_con_texto_deduplica_por_sha256_conservando_el_orden():
+    """Ronda de corrección 1 (Important): la reanudación no debe duplicar hashes si
+    dos filas de texto_origen.csv comparten sha256 (defensivo: hoy no hay duplicados)."""
+    filas = [
+        {"sha256": "a", "origen_texto": "bd_dev"},
+        {"sha256": "b", "origen_texto": "sin_texto"},
+        {"sha256": "a", "origen_texto": "bd_pro"},  # duplicado de "a", distinto origen
+        {"sha256": "c", "origen_texto": "di_dev"},
+    ]
+
+    assert embeddings._con_texto(filas) == ["a", "c"]
+
+
+def test_429_respeta_retry_after_y_reintenta(monkeypatch):
+    """Ronda de corrección 1 (Important): 429 respeta Retry-After (no la espera por
+    defecto de los transitorios acotados) y reintenta."""
+    resp_429 = FakeResponse(status_code=429, headers={"retry-after": "7"})
+    resp_ok = FakeResponse(
+        status_code=200, json_data={"data": [{"index": 0, "embedding": [0.1]}], "usage": {"prompt_tokens": 2}}
+    )
+    s = FakeSession([resp_429, resp_ok])
+    esperas = []
+    monkeypatch.setattr(embeddings.time, "sleep", lambda segundos: esperas.append(segundos))
+
+    emb, tokens = embeddings._llamar(s, ["texto"])
+
+    assert emb == [[0.1]]
+    assert tokens == 2
+    assert esperas == [7]
+    assert s.llamadas == 2
+
+
+def test_5xx_reintenta_con_espera_creciente_y_acaba_ok(monkeypatch):
+    """Ronda de corrección 1 (Important): un 500 seguido de éxito reintenta con la
+    primera espera de ESPERAS_TRANSITORIAS y el documento acaba bien."""
+    resp_500 = FakeResponse(status_code=500, text="server error")
+    resp_ok = FakeResponse(
+        status_code=200, json_data={"data": [{"index": 0, "embedding": [0.2]}], "usage": {"prompt_tokens": 3}}
+    )
+    s = FakeSession([resp_500, resp_ok])
+    esperas = []
+    monkeypatch.setattr(embeddings.time, "sleep", lambda segundos: esperas.append(segundos))
+
+    emb, tokens = embeddings._llamar(s, ["texto"])
+
+    assert emb == [[0.2]]
+    assert esperas == [5]
+    assert s.llamadas == 2
+
+
+def test_5xx_agota_los_3_reintentos_y_propaga(monkeypatch):
+    """Ronda de corrección 1 (Important): un 503 persistente se reintenta como mucho 3
+    veces (4 intentos en total) y luego propaga, sin bucle infinito."""
+    respuestas = [FakeResponse(status_code=503, text="unavailable") for _ in range(4)]
+    s = FakeSession(respuestas)
+    esperas = []
+    monkeypatch.setattr(embeddings.time, "sleep", lambda segundos: esperas.append(segundos))
+
+    with pytest.raises(requests.HTTPError):
+        embeddings._llamar(s, ["texto"])
+
+    assert s.llamadas == 4  # intento inicial + 3 reintentos
+    assert esperas == [5, 15, 45]
+
+
+def test_connectionerror_transitorio_reintenta_y_acaba_ok(monkeypatch):
+    """Ronda de corrección 1 (Important): ConnectionError/Timeout comparten el mismo
+    presupuesto acotado que los 5xx (ESPERAS_TRANSITORIAS)."""
+    resp_ok = FakeResponse(
+        status_code=200, json_data={"data": [{"index": 0, "embedding": [0.3]}], "usage": {"prompt_tokens": 4}}
+    )
+    s = FakeSession([requests.ConnectionError("sin red"), resp_ok])
+    esperas = []
+    monkeypatch.setattr(embeddings.time, "sleep", lambda segundos: esperas.append(segundos))
+
+    emb, tokens = embeddings._llamar(s, ["texto"])
+
+    assert emb == [[0.3]]
+    assert esperas == [5]
+    assert s.llamadas == 2

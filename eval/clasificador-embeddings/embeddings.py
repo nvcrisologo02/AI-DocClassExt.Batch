@@ -48,6 +48,14 @@ def cargar():
     return list(d["shas"]), d["X"]
 
 
+def _con_texto(filas):
+    """filas: dicts leídos de texto_origen.csv (sha256, origen_texto). Devuelve los
+    sha256 con texto, deduplicados conservando el orden de aparición. Defensivo: hoy
+    el CSV no trae duplicados, pero una fila repetida no debe pedirse ni guardarse dos
+    veces en embeddings.npz."""
+    return list(dict.fromkeys(r["sha256"] for r in filas if r["origen_texto"] != "sin_texto"))
+
+
 def separar_vacios(lote_hashes, textos):
     """textos: dict sha -> markdown ya recortado. Los vacíos no se envían y quedan
     sin vector (se cuentan e informan en main)."""
@@ -135,8 +143,7 @@ def pedir(s, textos):
 
 
 def main() -> None:
-    con_texto = [r["sha256"] for r in csv.DictReader((CACHE / "texto_origen.csv").open(encoding="utf-8-sig"), delimiter=";")
-                 if r["origen_texto"] != "sin_texto"]
+    con_texto = _con_texto(csv.DictReader((CACHE / "texto_origen.csv").open(encoding="utf-8-sig"), delimiter=";"))
     shas, X = (cargar() if NPZ.exists() else ([], np.zeros((0, 3072), np.float32)))
     hechos = set(shas)
     faltan = [h for h in con_texto if h not in hechos]
