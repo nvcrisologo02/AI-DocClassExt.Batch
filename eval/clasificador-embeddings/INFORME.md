@@ -226,3 +226,28 @@ Lectura:
 - En la distribución del corpus, A cumple lo que O2 y O3 piden (ECE ≤ 0,05; cobertura ≥ 40 % con acierto ≥ 90 %) y supera a C. En el golden no: la decisión de §2 (**para**, con el árbitro acordado) no cambia, pero queda acotada al golden.
 - Límites: C es el prompt compacto, no el GPT de producción (cuya medición operativa ronda el 86 % en AB#100003, otro conjunto y no comparable directamente); las etiquetas de cal y de train salen de la misma fuente (carpeta), así que A puede estar aprendiendo en parte el criterio de archivo; los umbrales 0,9 y 0,99 se aplican sobre la confianza bruta de A, sin calibrador.
 - Siguiente paso acordado: medir el GPT de producción (pipeline completo en DEV) sobre cal y comparar con A en los mismos documentos, en una prueba aparte.
+
+## 11. GPT de producción frente a A sobre todo cal (2026-09-29, AB#100775)
+
+Cierra el límite principal de §10: se midió el GPT de producción con el pipeline completo de DEV sobre los mismos 1.576 documentos de cal. Montaje idéntico al de la golden `BASELINE-GPT4OMINI-DEV`: consola `DocumentIA.Batch.Evaluation`, recorte de 10 páginas, paralelismo 2, `ForceReprocess` (842 de los 1.576 hashes ya tenían ejecución en DEV y la deduplicación habría devuelto la clasificación antigua) y nombre de fichero sin prefijo de etiqueta. Run `eval/runs/20260928-215126-gpt-cal` (`eval/cal.csv`, lanzado con `eval/run_cal_dev.ps1`): 1.576 OK en dos pasadas, 0 × 429 y 12 documentos sin tipología, que cuentan como fallo. Comparación con `comparar_cal.py --gpt`.
+
+| cal (n = 1.576) | A | GPT de producción |
+|---|---|---|
+| Acierto TDN1 | **0,872** | 0,839 |
+| Acierto TDN2 | 0,615 | 0,600 |
+| ECE bruta (TDN1) | **0,029** | 0,067 |
+| Confianza ≥ 0,9: cobertura / acierto | **61,7 % / 97,9 %** | 89,6 % / 86,2 % |
+| Confianza ≥ 0,7: cobertura / acierto | 79,9 % / 95,6 % | 98,0 % / 85,0 % |
+
+- McNemar TDN1: solo A acierta en 139 documentos y solo el GPT en 86; p = 0,0005. TDN2: 183 frente a 160, p = 0,23 (sin diferencia).
+- Sin casi duplicados de train: con vecino < 0,98 (n = 1.417), A 0,863 y GPT 0,832; con vecino < 0,95 (n = 1.197), A 0,845 y GPT 0,817.
+- Familias (n ≥ 10) donde más gana A: TASA (98 % frente a 35 %; el GPT la clasifica como CERJ en 36 de 63), DOCA (62 % frente a 25 %; 10 como DEAC), DOCN (97 % frente a 66 %; 11 como ESCR), CERJ (74 % frente a 59 %). Donde más gana el GPT: PBLO (78 % frente a 61 %) y PRPE (94 % frente a 83 %).
+- Coste real del GPT (`coste_gpt_cal.sql`): 1.562 ejecuciones persistidas, 39,7 M tokens y 9,16 EUR (0,0059 EUR por documento). El coste de DI no se ha leído (Cost Management de DEV con retraso); estimado ≈ 89 USD para 8.908 páginas facturables, sin reutilizar markdown porque `ForceReprocess` lo ignora.
+- Incidencia: el worker de DEV cayó por OutOfMemory a mitad del run (tramo ESIN, PDF de más de 20 MB) y se recuperó solo en unos 30 minutos; el run se reanudó con `--resume` sin repetir documentos.
+
+Lectura:
+
+- En la distribución del corpus, A supera también al GPT de producción en TDN1 (3,3 pp, significativo) y empata en TDN2. La ventaja frente a C (8,3 pp) se reduce a menos de la mitad, pero se mantiene.
+- El valor diferencial de A es la confianza: con umbral 0,9 resuelve el 62 % de los documentos al 98 %, mientras que la confianza del GPT apenas separa aciertos de fallos (86 % de acierto con confianza ≥ 0,9 frente al 84 % global).
+- Las confusiones TASA→CERJ, DOCA→DEAC y DOCN→ESCR del GPT son sistemáticas y son objetivos de reglas de contraste del catálogo, con independencia de A.
+- Siguen vigentes dos límites de §10: las etiquetas de cal y de train salen de la misma fuente (carpeta), y los umbrales se aplican sobre la confianza bruta de A. La decisión **para** de §2 sigue acotada al golden; en la distribución real los datos respaldan un híbrido (A con confianza ≥ 0,9 y el GPT para el resto), que queda como propuesta y no se ha medido.
