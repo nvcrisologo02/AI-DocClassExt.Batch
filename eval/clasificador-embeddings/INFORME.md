@@ -251,3 +251,26 @@ Lectura:
 - El valor diferencial de A es la confianza: con umbral 0,9 resuelve el 62 % de los documentos al 98 %, mientras que la confianza del GPT apenas separa aciertos de fallos (86 % de acierto con confianza ≥ 0,9 frente al 84 % global).
 - Las confusiones TASA→CERJ, DOCA→DEAC y DOCN→ESCR del GPT son sistemáticas y son objetivos de reglas de contraste del catálogo, con independencia de A.
 - Siguen vigentes dos límites de §10: las etiquetas de cal y de train salen de la misma fuente (carpeta), y los umbrales se aplican sobre la confianza bruta de A. La decisión **para** de §2 sigue acotada al golden; en la distribución real los datos respaldan un híbrido (A con confianza ≥ 0,9 y el GPT para el resto), que queda como propuesta y no se ha medido.
+
+## 12. Híbrido A + GPT de producción sobre cal (2026-09-30, AB#100779)
+
+Mide el híbrido propuesto en §11 fuera de línea y a coste cero, sobre los mismos 1.576 documentos: si la confianza TDN1 de A alcanza el umbral se toma la predicción de A (TDN1 y TDN2) y, si no, la del GPT de producción del run `eval/runs/20260928-215126-gpt-cal`. Fuente: `hibrido_cal.py`.
+
+| Umbral de A | Llamadas GPT ahorradas | TDN1 híbrido | TDN2 híbrido |
+|---|---|---|---|
+| 0,50 | 90,9 % | **0,896** | 0,640 |
+| 0,60 | 86,1 % | 0,895 | 0,642 |
+| 0,70 | 79,9 % | 0,887 | 0,643 |
+| 0,90 | 61,7 % | 0,860 | 0,623 |
+| solo A | — | 0,872 | 0,615 |
+| solo GPT | 0 % | 0,839 | 0,600 |
+
+- El punto planteado en §11 (umbral 0,9) mejora al GPT solo (+2,1 pp en TDN1; McNemar 39/5, p = 1,4·10⁻⁷) pero no a A solo (−1,2 pp, p = 0,18): A también supera al GPT en el tramo de baja confianza (≈70 % frente a 66,8 % con confianza < 0,9), así que derivar ese tramo al GPT no aporta acierto, solo reparte carga.
+- El óptimo está en 0,5-0,6. Con umbral 0,6 el híbrido supera a los dos componentes con significación: en TDN1, +5,7 pp frente al GPT (111/23, p = 5·10⁻¹⁵) y +2,4 pp frente a A (63/28, p = 3·10⁻⁴); en TDN2, 0,642 frente a 0,600 del GPT (p = 4·10⁻⁵) y 0,615 de A (p = 6·10⁻⁶). Ahorra el 86 % de las llamadas GPT de clasificación (el 91 % con umbral 0,5, con TDN1 equivalente).
+- Por familia (umbral 0,9, n ≥ 10): el híbrido mejora sobre todo DOCN (+25,7 pp), TASA (+12,7) y CERJ (+9,3); el GPT conserva ventaja en PBLO (−5,6) y DOCJ (−1,7).
+
+Lectura:
+
+- El valor del híbrido no es solo el coste: a umbral 0,6 gana en acierto a sus dos componentes, porque la confianza de A separa bien sus aciertos y el GPT solo aporta donde A duda.
+- Cifras sobre cal (distribución del corpus), con los límites de §10-§11 (misma fuente de etiquetas, confianza bruta sin calibrador). El umbral definitivo se decide con datos de la fase de sombra.
+- Continuación en ADO, bajo la Feature AB#99948: AB#100779 (híbrido en el orquestador, con ADR), AB#100780 (crecimiento y reentreno versionado), AB#100781 (promoción DEV → PRE → PRO por ai-artifacts; verificado el 2026-09-30 que los tres entornos tienen `text-embedding-3-large` v1 con los mismos nombres de deployment) y AB#100782 (regla de contraste TASA→CERJ del GPT, independiente de A).
