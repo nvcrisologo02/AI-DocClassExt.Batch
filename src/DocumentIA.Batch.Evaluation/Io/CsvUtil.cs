@@ -73,6 +73,24 @@ public static class CsvUtil
         return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
+    /// <summary>
+    /// Anexa una fila al final del fichero; si no existe lo crea con la cabecera. Cada llamada
+    /// abre, escribe y cierra, de modo que una fila termina en disco antes de seguir.
+    /// </summary>
+    public static void AppendRow(string path, IEnumerable<string> header, IEnumerable<string?> row)
+    {
+        var exists = File.Exists(path) && new FileInfo(path).Length > 0;
+        var utf8Bom = new UTF8Encoding(encoderShouldEmitUTF8Identifier: !exists);
+        using var writer = new StreamWriter(path, append: true, utf8Bom);
+        writer.NewLine = "\r\n";
+        if (!exists)
+        {
+            writer.WriteLine(string.Join(Delimiter, header.Select(EscapeField)));
+        }
+
+        writer.WriteLine(string.Join(Delimiter, row.Select(EscapeField)));
+    }
+
     public static IReadOnlyList<string[]> ReadRows(string path)
     {
         using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);

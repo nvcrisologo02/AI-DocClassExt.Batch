@@ -15,29 +15,32 @@ public static class ResultsCsv
     };
 
     public static void Write(string path, IEnumerable<EvaluationResultRow> rows)
-    {
-        var lines = rows.Select(r => (IEnumerable<string?>)new[]
-        {
-            r.RelPath,
-            r.FileName,
-            r.ExpectedTdn1,
-            r.ExpectedTdn2,
-            r.PredictedTdn1,
-            r.PredictedTdn2,
-            r.Confianza?.ToString("F4", CultureInfo.InvariantCulture),
-            r.Proveedor,
-            r.Fallback ? "True" : "False",
-            r.DuracionMs.ToString(CultureInfo.InvariantCulture),
-            r.Estado,
-            r.Error,
-            r.EstadoContrato,
-            r.RateLimit ? "True" : "False",
-            r.OrigenMarkdown,
-            r.CorrelationId
-        });
+        => CsvUtil.WriteRows(path, Header, rows.Select(ToFields));
 
-        CsvUtil.WriteRows(path, Header, lines);
-    }
+    /// <summary>Anexa una fila (creando el fichero con cabecera si no existe): permite que un run
+    /// interrumpido conserve lo ya clasificado y se reanude con --resume.</summary>
+    public static void Append(string path, EvaluationResultRow row)
+        => CsvUtil.AppendRow(path, Header, ToFields(row));
+
+    private static IEnumerable<string?> ToFields(EvaluationResultRow r) => new[]
+    {
+        r.RelPath,
+        r.FileName,
+        r.ExpectedTdn1,
+        r.ExpectedTdn2,
+        r.PredictedTdn1,
+        r.PredictedTdn2,
+        r.Confianza?.ToString("F4", CultureInfo.InvariantCulture),
+        r.Proveedor,
+        r.Fallback ? "True" : "False",
+        r.DuracionMs.ToString(CultureInfo.InvariantCulture),
+        r.Estado,
+        r.Error,
+        r.EstadoContrato,
+        r.RateLimit ? "True" : "False",
+        r.OrigenMarkdown,
+        r.CorrelationId
+    };
 
     public static List<EvaluationResultRow> Read(string path)
     {
