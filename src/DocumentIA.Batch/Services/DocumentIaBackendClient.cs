@@ -396,6 +396,10 @@ public class IngestInstrucciones
     [JsonPropertyName("skipGDCUpload")]
     public bool? SkipGdcUpload { get; set; }
 
+    /// <summary>Procesa el documento completo sin aplicar el limite de paginas.</summary>
+    [JsonPropertyName("forzarProcesadoSinLimitePaginas")]
+    public bool ForzarProcesadoSinLimitePaginas { get; set; }
+
     [JsonPropertyName("classification")]
     public IngestIaConfig Classification { get; set; } = new();
 
@@ -446,6 +450,15 @@ public class IngestPromptConfig
 
     [JsonPropertyName("userPromptTemplate")]
     public string? UserPromptTemplate { get; set; }
+
+    [JsonPropertyName("modelKey")]
+    public string? ModelKey { get; set; }
+
+    [JsonPropertyName("temperature")]
+    public double? Temperature { get; set; }
+
+    [JsonPropertyName("maxTokens")]
+    public int? MaxTokens { get; set; }
 }
 
 public class IngestDocumento
@@ -455,6 +468,10 @@ public class IngestDocumento
 
     [JsonPropertyName("content")]
     public IngestDocumentoContent Content { get; set; } = new();
+
+    /// <summary>Object ID del documento en GDC; el backend lo descarga en lugar de recibir el contenido.</summary>
+    [JsonPropertyName("objectIdGDC")]
+    public string? ObjectIdGDC { get; set; }
 }
 
 public class IngestDocumentoContent
@@ -474,6 +491,9 @@ public class IngestTrazabilidad
     /// </summary>
     [JsonPropertyName("submittedBy")]
     public string SubmittedBy { get; set; } = string.Empty;
+
+    [JsonPropertyName("idActivo")]
+    public string? IdActivo { get; set; }
 }
 
 public class IngestResponse
