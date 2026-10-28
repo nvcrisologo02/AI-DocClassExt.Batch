@@ -10,12 +10,14 @@ using DocumentIA.Batch.Services;
 namespace DocumentIA.Batch.IvaCedente.Commands;
 
 /// <summary>Resumen de una pasada: cuenta por fila de salida generada en esta pasada, no por documento.</summary>
-public sealed record ResumenProceso(int Total, int Omitidas, int Procesadas, int Ok, int NoAplica, int NoEsTitulo, int SinContenido, int NoParseable, int Errores, int Timeouts);
+public sealed record ResumenProceso(int Total, int Omitidas, int Procesadas, int Ok, int NoAplica, int NoEsTitulo, int SinContenido, int NoParseable, int Errores, int Timeouts, bool Interrumpida = false);
 
 /// <summary>Comando procesar: orquesta el lote con colas limitadas, una llamada por Object ID y reanudación.</summary>
 public static class ProcesarCommand
 {
     private const int DocumentosPorAvance = 10;
+    private const int IntentosEscritura = 6;
+    private static readonly TimeSpan EsperaEscritura = TimeSpan.FromSeconds(10);
 
     public static async Task<int> ExecuteAsync(string[] args)
     {
@@ -65,12 +67,17 @@ public static class ProcesarCommand
                 Console.WriteLine("Proceso cancelado. Relanza el mismo comando para continuar con lo pendiente.");
             }
 
+            if (cts.IsCancellationRequested || resumen.Interrumpida)
+            {
+                return 3;
+            }
+
             return resumen.Errores == 0 && resumen.Timeouts == 0 ? 0 : 2;
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
             Console.WriteLine("Proceso cancelado. Relanza el mismo comando para continuar con lo pendiente.");
-            return 0;
+            return 3;
         }
         finally
         {
@@ -87,18 +94,23 @@ public static class ProcesarCommand
         var pendientes = Reanudacion.Pendientes(entrada, previas, reintentarErrores);
         var grupos = pendientes.GroupBy(f => f.ObjectId).Select(g => g.ToList()).ToList();
 
+        var espera = delay ?? Task.Delay;
         var procesador = new ProcesadorDocumento(backend, config, prompts, delay);
         var nuevas = new List<FilaDocumento>();
-        var bloqueo = new object();
+        var bloqueo = new SemaphoreSlim(1, 1);
         var documentosHechos = 0;
+        var anexadoRoto = false;
         var reloj = Stopwatch.StartNew();
         using var semaforo = new SemaphoreSlim(Math.Max(1, config.Colas));
+        // Cancelación interna: si no se puede escribir la salida se deja de facturar a PRO.
+        using var ctsInterno = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var token = ctsInterno.Token;
 
         async Task ProcesarGrupoAsync(List<FilaEntrada> grupo)
         {
             try
             {
-                await semaforo.WaitAsync(ct);
+                await semaforo.WaitAsync(token);
             }
             catch (OperationCanceledException)
             {
@@ -107,21 +119,38 @@ public static class ProcesarCommand
 
             try
             {
-                if (ct.IsCancellationRequested)
+                if (token.IsCancellationRequested)
                 {
                     return;
                 }
 
-                var primera = await procesador.ProcesarAsync(grupo[0], ct);
+                var primera = await procesador.ProcesarAsync(grupo[0], token);
                 var filas = new List<FilaDocumento> { primera };
                 filas.AddRange(grupo.Skip(1).Select(e => primera.ParaActivo(e.IdSareb, e.Tdn2)));
 
-                lock (bloqueo)
+                // El resultado ya está facturado: se conserva en memoria pase lo que pase con el fichero.
+                await bloqueo.WaitAsync(CancellationToken.None);
+                try
                 {
-                    foreach (var fila in filas)
+                    nuevas.AddRange(filas);
+                    if (!anexadoRoto)
                     {
-                        SalidaDocumentosCsv.Anexar(salidaPath, fila);
-                        nuevas.Add(fila);
+                        var anexadas = 0;
+                        var anexado = await EscribirConReintentosAsync(
+                            () =>
+                            {
+                                for (; anexadas < filas.Count; anexadas++)
+                                {
+                                    SalidaDocumentosCsv.Anexar(salidaPath, filas[anexadas]);
+                                }
+                            },
+                            salidaPath, consola, espera, token);
+                        if (!anexado)
+                        {
+                            anexadoRoto = true;
+                            consola.WriteLine("No se puede escribir en la salida: se detiene la pasada. Lo ya procesado se conserva en memoria para la escritura final.");
+                            ctsInterno.Cancel();
+                        }
                     }
 
                     documentosHechos++;
@@ -130,8 +159,12 @@ public static class ProcesarCommand
                         consola.WriteLine(LineaAvance(documentosHechos, grupos.Count, nuevas, reloj.Elapsed));
                     }
                 }
+                finally
+                {
+                    bloqueo.Release();
+                }
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
             {
                 // Documento en vuelo cancelado: no se anexa y queda pendiente.
             }
@@ -143,16 +176,58 @@ public static class ProcesarCommand
 
         await Task.WhenAll(grupos.Select(ProcesarGrupoAsync));
 
-        lock (bloqueo)
+        if (documentosHechos % DocumentosPorAvance != 0 || documentosHechos == 0)
         {
-            if (documentosHechos % DocumentosPorAvance != 0 || documentosHechos == 0)
+            consola.WriteLine(LineaAvance(documentosHechos, grupos.Count, nuevas, reloj.Elapsed));
+        }
+
+        var fusionadas = Reanudacion.Fusionar(entrada, previas, nuevas);
+        var escrito = await EscribirConReintentosAsync(() => SalidaDocumentosCsv.Escribir(salidaPath, fusionadas),
+            salidaPath, consola, espera, CancellationToken.None);
+        if (!escrito)
+        {
+            throw new IvaCedenteUsageException(
+                $"No se pudo escribir la salida '{salidaPath}'. Ciérrala en Excel y relanza el mismo comando; lo ya anexado al fichero se conserva.");
+        }
+
+        var resumen = Resumir(entrada.Count, entrada.Count - pendientes.Count, nuevas);
+        return resumen with { Interrumpida = anexadoRoto };
+    }
+
+    /// <summary>
+    /// Ejecuta una escritura de fichero; ante IOException (típicamente Excel con el fichero abierto) avisa y
+    /// reintenta con espera. Devuelve false si se agotan los intentos o se cancela durante la espera.
+    /// </summary>
+    private static async Task<bool> EscribirConReintentosAsync(Action escribir, string ruta, TextWriter consola,
+        Func<TimeSpan, CancellationToken, Task> espera, CancellationToken ct)
+    {
+        for (var intento = 1; intento <= IntentosEscritura; intento++)
+        {
+            try
             {
-                consola.WriteLine(LineaAvance(documentosHechos, grupos.Count, nuevas, reloj.Elapsed));
+                escribir();
+                return true;
+            }
+            catch (IOException)
+            {
+                consola.WriteLine($"No se puede escribir en {ruta}: ciérralo en Excel. Reintentando...");
+                if (intento == IntentosEscritura)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await espera(EsperaEscritura, ct);
+                }
+                catch (OperationCanceledException)
+                {
+                    return false;
+                }
             }
         }
 
-        SalidaDocumentosCsv.Escribir(salidaPath, Reanudacion.Fusionar(entrada, previas, nuevas));
-        return Resumir(entrada.Count, entrada.Count - pendientes.Count, nuevas);
+        return false;
     }
 
     private static string LineaAvance(int hechos, int totalDocumentos, List<FilaDocumento> nuevas, TimeSpan transcurrido)

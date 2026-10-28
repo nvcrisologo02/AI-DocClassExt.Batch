@@ -29,6 +29,11 @@ public static class Program
             Console.Error.WriteLine($"Error: {ex.Message}");
             return 1;
         }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Error inesperado: {ex.Message}");
+            return 1;
+        }
     }
 
     private static int PrintUnknownCommand(string command)

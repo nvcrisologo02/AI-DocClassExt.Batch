@@ -135,4 +135,57 @@ public class ProcesarCommandTests : IDisposable
         Assert.Equal(2, segundaBackend.Requests.Count);
         Assert.All(SalidaDocumentosCsv.Leer(_salida), f => Assert.Equal(EstadosProcesado.Ok, f.Procesado));
     }
+    [Fact]
+    public async Task Ejecutar_SalidaBloqueadaPorExcel_ReintentaYNoPierdeLaFila()
+    {
+        EscribirEntrada(("A1", "A", "ESCR-10"));
+        FileStream? bloqueo = null;
+        var backend = BackendOk();
+        backend.OnStatus = _ =>
+        {
+            bloqueo ??= new FileStream(_salida, FileMode.Create, FileAccess.Write, FileShare.Read);
+            return FakeIngestBackend.CompletedStatus("OK", "ESCR-10", JsonSi);
+        };
+        var esperas = 0;
+
+        var resumen = await ProcesarCommand.EjecutarAsync(_entrada, _salida, Config(), new Prompts("s", "u"), backend, false,
+            TextWriter.Null, CancellationToken.None, (_, _) =>
+            {
+                if (bloqueo is not null)
+                {
+                    esperas++;
+                    bloqueo.Dispose();
+                    bloqueo = null;
+                }
+
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(1, esperas);
+        Assert.Equal(1, resumen.Ok);
+        var filas = SalidaDocumentosCsv.Leer(_salida);
+        Assert.Equal(EstadosProcesado.Ok, Assert.Single(filas).Procesado);
+    }
+
+    [Fact]
+    public async Task Ejecutar_SalidaBloqueadaParaSiempre_AgotaReintentosYFallaSinTraza()
+    {
+        EscribirEntrada(("A1", "A", "ESCR-10"), ("A2", "B", "ESCR-10"));
+        FileStream? bloqueo = null;
+        var backend = BackendOk();
+        backend.OnStatus = _ =>
+        {
+            bloqueo ??= new FileStream(_salida, FileMode.Create, FileAccess.Write, FileShare.Read);
+            return FakeIngestBackend.CompletedStatus("OK", "ESCR-10", JsonSi);
+        };
+
+        var ex = await Assert.ThrowsAsync<IvaCedenteUsageException>(() =>
+            ProcesarCommand.EjecutarAsync(_entrada, _salida, Config(colas: 1), new Prompts("s", "u"), backend, false,
+                TextWriter.Null, CancellationToken.None, (_, _) => Task.CompletedTask));
+
+        bloqueo?.Dispose();
+        Assert.Contains("salida.csv", ex.Message);
+        // La pasada se cancela tras agotar el anexado: no se factura el segundo documento.
+        Assert.Single(backend.Requests);
+    }
 }
