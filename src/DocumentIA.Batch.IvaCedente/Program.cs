@@ -1,3 +1,5 @@
+using DocumentIA.Batch.IvaCedente.Commands;
+
 namespace DocumentIA.Batch.IvaCedente;
 
 public static class Program
@@ -14,12 +16,13 @@ public static class Program
 
         try
         {
-            // Los comandos procesar y consolidar se cablean en tareas posteriores.
-            return await Task.FromResult(command.ToLowerInvariant() switch
+            // El comando consolidar se cablea en una tarea posterior.
+            return command.ToLowerInvariant() switch
             {
+                "procesar" => await ProcesarCommand.ExecuteAsync(args[1..]),
                 "help" or "--help" or "-h" => PrintUsageAndSucceed(),
                 _ => PrintUnknownCommand(command)
-            });
+            };
         }
         catch (IvaCedenteUsageException ex)
         {
