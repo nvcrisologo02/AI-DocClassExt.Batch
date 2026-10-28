@@ -96,4 +96,31 @@ public class ConsolidadorTests
         Assert.Equal(new[] { "9", "3" }, r.Select(x => x.IdSareb));
         Assert.Equal(2, r[0].Documentos);
     }
+
+    [Theory]
+    [InlineData(EstadosProcesado.Error)]
+    [InlineData(EstadosProcesado.Timeout)]
+    [InlineData(EstadosProcesado.Pendiente)]
+    public void Consolidar_ActivoConFilaIncompleta_MarcaRevisarSinCambiarLosValores(string estado)
+    {
+        var filas = new[]
+        {
+            Titulo("1", "A", "sí", "sí"),
+            new FilaDocumento { IdSareb = "1", ObjectId = "B", Procesado = estado },
+        };
+        var a = Assert.Single(Consolidador.Consolidar(filas));
+        Assert.Equal("sí", a.Revisar);
+        Assert.Equal("sí", a.HuboIVA);
+
+        var sinTitulo = Assert.Single(Consolidador.Consolidar(new[] { new FilaDocumento { IdSareb = "2", ObjectId = "C", Procesado = estado } }));
+        Assert.Equal(Consolidador.SinTitulo, sinTitulo.HuboIVA);
+        Assert.Equal("sí", sinTitulo.Revisar);
+    }
+
+    [Fact]
+    public void Consolidar_ActivoCompletoSinContradiccion_NoMarcaRevisar()
+    {
+        var a = Assert.Single(Consolidador.Consolidar(new[] { Titulo("1", "A", "sí") }));
+        Assert.Equal("no", a.Revisar);
+    }
 }

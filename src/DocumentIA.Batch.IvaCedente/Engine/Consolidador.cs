@@ -20,7 +20,8 @@ public static class Consolidador
             string hubo;
             string deduccion;
             var soporte = "";
-            var revisar = false;
+            // Un activo con alguna fila sin resolver (pendiente, error o timeout) puede tener un título sin leer.
+            var revisar = docs.Any(f => f.Procesado is EstadosProcesado.Pendiente or EstadosProcesado.Error or EstadosProcesado.Timeout);
 
             if (conRespuesta.Count == 0)
             {
@@ -38,7 +39,7 @@ public static class Consolidador
                     soporte = string.Join(",", conRespuesta.Where(f => f.HuboIVA == hubo).Select(f => f.ObjectId).Distinct());
                 }
 
-                revisar = Contradice(conRespuesta.Select(f => f.HuboIVA)) || Contradice(deducciones);
+                revisar |= Contradice(conRespuesta.Select(f => f.HuboIVA)) || Contradice(deducciones);
             }
 
             resultado.Add(new FilaActivo
