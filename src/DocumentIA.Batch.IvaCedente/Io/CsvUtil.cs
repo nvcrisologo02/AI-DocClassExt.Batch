@@ -132,4 +132,23 @@ public static class CsvUtil
             writer.WriteLine(string.Join(Delimiter, row.Select(EscapeField)));
         }
     }
+
+    /// <summary>
+    /// Como WriteRows pero atómica: escribe en "path.tmp" y lo mueve sobre el destino, de modo que un
+    /// fallo a medias no deja el fichero truncado.
+    /// </summary>
+    public static void WriteRowsAtomic(string path, IEnumerable<string> header, IEnumerable<IEnumerable<string?>> rows)
+    {
+        var tmp = path + ".tmp";
+        try
+        {
+            WriteRows(tmp, header, rows);
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch
+        {
+            try { File.Delete(tmp); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            throw;
+        }
+    }
 }

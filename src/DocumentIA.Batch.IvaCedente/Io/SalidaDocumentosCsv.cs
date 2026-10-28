@@ -23,7 +23,7 @@ public static class SalidaDocumentosCsv
         => CsvUtil.AppendRow(path, Cabecera, ALista(fila));
 
     public static void Escribir(string path, IEnumerable<FilaDocumento> filas)
-        => CsvUtil.WriteRows(path, Cabecera, filas.Select(ALista));
+        => CsvUtil.WriteRowsAtomic(path, Cabecera, filas.Select(ALista));
 
     public static List<FilaDocumento> Leer(string path)
     {
@@ -35,7 +35,7 @@ public static class SalidaDocumentosCsv
 
         foreach (var c in CsvUtil.ReadRows(path).Skip(1))
         {
-            string T(int i) => i < c.Length ? Desneutralizar(c[i]) : "";
+            string T(int i) => i < c.Length ? AntiFormula.Desneutralizar(c[i]) : "";
             var conf = T(10);
             var fecha = T(15);
             resultado.Add(new FilaDocumento
@@ -74,23 +74,12 @@ public static class SalidaDocumentosCsv
 
         return new[]
         {
-            Neutralizar(f.IdSareb), Neutralizar(f.ObjectId), Neutralizar(f.Tdn2), Neutralizar(f.Procesado),
-            Neutralizar(f.EsTituloPrevio), Neutralizar(f.HuboIVA), Neutralizar(f.DeduccionIVA),
-            Neutralizar(f.Cedente), Neutralizar(f.FechaAdquisicion), Neutralizar(evidencia),
+            AntiFormula.Neutralizar(f.IdSareb), AntiFormula.Neutralizar(f.ObjectId), AntiFormula.Neutralizar(f.Tdn2), AntiFormula.Neutralizar(f.Procesado),
+            AntiFormula.Neutralizar(f.EsTituloPrevio), AntiFormula.Neutralizar(f.HuboIVA), AntiFormula.Neutralizar(f.DeduccionIVA),
+            AntiFormula.Neutralizar(f.Cedente), AntiFormula.Neutralizar(f.FechaAdquisicion), AntiFormula.Neutralizar(evidencia),
             f.Confianza?.ToString("R", CultureInfo.InvariantCulture) ?? "",
-            Neutralizar(f.Tipologia), Neutralizar(f.InstanceId), Neutralizar(f.CorrelationId), Neutralizar(f.Error),
+            AntiFormula.Neutralizar(f.Tipologia), AntiFormula.Neutralizar(f.InstanceId), AntiFormula.Neutralizar(f.CorrelationId), AntiFormula.Neutralizar(f.Error),
             f.Fecha?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
         };
     }
-
-    private static string Neutralizar(string? valor)
-    {
-        valor ??= "";
-        return valor.Length > 0 && valor[0] is '=' or '+' or '-' or '@' or '\t' or '\r' or '\''
-            ? "'" + valor
-            : valor;
-    }
-
-    private static string Desneutralizar(string valor)
-        => valor.Length > 0 && valor[0] == '\'' ? valor[1..] : valor;
 }

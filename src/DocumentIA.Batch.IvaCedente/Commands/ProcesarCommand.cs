@@ -195,7 +195,7 @@ public static class ProcesarCommand
     }
 
     /// <summary>
-    /// Ejecuta una escritura de fichero; ante IOException (típicamente Excel con el fichero abierto) avisa y
+    /// Ejecuta una escritura de fichero; ante IOException o UnauthorizedAccessException (típicamente Excel con el fichero abierto) avisa y
     /// reintenta con espera. Devuelve false si se agotan los intentos o se cancela durante la espera.
     /// </summary>
     private static async Task<bool> EscribirConReintentosAsync(Action escribir, string ruta, TextWriter consola,
@@ -208,8 +208,9 @@ public static class ProcesarCommand
                 escribir();
                 return true;
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                // En Windows, mover sobre un fichero abierto en Excel da UnauthorizedAccessException.
                 consola.WriteLine($"No se puede escribir en {ruta}: ciérralo en Excel. Reintentando...");
                 if (intento == IntentosEscritura)
                 {
