@@ -64,7 +64,16 @@ Un mismo Object ID que aparece en varios activos se envía una sola vez a Docume
 
 En consola se muestra el entorno, la URL, las colas y las filas pendientes, y cada 10 documentos una línea de avance: `[hechos/total] OK=… noAplica=… noTitulo=… errores=… media=… s`.
 
-Código de salida: `0` si no hubo errores ni timeouts en la pasada; `2` si los hubo; `1` ante un error de uso o configuración.
+No abras la salida en Excel mientras corre; abre una copia. Si Excel (u otro programa) tiene el fichero bloqueado, el programa avisa (`No se puede escribir en <ruta>: ciérralo en Excel. Reintentando...`) y reintenta 6 veces con 10 segundos de espera. Si se agotan, conserva el resultado en memoria, detiene la pasada para no facturar más documentos y, al final, intenta la escritura completa con los mismos reintentos; si también falla, termina con un mensaje claro y código `1`.
+
+Códigos de salida:
+
+| Código | Significado |
+|---|---|
+| `0` | Pasada completa sin errores ni timeouts. |
+| `1` | Error de uso, de configuración o no se pudo escribir la salida. |
+| `2` | Pasada completa con algún `error` o `timeout`. |
+| `3` | Pasada interrumpida (Ctrl+C o imposibilidad de escribir la salida); tiene prioridad sobre el `2`. Lo pendiente se retoma relanzando. |
 
 ### Filtro por TDN2 y caminos
 
@@ -75,9 +84,10 @@ Código de salida: `0` si no hubo errores ni timeouts en la pasada; `2` si los h
 
 ### Reintentos y cancelación
 
-- Se reintenta el paso (hasta `MaxReintentos` veces) ante una excepción, incluido un timeout de HTTP, ante una orquestación `Failed` o `Terminated` y ante los estados `ERROR` y `PENDIENTE_REINTENTO` del contrato de DocumentIA.
+- Hay dos niveles de reintento. El reintento de consulta: si falla una consulta del estado de la orquestación, se repite solo la consulta (no se reenvía el documento) hasta 5 fallos seguidos o hasta `TimeoutMinutos`. El reintento de paso: se reenvía el paso completo (hasta `MaxReintentos` veces) ante una excepción del ingest, incluido un timeout de HTTP, ante una orquestación `Failed` o `Terminated`, ante cinco fallos seguidos de consulta y ante los estados `ERROR` y `PENDIENTE_REINTENTO` del contrato de DocumentIA. `MaxReintentos = 2` son 3 intentos en total.
+- Entre intentos del paso se espera `PollingIntervalSeconds * (intento + 1)` segundos.
 - Si se agota la espera de `TimeoutMinutos`, la fila queda como `timeout`.
-- Ctrl+C no cuenta como error: se espera a escribir lo ya procesado, el documento en vuelo queda pendiente y el mismo comando continúa donde se dejó.
+- Ctrl+C no cuenta como error: se espera a escribir lo ya procesado, el documento en vuelo queda pendiente, el código de salida es `3` y el mismo comando continúa donde se dejó. La orquestación que estaba en vuelo sigue ejecutándose en PRO y se volverá a facturar al relanzar ese documento.
 
 ## CSV por documento
 
@@ -95,7 +105,7 @@ Separador `;`, UTF-8 con BOM, una fila por par activo y documento. Columnas:
 | `Confianza` | Número entre 0 y 1, con punto decimal. |
 | `Tipologia` | Tipología que devuelve DocumentIA. |
 | `InstanceId`, `CorrelationId` | Identificadores de la última llamada, para localizarla en PRO. |
-| `Error` | Mensaje cuando `Procesado` es `error` o `timeout`. |
+| `Error` | Mensaje cuando `Procesado` es `error` o `timeout`. Si el estado del contrato de DocumentIA no es `OK`, se anota también aunque la fila acabe `OK` (por ejemplo `Estado del contrato: REVISION`). |
 | `Fecha` | Instante de procesado en UTC (ISO 8601). |
 
 Valores de `Procesado`:
@@ -106,7 +116,7 @@ Valores de `Procesado`:
 | `OK` | Respuesta del prompt leída. | No |
 | `no aplica` | TDN2 excluido. | No |
 | `no es título` | La preclasificación dijo que no es un título previo. | No |
-| `sin contenido` | DocumentIA no pudo obtener contenido del documento. | No |
+| `sin contenido` | DocumentIA devolvió el estado `SIN_CONTENIDO_DOCUMENTO` (se acepta también `SIN_CONTENIDO`): no pudo obtener contenido del documento. | No |
 | `respuesta no parseable` | La respuesta del prompt no era JSON válido. | No |
 | `error` | Fallo tras agotar reintentos. | Solo con `--reintentar-errores` |
 | `timeout` | Espera agotada. | Solo con `--reintentar-errores` |
@@ -118,7 +128,7 @@ Dos detalles del fichero:
 
 ## Reanudación
 
-El CSV de salida es el estado. Cada resultado se anexa al fichero en cuanto llega, y al terminar la pasada se reescribe completo en el orden de la entrada. Al relanzar `procesar` con la misma entrada y la misma salida se saltan las filas ya resueltas (`OK`, `no aplica`, `no es título`, `sin contenido` y `respuesta no parseable`); las que fallaron por `error` o `timeout` se dejan como están salvo que se pase `--reintentar-errores`. Las filas `pendiente` y las que faltan en la salida se procesan siempre. Para volver a procesar una fila ya resuelta hay que quitarla del CSV de salida.
+El CSV de salida es el estado. Cada resultado se anexa al fichero en cuanto llega, y al terminar la pasada se reescribe completo (de forma atómica, vía un fichero `.tmp`) en el orden de la entrada. Si se relanza con otra entrada, las filas previas cuyo activo y Object ID ya no están en ella se conservan al final del fichero. Al relanzar `procesar` con la misma entrada y la misma salida se saltan las filas ya resueltas (`OK`, `no aplica`, `no es título`, `sin contenido` y `respuesta no parseable`); las que fallaron por `error` o `timeout` se dejan como están salvo que se pase `--reintentar-errores`. Las filas `pendiente` y las que faltan en la salida se procesan siempre. Para volver a procesar una fila ya resuelta hay que quitarla del CSV de salida.
 
 ## Comando `consolidar`
 
@@ -126,7 +136,7 @@ El CSV de salida es el estado. Cada resultado se anexa al fichero en cuanto lleg
 dotnet run --project src/DocumentIA.Batch.IvaCedente -- consolidar --entrada resultado.csv --salida activos-consolidado.csv
 ```
 
-Lee el CSV por documento y escribe una fila por activo. No necesita configuración ni red, y se puede repetir las veces que haga falta. Imprime cuántos activos se consolidaron y cuántos quedan para revisar. Columnas:
+Lee el CSV por documento y escribe una fila por activo. No necesita configuración ni red, y se puede repetir las veces que haga falta. Imprime cuántos activos se consolidaron, cuántos quedan para revisar y cuántas filas siguen en `pendiente`, `error` o `timeout`. Columnas:
 
 | Columna | Contenido |
 |---|---|
@@ -137,7 +147,7 @@ Lee el CSV por documento y escribe una fila por activo. No necesita configuraci�
 | `HuboIVA` | `sí`, `no`, `no consta` o `sin título` (ningún documento del activo es un título previo con respuesta). |
 | `DeduccionIVA` | `sí`, `no`, `no consta`, `no aplica` (ningún título indica deducción aplicable) o `sin título`. |
 | `ObjectIdsSoporte` | Object IDs, separados por coma, de los documentos que sostienen el valor cuando `HuboIVA` es `sí` o `no`. |
-| `Revisar` | `sí` si el activo tiene a la vez `sí` y `no` (en IVA o en deducción) entre sus títulos; `no` en otro caso. |
+| `Revisar` | `sí` si el activo tiene a la vez `sí` y `no` (en IVA o en deducción) entre sus títulos, o si alguna de sus filas sigue en `pendiente`, `error` o `timeout` (el proceso está incompleto y puede haber un título sin leer); `no` en otro caso. |
 
 Regla de agregación, igual para IVA y para deducción: gana el `sí` si algún título lo dice; si no hay `sí` y hay algún `no`, `no`; si no, `no consta`. Los valores `no aplica` de la deducción no cuentan en la agregación.
 
