@@ -1,0 +1,18 @@
+{
+  "Entorno": "PRO",
+  "Environments": [
+    { "Name": "DEV", "BackendUrl": "https://srbappdevdocai.azurewebsites.net", "FunctionKey": "" },
+    { "Name": "PRO", "BackendUrl": "https://srbappprodocai.azurewebsites.net", "FunctionKey": "" }
+  ],
+  "Colas": 3,
+  "CodigosExcluidos": [ "TASA-11", "SCXX-00" ],
+  "CodigosPreclasificar": [ "SCXX-00" ],
+  "ForzarSinLimitePaginas": true,
+  "ModelKey": null,
+  "PromptSystemPath": "prompts/system.md",
+  "PromptUserPath": "prompts/user.md",
+  "PollingIntervalSeconds": 30,
+  "TimeoutMinutos": 30,
+  "MaxReintentos": 2,
+  "MaxPaginasClasificacion": 10
+}

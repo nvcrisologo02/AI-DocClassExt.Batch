@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="config.sample.json" Condition="Exists('config.sample.json')" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="config.sample.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="prompts\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
