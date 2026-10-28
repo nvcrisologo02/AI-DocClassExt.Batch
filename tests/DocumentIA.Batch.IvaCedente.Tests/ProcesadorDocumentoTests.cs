@@ -113,13 +113,44 @@ public class ProcesadorDocumentoTests
         Assert.Equal("bla", fila.Evidencia);
     }
 
-    [Fact]
-    public async Task EstadoSinContenido_MarcaSinContenido()
+    [Theory]
+    [InlineData("SIN_CONTENIDO_DOCUMENTO")]
+    [InlineData("SIN_CONTENIDO")]
+    public async Task EstadoSinContenido_MarcaSinContenido(string estado)
     {
-        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus("SIN_CONTENIDO", "ESCR-10", null) };
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus(estado, "ESCR-10", null) };
         var fila = await Procesar(Crear(backend), "ESCR-10");
 
         Assert.Equal(EstadosProcesado.SinContenido, fila.Procesado);
+    }
+
+    [Fact]
+    public async Task DosLlamadas_SinContenidoEnLaClasificacion_NoLanzaElPrompt()
+    {
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus("SIN_CONTENIDO_DOCUMENTO", null, null) };
+        var fila = await Procesar(Crear(backend, ConfigDosLlamadas()), "SCXX-00");
+
+        Assert.Single(backend.Requests);
+        Assert.Equal(EstadosProcesado.SinContenido, fila.Procesado);
+    }
+
+    [Fact]
+    public async Task EstadoDeContratoNoOk_SeAnotaEnErrorAunqueLaFilaAcabeOk()
+    {
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus("REVISION", "ESCR-10", JsonSi) };
+        var fila = await Procesar(Crear(backend), "ESCR-10");
+
+        Assert.Equal(EstadosProcesado.Ok, fila.Procesado);
+        Assert.Contains("REVISION", fila.Error);
+    }
+
+    [Fact]
+    public async Task EstadoDeContratoOk_NoAnotaError()
+    {
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus("OK", "ESCR-10", JsonSi) };
+        var fila = await Procesar(Crear(backend), "ESCR-10");
+
+        Assert.Equal("", fila.Error);
     }
 
     [Fact]

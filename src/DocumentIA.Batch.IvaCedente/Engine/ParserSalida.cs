@@ -12,7 +12,12 @@ public sealed record SalidaDocumentIa(string? EstadoContrato, string? Tdn2, stri
 /// <summary>Lee la salida de DocumentIA y la respuesta JSON del modelo.</summary>
 public static class ParserSalida
 {
-    public const string EstadoSinContenido = "SIN_CONTENIDO";
+    /// <summary>Valor que emite el core. Se acepta también el nombre corto por compatibilidad.</summary>
+    public const string EstadoSinContenido = "SIN_CONTENIDO_DOCUMENTO";
+
+    public static bool EsSinContenido(string? estado)
+        => string.Equals(estado, EstadoSinContenido, StringComparison.OrdinalIgnoreCase)
+           || string.Equals(estado, "SIN_CONTENIDO", StringComparison.OrdinalIgnoreCase);
 
     public static SalidaDocumentIa Leer(JsonElement output)
     {

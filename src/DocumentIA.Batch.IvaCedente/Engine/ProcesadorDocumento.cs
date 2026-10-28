@@ -54,7 +54,7 @@ public sealed class ProcesadorDocumento
                 return;
             }
 
-            if (clasificacion.Salida!.EstadoContrato == ParserSalida.EstadoSinContenido)
+            if (ParserSalida.EsSinContenido(clasificacion.Salida!.EstadoContrato))
             {
                 resultado.Procesado = EstadosProcesado.SinContenido;
                 return;
@@ -82,10 +82,16 @@ public sealed class ProcesadorDocumento
         var salida = extraccion.Salida!;
         resultado.Tipologia = !string.IsNullOrWhiteSpace(salida.Tdn2) ? salida.Tdn2! : tdn2Clasificado ?? fila.Tdn2;
 
-        if (salida.EstadoContrato == ParserSalida.EstadoSinContenido)
+        if (ParserSalida.EsSinContenido(salida.EstadoContrato))
         {
             resultado.Procesado = EstadosProcesado.SinContenido;
             return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(salida.EstadoContrato)
+            && !string.Equals(salida.EstadoContrato, "OK", StringComparison.OrdinalIgnoreCase))
+        {
+            resultado.Error = $"Estado del contrato: {salida.EstadoContrato}";
         }
 
         var respuesta = ParserSalida.ParsearRespuesta(salida.ResultadoPrompt);
