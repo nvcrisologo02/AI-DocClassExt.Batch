@@ -16,10 +16,10 @@ public static class Program
 
         try
         {
-            // El comando consolidar se cablea en una tarea posterior.
             return command.ToLowerInvariant() switch
             {
                 "procesar" => await ProcesarCommand.ExecuteAsync(args[1..]),
+                "consolidar" => ConsolidarCommand.Execute(args[1..]),
                 "help" or "--help" or "-h" => PrintUsageAndSucceed(),
                 _ => PrintUnknownCommand(command)
             };
