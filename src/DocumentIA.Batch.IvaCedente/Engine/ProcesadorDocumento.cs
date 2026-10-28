@@ -135,7 +135,7 @@ public sealed class ProcesadorDocumento
                 fila.InstanceId = respuesta.InstanceId;
                 ultimo = await EsperarResultadoAsync(respuesta.StatusQueryUri, ct);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 throw;
             }

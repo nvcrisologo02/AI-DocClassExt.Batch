@@ -162,4 +162,15 @@ public class ProcesadorDocumentoTests
         Assert.Equal(EstadosProcesado.Timeout, fila.Procesado);
         Assert.Single(backend.Requests);
     }
+
+    [Fact]
+    public async Task TimeoutDeHttp_SinCancelacion_ReintentaYMarcaError()
+    {
+        var backend = new FakeIngestBackend { OnIngest = _ => throw new TaskCanceledException("timeout http") };
+        var fila = await Procesar(Crear(backend, new IvaConfig { MaxReintentos = 2 }), "ESCR-10");
+
+        Assert.Equal(3, backend.Requests.Count);
+        Assert.Equal(EstadosProcesado.Error, fila.Procesado);
+        Assert.Contains("timeout http", fila.Error);
+    }
 }

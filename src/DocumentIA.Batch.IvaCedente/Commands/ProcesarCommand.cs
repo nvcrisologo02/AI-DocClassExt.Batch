@@ -131,7 +131,7 @@ public static class ProcesarCommand
                     }
                 }
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
                 // Documento en vuelo cancelado: no se anexa y queda pendiente.
             }
