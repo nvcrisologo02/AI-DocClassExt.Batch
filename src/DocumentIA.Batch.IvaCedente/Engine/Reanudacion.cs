@@ -34,10 +34,16 @@ public static class Reanudacion
             porClave[(n.IdSareb, n.ObjectId)] = n;
         }
 
-        return entrada
+        var resultado = entrada
             .Select(e => porClave.TryGetValue((e.IdSareb, e.ObjectId), out var f)
                 ? f
                 : new FilaDocumento { IdSareb = e.IdSareb, ObjectId = e.ObjectId, Tdn2 = e.Tdn2, Procesado = EstadosProcesado.Pendiente })
             .ToList();
+
+        // Resultados previos de documentos que la entrada actual ya no incluye: se conservan al final.
+        var enEntrada = entrada.Select(e => (e.IdSareb, e.ObjectId)).ToHashSet();
+        var vistas = new HashSet<(string, string)>();
+        resultado.AddRange(previas.Where(p => !enEntrada.Contains((p.IdSareb, p.ObjectId)) && vistas.Add((p.IdSareb, p.ObjectId))));
+        return resultado;
     }
 }

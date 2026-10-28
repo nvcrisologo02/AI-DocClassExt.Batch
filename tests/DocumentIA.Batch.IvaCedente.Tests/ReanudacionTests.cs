@@ -49,4 +49,14 @@ public class ReanudacionTests
         Assert.Equal(EstadosProcesado.Pendiente, f[4].Procesado);
         Assert.Equal("e", f[4].ObjectId);
     }
+
+    [Fact]
+    public void Fusionar_ConservaAlFinalLasPreviasQueYaNoEstanEnLaEntrada()
+    {
+        var entrada = new[] { E("2", "b"), E("9", "z") };
+        var f = Reanudacion.Fusionar(entrada, Previas, new[] { D("9", "z", EstadosProcesado.Ok) });
+        Assert.Equal(new[] { "2", "9", "1", "3", "4" }, f.Select(x => x.IdSareb));
+        Assert.Equal(EstadosProcesado.NoAplica, f[0].Procesado);
+        Assert.Equal(EstadosProcesado.Error, f[3].Procesado);
+    }
 }
