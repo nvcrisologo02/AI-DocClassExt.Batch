@@ -13,7 +13,9 @@ public class IngestRequestSerializationTests
         {
             Instrucciones = new IngestInstrucciones
             {
-                ClassificationOnly = true, SkipDuplicateCheck = true, SkipGdcUpload = true,
+                ClassificationOnly = true,
+                SkipDuplicateCheck = true,
+                SkipGdcUpload = true,
                 ForzarProcesadoSinLimitePaginas = true,
                 Prompt = new IngestPromptConfig { SystemPrompt = "s", UserPromptTemplate = "u {contenido}", ModelKey = "gpt-x" }
             },

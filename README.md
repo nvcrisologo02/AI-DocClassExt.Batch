@@ -40,6 +40,10 @@ Resultado: compilacion correcta.
 
 Nota: la ultima validacion de compilacion se ejecuto con `OutDir` temporal porque una sesion PowerShell usada para una prueba de humo mantenia bloqueada la DLL de `bin/Debug`.
 
+### Consola IvaCedente (`AB#101191`)
+
+Se anade `src/DocumentIA.Batch.IvaCedente`, una consola .NET 8 sin interfaz que llama a DocumentIA para detectar si hubo IVA en la adquisicion por la cedente y si consta su deduccion, a partir de un CSV de activos y documentos. Tiene dos comandos, `procesar` (CSV por documento, con colas en paralelo y reanudacion) y `consolidar` (CSV por activo). El manual esta en `src/DocumentIA.Batch.IvaCedente/README.md`.
+
 ## Como compilar
 
 Desde la raiz del repo:
@@ -65,6 +69,12 @@ src/DocumentIA.Batch/
 	ViewModels/    Estado y comandos de la UI
 	Views/         Dialogos secundarios
 	Resources/     Estilos WPF
+src/DocumentIA.Batch.IvaCedente/
+	Commands/      Comandos procesar y consolidar
+	Engine/        Caminos por TDN2, peticiones, procesado, reanudacion y consolidacion
+	Io/            Lectura y escritura de los CSV
+	Models/        Configuracion, filas y valores
+	prompts/       Prompts de sistema y de usuario
 ```
 
 ## Work items relacionados
@@ -86,6 +96,7 @@ src/DocumentIA.Batch/
 - `AB#99236`: completado. PBI de trazabilidad, robustez, reintentos y revision.
 - `AB#99230`: completado. Feature MVP end-to-end.
 - `AB#99229`: completado. Epic MVP DocumentIA.Batch.
+- `AB#101191`: consola IvaCedente para detectar IVA y su deduccion en el titulo previo de cada activo.
 
 ## Siguiente paso sugerido
 
