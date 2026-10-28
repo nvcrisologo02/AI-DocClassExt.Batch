@@ -204,4 +204,53 @@ public class ProcesadorDocumentoTests
         Assert.Equal(EstadosProcesado.Error, fila.Procesado);
         Assert.Contains("timeout http", fila.Error);
     }
+
+    [Fact]
+    public async Task PendienteReintento_AcabaOkEnElSegundoIntento_EsperandoEntreIntentos()
+    {
+        var esperas = new List<TimeSpan>();
+        var llamadas = 0;
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => ++llamadas == 1
+                ? FakeIngestBackend.CompletedStatus("PENDIENTE_REINTENTO", "ESCR-10", null)
+                : FakeIngestBackend.CompletedStatus("OK", "ESCR-10", JsonSi)
+        };
+        var config = new IvaConfig { MaxReintentos = 2, PollingIntervalSeconds = 1000 };
+        var procesador = new ProcesadorDocumento(backend, config, new Prompts("s", "u"), (t, _) => { esperas.Add(t); return Task.CompletedTask; });
+
+        var fila = await procesador.ProcesarAsync(new FilaEntrada("A1", "OBJ1", "ESCR-10"), CancellationToken.None);
+
+        Assert.Equal(EstadosProcesado.Ok, fila.Procesado);
+        Assert.Equal(2, backend.Requests.Count);
+        Assert.Contains(TimeSpan.FromSeconds(1000), esperas);
+    }
+
+    [Fact]
+    public async Task ErrorTransitorioDeEstado_ReintentaLaConsultaSinReenviarElIngest()
+    {
+        var llamadas = 0;
+        var backend = new FakeIngestBackend
+        {
+            OnStatus = _ => ++llamadas == 1
+                ? throw new HttpRequestException("corte puntual")
+                : FakeIngestBackend.CompletedStatus("OK", "ESCR-10", JsonSi)
+        };
+        var fila = await Procesar(Crear(backend, new IvaConfig { MaxReintentos = 2 }), "ESCR-10");
+
+        Assert.Equal(EstadosProcesado.Ok, fila.Procesado);
+        Assert.Single(backend.Requests);
+        Assert.Equal(2, llamadas);
+    }
+
+    [Fact]
+    public async Task ErroresDeEstadoSeguidos_TrasCincoFallosSeReintentaElPaso()
+    {
+        var backend = new FakeIngestBackend { OnStatus = _ => throw new HttpRequestException("caído") };
+        var fila = await Procesar(Crear(backend, new IvaConfig { MaxReintentos = 1 }), "ESCR-10");
+
+        Assert.Equal(EstadosProcesado.Error, fila.Procesado);
+        Assert.Equal(2, backend.Requests.Count);
+        Assert.Contains("caído", fila.Error);
+    }
 }

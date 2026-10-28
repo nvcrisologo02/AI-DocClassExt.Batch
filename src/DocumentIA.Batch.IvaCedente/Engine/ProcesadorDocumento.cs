@@ -10,6 +10,7 @@ public sealed class ProcesadorDocumento
 {
     private const string Si = "sí";
     private const string No = "no";
+    private const int MaxFallosConsulta = 5;
 
     private readonly IIngestBackend _backend;
     private readonly IvaConfig _config;
@@ -151,6 +152,12 @@ public sealed class ProcesadorDocumento
             }
 
             if (ultimo.Estado != EstadoPaso.Error) return ultimo;
+
+            if (intento < Math.Max(0, _config.MaxReintentos))
+            {
+                // Espera creciente antes de volver a enviar el paso a PRO.
+                await _delay(TimeSpan.FromSeconds(_config.PollingIntervalSeconds * (intento + 1)), ct);
+            }
         }
         return ultimo;
     }
@@ -158,6 +165,7 @@ public sealed class ProcesadorDocumento
     private async Task<ResultadoPaso> EsperarResultadoAsync(string statusQueryUri, CancellationToken ct)
     {
         var reloj = Stopwatch.StartNew();
+        var fallosConsecutivos = 0;
         for (var intento = 0; ; intento++)
         {
             if (_polling.IsTimedOut(reloj.Elapsed))
@@ -166,7 +174,26 @@ public sealed class ProcesadorDocumento
             }
 
             await _delay(_polling.GetDelay(intento), ct);
-            var estado = await _backend.GetStatusAsync(statusQueryUri, ct);
+            DurableStatusResponse estado;
+            try
+            {
+                estado = await _backend.GetStatusAsync(statusQueryUri, ct);
+                fallosConsecutivos = 0;
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // Fallo transitorio de la consulta: se repite la consulta, no el ingest.
+                if (++fallosConsecutivos >= MaxFallosConsulta)
+                {
+                    return new ResultadoPaso(EstadoPaso.Error, null, $"Fallo repetido al consultar el estado: {ex.Message}");
+                }
+
+                continue;
+            }
 
             if (string.Equals(estado.RuntimeStatus, "Completed", StringComparison.OrdinalIgnoreCase))
             {
