@@ -67,6 +67,36 @@ public class ProcesadorDocumentoTests
         Assert.Null(fila.CuotaIVA);
     }
 
+    [Theory]
+    [InlineData("SOCIEDAD DE GESTION DE ACTIVOS PROCEDENTES DE LA REESTRUCTURACIÓN BANCARIA SA")]
+    [InlineData("Sareb, S.A.")]
+    [InlineData("SAREB")]
+    public async Task UnaLlamada_CedenteEsSareb_NoEsTituloAunqueElModeloDigaQueSi(string cedente)
+    {
+        var json = "{\"esTituloPrevio\":true,\"huboIVA\":\"sí\",\"deduccionIVA\":\"sí\",\"cedente\":\"" + cedente + "\",\"fechaAdquisicion\":\"2013-11-22\",\"tipoIVA\":21,\"cuotaIVA\":64050,\"evidencia\":\"La Vendedora hace constar\",\"confianza\":0.95}";
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus("OK", "ESCR-10", json) };
+        var fila = await Procesar(Crear(backend), "ESCR-10");
+
+        Assert.Equal(EstadosProcesado.Ok, fila.Procesado);
+        Assert.Equal("no", fila.EsTituloPrevio);
+        Assert.Equal("no es título", fila.HuboIVA);
+        Assert.Equal("no aplica", fila.DeduccionIVA);
+        Assert.Equal(cedente, fila.Cedente);
+        Assert.Equal("", fila.FechaAdquisicion);
+        Assert.Null(fila.TipoIVA);
+        Assert.Null(fila.CuotaIVA);
+        Assert.Equal("La Vendedora hace constar", fila.Evidencia);
+    }
+
+    [Theory]
+    [InlineData("Banco Sabadell, S.A.", false)]
+    [InlineData("INVERALDE, S.L.", false)]
+    [InlineData(null, false)]
+    [InlineData("SAREB", true)]
+    [InlineData("Sociedad de Gestión de Activos procedentes de la Reestructuración Bancaria, S.A.", true)]
+    public void EsSareb_ReconoceLaDenominacionYLaSigla(string? nombre, bool esperado)
+        => Assert.Equal(esperado, ProcesadorDocumento.EsSareb(nombre));
+
     [Fact]
     public async Task NoAplica_ScxxExcluidoPorDefecto_NoLlamaAlBackend()
     {

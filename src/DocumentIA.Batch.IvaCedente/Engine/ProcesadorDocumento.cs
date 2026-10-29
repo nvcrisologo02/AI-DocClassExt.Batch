@@ -103,11 +103,15 @@ public sealed class ProcesadorDocumento
             return;
         }
 
+        // Guarda determinista: Sareb nunca es la cedente. Si el modelo la nombra como tal, el documento es una
+        // operación posterior de Sareb (venta, donación, cesión) y no el título previo, diga lo que diga esTituloPrevio.
+        var esTitulo = respuesta.EsTituloPrevio && !EsSareb(respuesta.Cedente);
+
         resultado.Procesado = EstadosProcesado.Ok;
-        resultado.EsTituloPrevio = respuesta.EsTituloPrevio ? Si : No;
+        resultado.EsTituloPrevio = esTitulo ? Si : No;
         resultado.Confianza = respuesta.Confianza;
         resultado.Evidencia = respuesta.Evidencia ?? string.Empty;
-        if (respuesta.EsTituloPrevio)
+        if (esTitulo)
         {
             resultado.HuboIVA = respuesta.HuboIVA;
             resultado.DeduccionIVA = respuesta.DeduccionIVA;
@@ -120,7 +124,22 @@ public sealed class ProcesadorDocumento
         {
             resultado.HuboIVA = ValoresIva.NoEsTitulo;
             resultado.DeduccionIVA = ValoresIva.NoAplica;
+            if (respuesta.EsTituloPrevio)
+            {
+                // Se conserva el nombre para que se vea por qué la guarda descartó el documento.
+                resultado.Cedente = respuesta.Cedente ?? string.Empty;
+            }
         }
+    }
+
+    /// <summary>Reconoce a Sareb por su sigla o por su denominación social, con o sin acentos.</summary>
+    internal static bool EsSareb(string? nombre)
+    {
+        if (string.IsNullOrWhiteSpace(nombre)) return false;
+        var n = ParserSalida.SinAcentos(nombre).ToUpperInvariant();
+        var palabras = n.Split(new[] { ' ', ',', '.', ';', ':', '(', ')', '"', '\'' }, StringSplitOptions.RemoveEmptyEntries);
+        return palabras.Contains("SAREB")
+               || (n.Contains("GESTION DE ACTIVOS") && n.Contains("REESTRUCTURACION BANCARIA"));
     }
 
     private static void AplicarFallo(FilaDocumento resultado, ResultadoPaso paso)

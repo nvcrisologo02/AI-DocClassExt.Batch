@@ -139,7 +139,7 @@ public static class ParserSalida
         return double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : null;
     }
 
-    private static string SinAcentos(string texto)
+    internal static string SinAcentos(string texto)
     {
         var sb = new StringBuilder(texto.Length);
         foreach (var c in texto.Normalize(NormalizationForm.FormD))
