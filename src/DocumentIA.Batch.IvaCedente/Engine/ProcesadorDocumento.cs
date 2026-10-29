@@ -103,9 +103,11 @@ public sealed class ProcesadorDocumento
             return;
         }
 
-        // Guarda determinista: Sareb nunca es la cedente. Si el modelo la nombra como tal, el documento es una
-        // operación posterior de Sareb (venta, donación, cesión) y no el título previo, diga lo que diga esTituloPrevio.
-        var esTitulo = respuesta.EsTituloPrevio && !EsSareb(respuesta.Cedente);
+        // Guarda determinista: Sareb nunca es parte del título previo. Si el modelo la nombra como cedente,
+        // transmitente o adquirente, el documento es una operación posterior de Sareb (venta, donación, cesión)
+        // o el traspaso a Sareb, y no el título previo, diga lo que diga esTituloPrevio.
+        var nombreSareb = new[] { respuesta.Cedente, respuesta.Transmitente, respuesta.Adquirente }.FirstOrDefault(EsSareb);
+        var esTitulo = respuesta.EsTituloPrevio && nombreSareb is null;
 
         resultado.Procesado = EstadosProcesado.Ok;
         resultado.EsTituloPrevio = esTitulo ? Si : No;
@@ -124,10 +126,10 @@ public sealed class ProcesadorDocumento
         {
             resultado.HuboIVA = ValoresIva.NoEsTitulo;
             resultado.DeduccionIVA = ValoresIva.NoAplica;
-            if (respuesta.EsTituloPrevio)
+            if (nombreSareb is not null)
             {
-                // Se conserva el nombre para que se vea por qué la guarda descartó el documento.
-                resultado.Cedente = respuesta.Cedente ?? string.Empty;
+                // Se conserva el nombre con el que apareció Sareb para que se vea por qué la guarda descartó el documento.
+                resultado.Cedente = nombreSareb;
             }
         }
     }

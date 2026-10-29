@@ -97,7 +97,7 @@ Separador `;`, UTF-8 con BOM, una fila por par activo y documento. Columnas:
 |---|---|
 | `ID_SAREB`, `Object ID del Documento`, `TDN2` | Copia de la entrada. |
 | `Procesado` | Estado de la fila (valores abajo). |
-| `EsTituloPrevio` | `sí`, `no` o vacío si no se llegó a determinar. Si el modelo dice que es título previo pero nombra a Sareb como cedente, el programa lo corrige a `no` (Sareb nunca es la cedente: el documento es una operación posterior de Sareb) y conserva el nombre en `Cedente` para que se vea el motivo. |
+| `EsTituloPrevio` | `sí`, `no` o vacío si no se llegó a determinar. Si el modelo dice que es título previo pero nombra a Sareb como cedente, transmitente o adquirente, el programa lo corrige a `no` (Sareb nunca es parte del título previo: el documento es una operación posterior de Sareb o el traspaso a Sareb) y deja en `Cedente` el nombre con el que apareció Sareb para que se vea el motivo. |
 | `HuboIVA` | `sí`, `no`, `no consta` o `no es título`. |
 | `DeduccionIVA` | `sí`, `no`, `no consta` o `no aplica`. |
 | `Cedente`, `FechaAdquisicion` | Datos que devuelve el prompt cuando el documento es un título previo. |

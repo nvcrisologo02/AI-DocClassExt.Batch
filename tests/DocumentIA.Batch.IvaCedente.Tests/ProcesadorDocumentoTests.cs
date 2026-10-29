@@ -89,6 +89,37 @@ public class ProcesadorDocumentoTests
     }
 
     [Theory]
+    [InlineData("\"transmitente\":\"SAREB\",\"adquirente\":\"NUEVA BALERMA DESARROLLOS, S.L.\"", "SAREB")]
+    [InlineData("\"transmitente\":\"PROMOTORA X, S.L.\",\"adquirente\":\"Sociedad de Gestión de Activos Procedentes de la Reestructuración Bancaria, S.A.\"", "Sociedad de Gestión de Activos Procedentes de la Reestructuración Bancaria, S.A.")]
+    public async Task UnaLlamada_SarebEsParteDelDocumento_NoEsTituloAunqueLaCedenteSeaOtra(string partes, string nombreEsperadoEnCedente)
+    {
+        var json = "{" + partes + ",\"esTituloPrevio\":true,\"huboIVA\":\"sí\",\"deduccionIVA\":\"sí\",\"cedente\":\"NUEVA BALERMA DESARROLLOS, S.L.\",\"fechaAdquisicion\":\"2013-11-22\",\"tipoIVA\":21,\"cuotaIVA\":64050,\"evidencia\":\"La Vendedora hace constar\",\"confianza\":0.95}";
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus("OK", "ESCR-10", json) };
+        var fila = await Procesar(Crear(backend), "ESCR-10");
+
+        Assert.Equal(EstadosProcesado.Ok, fila.Procesado);
+        Assert.Equal("no", fila.EsTituloPrevio);
+        Assert.Equal("no es título", fila.HuboIVA);
+        Assert.Equal("no aplica", fila.DeduccionIVA);
+        Assert.Equal(nombreEsperadoEnCedente, fila.Cedente);
+        Assert.Null(fila.TipoIVA);
+        Assert.Null(fila.CuotaIVA);
+    }
+
+    [Fact]
+    public async Task UnaLlamada_PartesSinSareb_SeRespetaAlModelo()
+    {
+        var json = "{\"transmitente\":\"PROMOTORA X, S.L.\",\"adquirente\":\"BANCO Y, S.A.\",\"esTituloPrevio\":true,\"huboIVA\":\"sí\",\"deduccionIVA\":\"sí\",\"cedente\":\"BANCO Y, S.A.\",\"fechaAdquisicion\":\"2012-06-21\",\"tipoIVA\":18,\"cuotaIVA\":1037036.16,\"evidencia\":\"repercute IVA\",\"confianza\":0.9}";
+        var backend = new FakeIngestBackend { OnStatus = _ => FakeIngestBackend.CompletedStatus("OK", "ESCR-29", json) };
+        var fila = await Procesar(Crear(backend), "ESCR-29");
+
+        Assert.Equal("sí", fila.EsTituloPrevio);
+        Assert.Equal("BANCO Y, S.A.", fila.Cedente);
+        Assert.Equal(18, fila.TipoIVA);
+        Assert.Equal(1037036.16, fila.CuotaIVA);
+    }
+
+    [Theory]
     [InlineData("Banco Sabadell, S.A.", false)]
     [InlineData("INVERALDE, S.L.", false)]
     [InlineData(null, false)]

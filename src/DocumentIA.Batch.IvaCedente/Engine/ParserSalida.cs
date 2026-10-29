@@ -46,6 +46,8 @@ public static class ParserSalida
             if (raiz.ValueKind != JsonValueKind.Object) return null;
             return new RespuestaPrompt
             {
+                Transmitente = TextoONulo(Propiedad(raiz, "transmitente")),
+                Adquirente = TextoONulo(Propiedad(raiz, "adquirente")),
                 EsTituloPrevio = LeerBool(Propiedad(raiz, "esTituloPrevio")),
                 HuboIVA = NormalizarValor(TextoONulo(Propiedad(raiz, "huboIVA")), false),
                 DeduccionIVA = NormalizarValor(TextoONulo(Propiedad(raiz, "deduccionIVA")), true),

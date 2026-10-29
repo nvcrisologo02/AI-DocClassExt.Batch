@@ -3,6 +3,12 @@ namespace DocumentIA.Batch.IvaCedente.Models;
 /// <summary>Respuesta JSON del modelo al prompt de IVA del cedente.</summary>
 public sealed class RespuestaPrompt
 {
+    /// <summary>Quién transmite el inmueble en el documento, según el modelo. Solo se usa para la guarda de Sareb.</summary>
+    public string? Transmitente { get; set; }
+
+    /// <summary>Quién adquiere el inmueble en el documento, según el modelo. Solo se usa para la guarda de Sareb.</summary>
+    public string? Adquirente { get; set; }
+
     public bool EsTituloPrevio { get; set; }
     public string HuboIVA { get; set; } = ValoresIva.NoConsta;
     public string DeduccionIVA { get; set; } = ValoresIva.NoConsta;

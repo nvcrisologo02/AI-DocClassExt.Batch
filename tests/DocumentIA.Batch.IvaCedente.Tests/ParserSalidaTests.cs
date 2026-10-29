@@ -28,6 +28,18 @@ public class ParserSalidaTests
     }
 
     [Fact]
+    public void ParsearRespuesta_LeeTransmitenteYAdquirente()
+    {
+        var r = ParserSalida.ParsearRespuesta("{\"transmitente\":\"SAREB\",\"adquirente\":\"NUEVA BALERMA DESARROLLOS, S.L.\",\"esTituloPrevio\":true}")!;
+        Assert.Equal("SAREB", r.Transmitente);
+        Assert.Equal("NUEVA BALERMA DESARROLLOS, S.L.", r.Adquirente);
+
+        r = ParserSalida.ParsearRespuesta("{\"esTituloPrevio\":true}")!;
+        Assert.Null(r.Transmitente);
+        Assert.Null(r.Adquirente);
+    }
+
+    [Fact]
     public void ParsearRespuesta_LeeTipoYCuotaIva_NumericosOConTexto()
     {
         var r = ParserSalida.ParsearRespuesta("{\"esTituloPrevio\":true,\"huboIVA\":\"sí\",\"tipoIVA\":21,\"cuotaIVA\":64050.5}")!;
