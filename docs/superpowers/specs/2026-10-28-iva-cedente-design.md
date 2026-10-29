@@ -67,7 +67,9 @@ Decisión del usuario: 1. Tamaño: cambio pequeño, diseño corto.
 - Avance en consola: procesados/total, OK, errores, en curso, tiempo medio por documento.
 - Columnas de salida por documento: las tres de entrada más `Procesado`, `EsTituloPrevio`, `HuboIVA`, `DeduccionIVA`,
   `Cedente`, `FechaAdquisicion`, `Evidencia`, `Confianza`, `Tipologia` (la que devuelva DocumentIA), `InstanceId`,
-  `CorrelationId`, `Error`, `Fecha`.
+  `CorrelationId`, `Error`, `Fecha`. Ajuste del 2026-10-29, pedido por el usuario tras la tanda de humo en PRO:
+  se añaden `TipoIVA` y `CuotaIVA` (porcentaje y cuota en euros de la adquisición por la cedente) detrás de
+  `FechaAdquisicion`, y la salida se lee por nombre de cabecera para que una salida anterior se reanude igual.
 - Consolidación por activo: `ID_SAREB`, `Documentos`, `Leidos`, `ConRespuesta`, `HuboIVA`, `DeduccionIVA`,
   `ObjectIdsSoporte`, `Revisar`. Regla: algún "sí" gana; si no hay "sí" y hay algún "no", no; si todo "no consta",
   no consta. `Revisar = sí` cuando hay "sí" y "no" en el mismo activo. Misma regla para la deducción.

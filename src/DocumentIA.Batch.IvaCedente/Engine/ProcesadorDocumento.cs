@@ -113,6 +113,8 @@ public sealed class ProcesadorDocumento
             resultado.DeduccionIVA = respuesta.DeduccionIVA;
             resultado.Cedente = respuesta.Cedente ?? string.Empty;
             resultado.FechaAdquisicion = respuesta.FechaAdquisicion ?? string.Empty;
+            resultado.TipoIVA = respuesta.TipoIVA;
+            resultado.CuotaIVA = respuesta.CuotaIVA;
         }
         else
         {

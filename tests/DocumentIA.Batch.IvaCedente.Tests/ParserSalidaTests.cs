@@ -27,6 +27,22 @@ public class ParserSalidaTests
         Assert.Equal(0.8, r.Confianza);
     }
 
+    [Fact]
+    public void ParsearRespuesta_LeeTipoYCuotaIva_NumericosOConTexto()
+    {
+        var r = ParserSalida.ParsearRespuesta("{\"esTituloPrevio\":true,\"huboIVA\":\"sí\",\"tipoIVA\":21,\"cuotaIVA\":64050.5}")!;
+        Assert.Equal(21, r.TipoIVA);
+        Assert.Equal(64050.5, r.CuotaIVA);
+
+        r = ParserSalida.ParsearRespuesta("{\"esTituloPrevio\":true,\"tipoIVA\":\"18%\",\"cuotaIVA\":\"64.050,00 €\"}")!;
+        Assert.Equal(18, r.TipoIVA);
+        Assert.Equal(64050, r.CuotaIVA);
+
+        r = ParserSalida.ParsearRespuesta("{\"esTituloPrevio\":true,\"tipoIVA\":null,\"cuotaIVA\":\"no consta\"}")!;
+        Assert.Null(r.TipoIVA);
+        Assert.Null(r.CuotaIVA);
+    }
+
     [Theory]
     [InlineData("no es JSON")]
     [InlineData("")]

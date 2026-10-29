@@ -13,7 +13,7 @@ public static class SalidaDocumentosCsv
     public static readonly string[] Cabecera =
     {
         "ID_SAREB", "Object ID del Documento", "TDN2", "Procesado", "EsTituloPrevio", "HuboIVA", "DeduccionIVA",
-        "Cedente", "FechaAdquisicion", "Evidencia", "Confianza", "Tipologia", "InstanceId", "CorrelationId", "Error", "Fecha",
+        "Cedente", "FechaAdquisicion", "TipoIVA", "CuotaIVA", "Evidencia", "Confianza", "Tipologia", "InstanceId", "CorrelationId", "Error", "Fecha",
     };
 
     private const int MaxEvidencia = 4000;
@@ -33,28 +33,43 @@ public static class SalidaDocumentosCsv
             return resultado;
         }
 
-        foreach (var c in CsvUtil.ReadRows(path).Skip(1))
+        var filas = CsvUtil.ReadRows(path);
+        if (filas.Count == 0)
         {
-            string T(int i) => i < c.Length ? AntiFormula.Desneutralizar(c[i]) : "";
-            var conf = T(10);
-            var fecha = T(15);
+            return resultado;
+        }
+
+        // Las columnas se localizan por su nombre de cabecera: una salida escrita por una versión
+        // anterior, sin alguna columna, se sigue leyendo (la columna ausente queda vacía).
+        var indice = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < filas[0].Length; i++)
+        {
+            indice[filas[0][i].Trim((char)0xFEFF, ' ')] = i;
+        }
+
+        foreach (var c in filas.Skip(1))
+        {
+            string T(string columna) => indice.TryGetValue(columna, out var i) && i < c.Length ? AntiFormula.Desneutralizar(c[i]) : "";
+            var fecha = T("Fecha");
             resultado.Add(new FilaDocumento
             {
-                IdSareb = T(0),
-                ObjectId = T(1),
-                Tdn2 = T(2),
-                Procesado = T(3),
-                EsTituloPrevio = T(4),
-                HuboIVA = T(5),
-                DeduccionIVA = T(6),
-                Cedente = T(7),
-                FechaAdquisicion = T(8),
-                Evidencia = T(9),
-                Confianza = double.TryParse(conf, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null,
-                Tipologia = T(11),
-                InstanceId = T(12),
-                CorrelationId = T(13),
-                Error = T(14),
+                IdSareb = T("ID_SAREB"),
+                ObjectId = T("Object ID del Documento"),
+                Tdn2 = T("TDN2"),
+                Procesado = T("Procesado"),
+                EsTituloPrevio = T("EsTituloPrevio"),
+                HuboIVA = T("HuboIVA"),
+                DeduccionIVA = T("DeduccionIVA"),
+                Cedente = T("Cedente"),
+                FechaAdquisicion = T("FechaAdquisicion"),
+                TipoIVA = Numero(T("TipoIVA")),
+                CuotaIVA = Numero(T("CuotaIVA")),
+                Evidencia = T("Evidencia"),
+                Confianza = Numero(T("Confianza")),
+                Tipologia = T("Tipologia"),
+                InstanceId = T("InstanceId"),
+                CorrelationId = T("CorrelationId"),
+                Error = T("Error"),
                 Fecha = DateTime.TryParse(fecha, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var f)
                     ? DateTime.SpecifyKind(f, DateTimeKind.Utc)
                     : null,
@@ -63,6 +78,12 @@ public static class SalidaDocumentosCsv
 
         return resultado;
     }
+
+    private static double? Numero(string texto)
+        => double.TryParse(texto, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;
+
+    private static string Numero(double? valor)
+        => valor?.ToString("R", CultureInfo.InvariantCulture) ?? "";
 
     private static string?[] ALista(FilaDocumento f)
     {
@@ -76,8 +97,8 @@ public static class SalidaDocumentosCsv
         {
             AntiFormula.Neutralizar(f.IdSareb), AntiFormula.Neutralizar(f.ObjectId), AntiFormula.Neutralizar(f.Tdn2), AntiFormula.Neutralizar(f.Procesado),
             AntiFormula.Neutralizar(f.EsTituloPrevio), AntiFormula.Neutralizar(f.HuboIVA), AntiFormula.Neutralizar(f.DeduccionIVA),
-            AntiFormula.Neutralizar(f.Cedente), AntiFormula.Neutralizar(f.FechaAdquisicion), AntiFormula.Neutralizar(evidencia),
-            f.Confianza?.ToString("R", CultureInfo.InvariantCulture) ?? "",
+            AntiFormula.Neutralizar(f.Cedente), AntiFormula.Neutralizar(f.FechaAdquisicion), Numero(f.TipoIVA), Numero(f.CuotaIVA), AntiFormula.Neutralizar(evidencia),
+            Numero(f.Confianza),
             AntiFormula.Neutralizar(f.Tipologia), AntiFormula.Neutralizar(f.InstanceId), AntiFormula.Neutralizar(f.CorrelationId), AntiFormula.Neutralizar(f.Error),
             f.Fecha?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
         };

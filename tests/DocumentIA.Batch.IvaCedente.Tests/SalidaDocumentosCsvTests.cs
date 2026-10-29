@@ -23,6 +23,8 @@ public class SalidaDocumentosCsvTests
             DeduccionIVA = ValoresIva.NoConsta,
             Cedente = "Banco; S.A.",
             FechaAdquisicion = "01/02/2020",
+            TipoIVA = 21,
+            CuotaIVA = 64050.5,
             Evidencia = "precio; \"con IVA\"\nlínea 2",
             Confianza = 0.85,
             Tipologia = "tipo",
@@ -40,11 +42,34 @@ public class SalidaDocumentosCsvTests
         var l = leidas[0];
         Assert.Equal(fila.Evidencia, l.Evidencia);
         Assert.Equal(0.85, l.Confianza);
+        Assert.Equal(21, l.TipoIVA);
+        Assert.Equal(64050.5, l.CuotaIVA);
         Assert.Equal(fila.Fecha, l.Fecha);
         Assert.Equal(DateTimeKind.Utc, l.Fecha!.Value.Kind);
         Assert.Equal("Banco; S.A.", l.Cedente);
         Assert.Equal("97061", leidas[1].IdSareb);
         Assert.Equal(string.Join(';', SalidaDocumentosCsv.Cabecera), File.ReadLines(path).First().TrimStart('﻿'));
+    }
+
+    [Fact]
+    public void Leer_FicheroSinColumnasDeIva_LeePorNombreDeCabecera()
+    {
+        var path = RutaTemporal();
+        File.WriteAllLines(path, new[]
+        {
+            "ID_SAREB;Object ID del Documento;TDN2;Procesado;EsTituloPrevio;HuboIVA;DeduccionIVA;Cedente;FechaAdquisicion;Evidencia;Confianza;Tipologia;InstanceId;CorrelationId;Error;Fecha",
+            "1;2;ESCR-10;OK;sí;sí;sí;Banco;2008-05-12;ev;0.9;ESCR-10;i1;c1;;2026-10-29T09:40:55Z",
+        });
+
+        var l = Assert.Single(SalidaDocumentosCsv.Leer(path));
+
+        Assert.Equal("OK", l.Procesado);
+        Assert.Equal("i1", l.InstanceId);
+        Assert.Equal("c1", l.CorrelationId);
+        Assert.Equal(0.9, l.Confianza);
+        Assert.Null(l.TipoIVA);
+        Assert.Null(l.CuotaIVA);
+        Assert.NotNull(l.Fecha);
     }
 
     [Fact]

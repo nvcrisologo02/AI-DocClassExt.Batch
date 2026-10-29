@@ -12,6 +12,8 @@ public sealed class FilaDocumento
     public string DeduccionIVA { get; set; } = "";
     public string Cedente { get; set; } = "";
     public string FechaAdquisicion { get; set; } = "";
+    public double? TipoIVA { get; set; }
+    public double? CuotaIVA { get; set; }
     public string Evidencia { get; set; } = "";
     public string Tipologia { get; set; } = "";
     public string InstanceId { get; set; } = "";

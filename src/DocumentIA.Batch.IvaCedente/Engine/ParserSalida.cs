@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using DocumentIA.Batch.ClassificationLite.Engine;
 using DocumentIA.Batch.IvaCedente.Models;
 
@@ -50,6 +51,8 @@ public static class ParserSalida
                 DeduccionIVA = NormalizarValor(TextoONulo(Propiedad(raiz, "deduccionIVA")), true),
                 Cedente = TextoONulo(Propiedad(raiz, "cedente")),
                 FechaAdquisicion = TextoONulo(Propiedad(raiz, "fechaAdquisicion")),
+                TipoIVA = LeerImporte(Propiedad(raiz, "tipoIVA")),
+                CuotaIVA = LeerImporte(Propiedad(raiz, "cuotaIVA")),
                 Evidencia = TextoONulo(Propiedad(raiz, "evidencia")),
                 Confianza = LeerNumero(Propiedad(raiz, "confianza"))
             };
@@ -107,6 +110,33 @@ public static class ParserSalida
             && double.TryParse(e.Value.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var n))
             return n;
         return null;
+    }
+
+    /// <summary>
+    /// Número que el modelo puede devolver como texto con símbolos ("21%", "64.050,00 €"). Se quitan
+    /// símbolos y espacios; con coma decimal se eliminan los puntos de miles; un texto solo con grupos
+    /// de tres cifras separados por puntos ("64.050") se toma como miles. Lo que no sea número queda null.
+    /// </summary>
+    private static double? LeerImporte(JsonElement? e)
+    {
+        if (e is null) return null;
+        if (e.Value.ValueKind == JsonValueKind.Number) return e.Value.GetDouble();
+        if (e.Value.ValueKind != JsonValueKind.String) return null;
+
+        var t = e.Value.GetString()!
+            .Replace("%", "").Replace("€", "").Replace("EUR", "", StringComparison.OrdinalIgnoreCase)
+            .Replace(" ", "").Replace(((char)0xA0).ToString(), "").Trim();
+        if (t.Length == 0) return null;
+        if (t.Contains(','))
+        {
+            t = t.Replace(".", "").Replace(',', '.');
+        }
+        else if (Regex.IsMatch(t, @"^\d{1,3}(\.\d{3})+$"))
+        {
+            t = t.Replace(".", "");
+        }
+
+        return double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var n) ? n : null;
     }
 
     private static string SinAcentos(string texto)

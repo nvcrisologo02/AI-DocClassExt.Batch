@@ -7,8 +7,8 @@ namespace DocumentIA.Batch.IvaCedente.Tests;
 
 public class ProcesadorDocumentoTests
 {
-    private const string JsonSi = "{\"esTituloPrevio\":true,\"huboIVA\":\"sí\",\"deduccionIVA\":\"sí\",\"cedente\":\"Banco X\",\"fechaAdquisicion\":\"2008-05-12\",\"evidencia\":\"con renuncia a la exención\",\"confianza\":0.9}";
-    private const string JsonNoTitulo = "{\"esTituloPrevio\":false,\"huboIVA\":\"no consta\",\"deduccionIVA\":\"no aplica\",\"cedente\":null,\"fechaAdquisicion\":null,\"evidencia\":null,\"confianza\":0.95}";
+    private const string JsonSi = "{\"esTituloPrevio\":true,\"huboIVA\":\"sí\",\"deduccionIVA\":\"sí\",\"cedente\":\"Banco X\",\"fechaAdquisicion\":\"2008-05-12\",\"evidencia\":\"con renuncia a la exención\",\"confianza\":0.9,\"tipoIVA\":21,\"cuotaIVA\":64050}";
+    private const string JsonNoTitulo = "{\"esTituloPrevio\":false,\"huboIVA\":\"no consta\",\"deduccionIVA\":\"no aplica\",\"cedente\":null,\"fechaAdquisicion\":null,\"evidencia\":null,\"confianza\":0.95,\"tipoIVA\":21,\"cuotaIVA\":100}";
 
     private static ProcesadorDocumento Crear(FakeIngestBackend backend, IvaConfig? config = null)
         => new(backend, config ?? new IvaConfig(), new Prompts("sistema", "usuario"), (_, _) => Task.CompletedTask);
@@ -42,6 +42,8 @@ public class ProcesadorDocumentoTests
         Assert.Equal("sí", fila.DeduccionIVA);
         Assert.Equal("Banco X", fila.Cedente);
         Assert.Equal("2008-05-12", fila.FechaAdquisicion);
+        Assert.Equal(21, fila.TipoIVA);
+        Assert.Equal(64050, fila.CuotaIVA);
         Assert.Equal("con renuncia a la exención", fila.Evidencia);
         Assert.Equal(0.9, fila.Confianza);
         Assert.Equal("ESCR-10", fila.Tipologia);
@@ -61,6 +63,8 @@ public class ProcesadorDocumentoTests
         Assert.Equal("no", fila.EsTituloPrevio);
         Assert.Equal("no es título", fila.HuboIVA);
         Assert.Equal("no aplica", fila.DeduccionIVA);
+        Assert.Null(fila.TipoIVA);
+        Assert.Null(fila.CuotaIVA);
     }
 
     [Fact]
