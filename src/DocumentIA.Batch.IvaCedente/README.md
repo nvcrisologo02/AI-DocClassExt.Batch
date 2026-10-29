@@ -149,10 +149,18 @@ Lee el CSV por documento y escribe una fila por activo. No necesita configuraci�
 | `ConRespuesta` | Documentos `OK` que son título previo (`EsTituloPrevio = sí`); solo estos cuentan para la decisión. |
 | `HuboIVA` | `sí`, `no`, `no consta` o `sin título` (ningún documento del activo es un título previo con respuesta). |
 | `DeduccionIVA` | `sí`, `no`, `no consta`, `no aplica` (ningún título indica deducción aplicable) o `sin título`. |
-| `ObjectIdsSoporte` | Object IDs, separados por coma, de los documentos que sostienen el valor cuando `HuboIVA` es `sí` o `no`. |
-| `Revisar` | `sí` si el activo tiene a la vez `sí` y `no` (en IVA o en deducción) entre sus títulos, o si alguna de sus filas sigue en `pendiente`, `error` o `timeout` (el proceso está incompleto y puede haber un título sin leer); `no` en otro caso. |
+| `DocIVA` | Object ID del título elegido que sostiene `HuboIVA` cuando vale `sí` o `no`; vacío en `no consta` y `sin título`. |
+| `TipoIVA`, `CuotaIVA` | Tipo (porcentaje) y cuota en euros del título elegido, solo cuando `HuboIVA = sí`; números con punto decimal, como en el CSV por documento. |
+| `Cedente`, `FechaAdquisicion` | Del título elegido. |
+| `DocDeduccion` | Object ID del título elegido que sostiene `DeduccionIVA` cuando vale `sí` o `no`; vacío en otro caso. |
+| `Sustento` | Frase legible: `IVA sí 21% 64.050,00 € (doc 12345, cedente BANCO X, 2008-03-12); deducción sí (doc 12345)`. Variantes: `IVA no (doc …)`, `IVA no consta; deducción no consta`, `sin título previo`. Tipo y cuota en formato español; se omite lo que falte. |
+| `MotivoRevisar` | Motivos de `Revisar`, separados por `;` y en este orden: `filas sin resolver (n)`, `IVA contradictorio`, `deducción contradictoria`, `cuotas de IVA distintas`. Vacío cuando `Revisar = no`. |
+| `ObjectIdsSoporte` | Object IDs, separados por coma, de todos los documentos que sostienen el valor cuando `HuboIVA` es `sí` o `no`. |
+| `Revisar` | `sí` si hay algún motivo en `MotivoRevisar`: títulos con `sí` y `no` a la vez (en IVA o en deducción), filas en `pendiente`, `error` o `timeout` (el proceso está incompleto y puede haber un título sin leer) o cuotas de IVA distintas entre los títulos con IVA; `no` en otro caso. |
 
 Regla de agregación, igual para IVA y para deducción: gana el `sí` si algún título lo dice; si no hay `sí` y hay algún `no`, `no`; si no, `no consta`. Los valores `no aplica` de la deducción no cuentan en la agregación.
+
+Elección del título de sustento: entre los títulos cuyo `HuboIVA` coincide con el valor consolidado, el que tenga `CuotaIVA`; a igualdad, el que tenga `TipoIVA`; a igualdad, mayor `Confianza`; a igualdad, el primero en el orden del fichero. Para la deducción se prefiere el mismo documento que `DocIVA` si la sostiene; si no, la misma regla sobre los títulos cuya `DeduccionIVA` coincide con el valor consolidado.
 
 ## Coste en PRO y tanda de humo
 
