@@ -41,6 +41,14 @@ public class ConstructorPeticionesTests
         var config = new IvaConfig { TipologiaForzada = "resumen.documental" };
         var r = ConstructorPeticiones.ConPrompt(new FilaEntrada("1", "2", "ESCR-10"), config, new Prompts("S", "U"), "c");
         Assert.Equal("resumen.documental", r.Instrucciones.ExpectedType);
+        Assert.False(r.Instrucciones.ClassificationOnly);
+    }
+
+    [Fact]
+    public void ConPrompt_SinTipologiaForzada_MantieneSoloClasificacion()
+    {
+        var r = ConstructorPeticiones.ConPrompt(new FilaEntrada("1", "2", "ESCR-10"), new IvaConfig(), new Prompts("S", "U"), "c");
+        Assert.True(r.Instrucciones.ClassificationOnly);
     }
 
     [Fact]

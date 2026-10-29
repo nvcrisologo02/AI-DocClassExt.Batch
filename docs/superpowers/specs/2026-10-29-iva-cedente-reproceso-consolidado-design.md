@@ -75,6 +75,8 @@ Regla nueva de revisión: si entre los títulos con `HuboIVA = sí` hay más de 
 
 - `DocDeduccion`: cuando el título de `DocIVA` no sostiene la deducción, el código aplica la misma regla completa que para `DocIVA` (cuota, luego tipo, luego confianza, luego orden), no solo confianza y orden. Así lo fijó el plan y lo documenta el README; el efecto práctico es mínimo porque los títulos con deducción casi siempre coinciden con los que traen cuota.
 - Implementado en la rama `feature/101191-iva-cedente-sustento`; revisión final sin hallazgos críticos ni importantes.
+- Corrección tras el primer reproceso (35 filas, todas con 400): el trigger HTTP del core (`IngestAPITrigger`) rechaza `ExpectedType` junto con `ClassificationOnly`, validación que el diseño no comprobó (solo se miró el orquestador). Decisión del usuario: con tipología forzada la petición con prompt deja de ser de solo clasificación. Verificado en el core para `resumen.documental`: clasificación omitida, extracción deshabilitada en la tipología, sin plugins, subida a GDC omitida por `SkipGDCUpload`, prompt libre ejecutado en el camino normal. Queda por comprobar en PRO con una tanda corta.
+- Hallazgo para la línea core: en el lote original, 3 documentos clasificados por fallback GPT parcial salieron sin ejecutar el prompt libre (`DetalleEjecucion.Prompt` nulo, solo `Resumen`). No se corrige desde la consola.
 
 ## Lo que queda al constructor
 
