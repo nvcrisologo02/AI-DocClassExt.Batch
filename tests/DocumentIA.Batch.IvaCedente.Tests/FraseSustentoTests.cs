@@ -11,8 +11,14 @@ public class FraseSustentoTests
     {
         var a = new FilaActivo
         {
-            HuboIVA = "sí", TipoIVA = 21, CuotaIVA = 64050, DocIVA = "12345", Cedente = "BANCO X", FechaAdquisicion = "2008-03-12",
-            DeduccionIVA = "sí", DocDeduccion = "12345",
+            HuboIVA = "sí",
+            TipoIVA = 21,
+            CuotaIVA = 64050,
+            DocIVA = "12345",
+            Cedente = "BANCO X",
+            FechaAdquisicion = "2008-03-12",
+            DeduccionIVA = "sí",
+            DocDeduccion = "12345",
         };
         Assert.Equal("IVA sí 21% 64.050,00 € (doc 12345, cedente BANCO X, 2008-03-12); deducción sí (doc 12345)", FraseSustento.Componer(a));
     }
