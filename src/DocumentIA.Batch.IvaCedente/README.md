@@ -9,7 +9,7 @@ Hace dos cosas, cada una con su comando:
 
 ## Qué envía a DocumentIA
 
-Cada petición lleva `ClassificationOnly = true`, `SkipDuplicateCheck = true` (la clave de deduplicación no incluye el prompt), `SkipGdcUpload = true`, el `ObjectIdGDC` del documento, el `IdActivo` en la trazabilidad y el prompt de `prompts/system.md` y `prompts/user.md`. No se envía contenido del documento (ni base64 ni ruta de blob): DocumentIA lo recupera de GDC por su Object ID. Las ejecuciones quedan con un `SubmittedBy` propio de este programa para localizarlas en PRO.
+Cada petición lleva `ClassificationOnly = true`, `SkipDuplicateCheck = true` (la clave de deduplicación no incluye el prompt), `SkipGdcUpload = true`, el `ObjectIdGDC` del documento, el `IdActivo` en la trazabilidad y el prompt de `prompts/system.md` y `prompts/user.md`. El prompt de sistema fija quién es la cedente (Sareb nunca lo es: si Sareb transmite o adquiere en el documento, no es el título previo), pide el tipo y la cuota de IVA y una confianza razonada por tramos; se ajustó tras la tanda de humo en PRO del 2026-10-29. No se envía contenido del documento (ni base64 ni ruta de blob): DocumentIA lo recupera de GDC por su Object ID. Las ejecuciones quedan con un `SubmittedBy` propio de este programa para localizarlas en PRO.
 
 ## Compilar
 
@@ -101,6 +101,7 @@ Separador `;`, UTF-8 con BOM, una fila por par activo y documento. Columnas:
 | `HuboIVA` | `sí`, `no`, `no consta` o `no es título`. |
 | `DeduccionIVA` | `sí`, `no`, `no consta` o `no aplica`. |
 | `Cedente`, `FechaAdquisicion` | Datos que devuelve el prompt cuando el documento es un título previo. |
+| `TipoIVA`, `CuotaIVA` | Porcentaje y cuota en euros del IVA de la adquisición por la cedente, como números con punto decimal, cuando el prompt los encuentra. Vacíos si no hubo IVA, no constan o el documento no es título previo. |
 | `Evidencia` | Cita literal corta del documento (ver truncado más abajo). Con `respuesta no parseable`, el texto bruto devuelto. |
 | `Confianza` | Número entre 0 y 1, con punto decimal. |
 | `Tipologia` | Tipología que devuelve DocumentIA. |
@@ -128,7 +129,7 @@ Dos detalles del fichero:
 
 ## Reanudación
 
-El CSV de salida es el estado. Cada resultado se anexa al fichero en cuanto llega, y al terminar la pasada se reescribe completo (de forma atómica, vía un fichero `.tmp`) en el orden de la entrada. Si se relanza con otra entrada, las filas previas cuyo activo y Object ID ya no están en ella se conservan al final del fichero. Al relanzar `procesar` con la misma entrada y la misma salida se saltan las filas ya resueltas (`OK`, `no aplica`, `no es título`, `sin contenido` y `respuesta no parseable`); las que fallaron por `error` o `timeout` se dejan como están salvo que se pase `--reintentar-errores`. Las filas `pendiente` y las que faltan en la salida se procesan siempre. Para volver a procesar una fila ya resuelta hay que quitarla del CSV de salida.
+El CSV de salida es el estado. Sus columnas se leen por nombre de cabecera, así que una salida escrita por una versión anterior sin alguna columna (por ejemplo `TipoIVA` y `CuotaIVA`) se reanuda igual. Cada resultado se anexa al fichero en cuanto llega, y al terminar la pasada se reescribe completo (de forma atómica, vía un fichero `.tmp`) en el orden de la entrada. Si se relanza con otra entrada, las filas previas cuyo activo y Object ID ya no están en ella se conservan al final del fichero. Al relanzar `procesar` con la misma entrada y la misma salida se saltan las filas ya resueltas (`OK`, `no aplica`, `no es título`, `sin contenido` y `respuesta no parseable`); las que fallaron por `error` o `timeout` se dejan como están salvo que se pase `--reintentar-errores`. Las filas `pendiente` y las que faltan en la salida se procesan siempre. Para volver a procesar una fila ya resuelta hay que quitarla del CSV de salida.
 
 ## Comando `consolidar`
 
