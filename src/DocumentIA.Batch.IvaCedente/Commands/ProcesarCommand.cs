@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using DocumentIA.Batch.ClassificationLite.Engine;
 using DocumentIA.Batch.IvaCedente.Engine;
@@ -28,10 +28,7 @@ public static class ProcesarCommand
         var reintentarErrores = cli.Has("reintentar-errores");
 
         var config = IvaConfigLoader.Cargar(configPath);
-        if (cli.Has("colas"))
-        {
-            config.Colas = cli.GetIntOrDefault("colas", config.Colas);
-        }
+        AplicarOpciones(cli, config);
 
         if (config.Colas < 1)
         {
@@ -47,6 +44,11 @@ public static class ProcesarCommand
         Console.WriteLine($"Entorno: {entorno.Name}");
         Console.WriteLine($"URL: {entorno.BackendUrl}");
         Console.WriteLine($"Colas: {config.Colas}");
+        if (!string.IsNullOrWhiteSpace(config.TipologiaForzada))
+        {
+            Console.WriteLine($"Tipología forzada: {config.TipologiaForzada}");
+        }
+
         Console.WriteLine($"Entrada: {entrada}");
         Console.WriteLine($"Salida: {salida}");
         Console.WriteLine($"Filas pendientes: {pendientes.Count} de {filasEntrada.Count}");
@@ -82,6 +84,21 @@ public static class ProcesarCommand
         finally
         {
             Console.CancelKeyPress -= manejador;
+        }
+    }
+
+    /// <summary>Aplica sobre la configuración las opciones de línea de comandos que la sustituyen: --colas y --tipologia.</summary>
+    public static void AplicarOpciones(CliArgs cli, IvaConfig config)
+    {
+        if (cli.Has("colas"))
+        {
+            config.Colas = cli.GetIntOrDefault("colas", config.Colas);
+        }
+
+        if (cli.Has("tipologia"))
+        {
+            var tipologia = cli.GetOrDefault("tipologia", string.Empty).Trim();
+            config.TipologiaForzada = tipologia.Length == 0 ? null : tipologia;
         }
     }
 

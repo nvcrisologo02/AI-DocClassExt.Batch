@@ -1,4 +1,4 @@
-using DocumentIA.Batch.IvaCedente.Commands;
+﻿using DocumentIA.Batch.IvaCedente.Commands;
 
 namespace DocumentIA.Batch.IvaCedente;
 
@@ -55,7 +55,7 @@ public static class Program
             DocumentIA.Batch.IvaCedente — consola headless que detecta IVA y su deducción en el título previo de cada activo.
 
             Uso:
-              procesar --entrada <csv> --salida <csv> [--config <ruta>] [--colas <n>] [--reintentar-errores]
+              procesar --entrada <csv> --salida <csv> [--config <ruta>] [--colas <n>] [--tipologia <codigo>] [--reintentar-errores]
               consolidar --entrada <csv por documento> --salida <csv por activo>
               help
             """);

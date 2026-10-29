@@ -1,4 +1,4 @@
-using DocumentIA.Batch.Models;
+﻿using DocumentIA.Batch.Models;
 
 namespace DocumentIA.Batch.IvaCedente.Models;
 
@@ -18,6 +18,9 @@ public sealed class IvaConfig
     public List<string> CodigosPreclasificar { get; set; } = new() { "SCXX-00" };
     public bool ForzarSinLimitePaginas { get; set; } = true;
     public string? ModelKey { get; set; }
+
+    /// <summary>Código de tipología enviado como ExpectedType en la llamada con prompt; null para clasificar.</summary>
+    public string? TipologiaForzada { get; set; }
     public string PromptSystemPath { get; set; } = "prompts/system.md";
     public string PromptUserPath { get; set; } = "prompts/user.md";
     public int PollingIntervalSeconds { get; set; } = 30;

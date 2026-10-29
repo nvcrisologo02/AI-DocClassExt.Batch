@@ -1,4 +1,4 @@
-using DocumentIA.Batch.IvaCedente.Engine;
+﻿using DocumentIA.Batch.IvaCedente.Engine;
 using DocumentIA.Batch.IvaCedente.Models;
 using Xunit;
 
@@ -34,5 +34,27 @@ public class ConstructorPeticionesTests
         Assert.Equal("gpt-x", r.Instrucciones.Prompt.ModelKey);
         Assert.True(r.Instrucciones.ForzarProcesadoSinLimitePaginas);
         Assert.True(r.Instrucciones.ClassificationOnly);
+    }
+    [Fact]
+    public void ConPrompt_ConTipologiaForzada_LaEnviaComoExpectedType()
+    {
+        var config = new IvaConfig { TipologiaForzada = "resumen.documental" };
+        var r = ConstructorPeticiones.ConPrompt(new FilaEntrada("1", "2", "ESCR-10"), config, new Prompts("S", "U"), "c");
+        Assert.Equal("resumen.documental", r.Instrucciones.ExpectedType);
+    }
+
+    [Fact]
+    public void ConPrompt_SinTipologiaForzada_NoEnviaExpectedType()
+    {
+        var r = ConstructorPeticiones.ConPrompt(new FilaEntrada("1", "2", "ESCR-10"), new IvaConfig(), new Prompts("S", "U"), "c");
+        Assert.Equal(string.Empty, r.Instrucciones.ExpectedType);
+    }
+
+    [Fact]
+    public void Clasificacion_NuncaLlevaExpectedType()
+    {
+        var config = new IvaConfig { TipologiaForzada = "resumen.documental" };
+        var r = ConstructorPeticiones.Clasificacion(new FilaEntrada("1", "2", "SCXX-00"), config, "c");
+        Assert.Equal(string.Empty, r.Instrucciones.ExpectedType);
     }
 }

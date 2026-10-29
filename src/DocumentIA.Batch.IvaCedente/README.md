@@ -9,7 +9,7 @@ Hace dos cosas, cada una con su comando:
 
 ## Qué envía a DocumentIA
 
-Cada petición lleva `ClassificationOnly = true`, `SkipDuplicateCheck = true` (la clave de deduplicación no incluye el prompt), `SkipGdcUpload = true`, el `ObjectIdGDC` del documento, el `IdActivo` en la trazabilidad y el prompt de `prompts/system.md` y `prompts/user.md`. El prompt de sistema fija quién es la cedente (Sareb nunca lo es: si Sareb transmite o adquiere en el documento, no es el título previo), pide el tipo y la cuota de IVA y una confianza razonada por tramos; se ajustó tras la tanda de humo en PRO del 2026-10-29. No se envía contenido del documento (ni base64 ni ruta de blob): DocumentIA lo recupera de GDC por su Object ID. Las ejecuciones quedan con un `SubmittedBy` propio de este programa para localizarlas en PRO.
+Cada petición lleva `ClassificationOnly = true`, `SkipDuplicateCheck = true` (la clave de deduplicación no incluye el prompt), `SkipGdcUpload = true`, el `ObjectIdGDC` del documento, el `IdActivo` en la trazabilidad y el prompt de `prompts/system.md` y `prompts/user.md`. El prompt de sistema fija quién es la cedente (Sareb nunca lo es: si Sareb transmite o adquiere en el documento, no es el título previo), pide el tipo y la cuota de IVA y una confianza razonada por tramos; se ajustó tras la tanda de humo en PRO del 2026-10-29. Si `TipologiaForzada` está informada, la petición con prompt lleva además `ExpectedType` con ese código y DocumentIA no clasifica. No se envía contenido del documento (ni base64 ni ruta de blob): DocumentIA lo recupera de GDC por su Object ID. Las ejecuciones quedan con un `SubmittedBy` propio de este programa para localizarlas en PRO.
 
 ## Compilar
 
@@ -32,6 +32,7 @@ Se parte de `config.sample.json` (se versiona sin claves). Se copia a `config.js
 | `CodigosPreclasificar` | `["SCXX-00"]` | TDN2 que siguen el camino de dos llamadas (ver más abajo). |
 | `ForzarSinLimitePaginas` | `true` | Procesa el documento completo aunque supere el límite de páginas (las escrituras suelen superarlo; coste proporcional). |
 | `ModelKey` | `null` | Modelo a usar; `null` deja el que decida DocumentIA. |
+| `TipologiaForzada` | `null` | Código de tipología que se envía como `ExpectedType` en la llamada con prompt: DocumentIA omite la clasificación, fija confianza 1.0 y ejecuta el prompt siempre. `resumen.documental` sirve para cualquier documento. Se puede fijar por ejecución con `--tipologia`. No afecta a la llamada de preclasificación. |
 | `PromptSystemPath`, `PromptUserPath` | `prompts/system.md`, `prompts/user.md` | Prompts, relativos al ejecutable salvo ruta absoluta. |
 | `PollingIntervalSeconds` | `30` | Intervalo base de consulta del estado de la orquestación. |
 | `TimeoutMinutos` | `30` | Espera máxima por llamada antes de marcar `timeout`. |
@@ -54,9 +55,10 @@ En PowerShell: `$env:DOCIA_FUNCTION_KEY = '<clave del entorno>'`.
 dotnet run --project src/DocumentIA.Batch.IvaCedente -- procesar --entrada activos.csv --salida resultado.csv
 dotnet run --project src/DocumentIA.Batch.IvaCedente -- procesar --entrada activos.csv --salida resultado.csv --config config.json --colas 2
 dotnet run --project src/DocumentIA.Batch.IvaCedente -- procesar --entrada activos.csv --salida resultado.csv --reintentar-errores
+dotnet run --project src/DocumentIA.Batch.IvaCedente -- procesar --entrada activos.csv --salida resultado.csv --tipologia resumen.documental
 ```
 
-Opciones: `--entrada` y `--salida` (obligatorias), `--config` (por defecto `config.json` junto al ejecutable), `--colas` (sustituye a `Colas`) y `--reintentar-errores` (ver Reanudación).
+Opciones: `--entrada` y `--salida` (obligatorias), `--config` (por defecto `config.json` junto al ejecutable), `--colas` (sustituye a `Colas`), `--tipologia <codigo>` (sustituye a `TipologiaForzada`; vacío equivale a no forzar) y `--reintentar-errores` (ver Reanudación). Con tipología forzada la cabecera de consola muestra `Tipología forzada: <codigo>` y la columna `Tipologia` del CSV recoge la que devuelve DocumentIA, que marca las filas procesadas así.
 
 El CSV de entrada usa `;` y tiene las cabeceras `ID_SAREB`, `Object ID del Documento` y `TDN2`. Los códigos TDN2 se pasan a mayúsculas; las filas repetidas (mismo activo y mismo Object ID) se descartan; las filas completamente vacías se saltan. Un Object ID vacío, una fila con menos columnas de las necesarias o una comilla sin cerrar detienen la lectura indicando el número de fila.
 

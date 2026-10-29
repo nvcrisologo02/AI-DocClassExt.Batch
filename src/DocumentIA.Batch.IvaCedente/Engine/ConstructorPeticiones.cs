@@ -1,4 +1,4 @@
-using DocumentIA.Batch.IvaCedente.Models;
+﻿using DocumentIA.Batch.IvaCedente.Models;
 using DocumentIA.Batch.Services;
 
 namespace DocumentIA.Batch.IvaCedente.Engine;
@@ -36,6 +36,11 @@ public static class ConstructorPeticiones
     {
         var request = Clasificacion(fila, config, correlationId);
         request.Instrucciones.ForzarProcesadoSinLimitePaginas = config.ForzarSinLimitePaginas;
+        if (!string.IsNullOrWhiteSpace(config.TipologiaForzada))
+        {
+            request.Instrucciones.ExpectedType = config.TipologiaForzada.Trim();
+        }
+
         request.Instrucciones.Prompt = new IngestPromptConfig
         {
             SystemPrompt = prompts.System,

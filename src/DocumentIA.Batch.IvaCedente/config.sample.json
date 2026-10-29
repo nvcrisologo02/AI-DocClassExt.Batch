@@ -1,4 +1,4 @@
-{
+﻿{
   "Entorno": "PRO",
   "Environments": [
     { "Name": "DEV", "BackendUrl": "https://srbappdevdocai.azurewebsites.net", "FunctionKey": "" },
@@ -9,6 +9,7 @@
   "CodigosPreclasificar": [ "SCXX-00" ],
   "ForzarSinLimitePaginas": true,
   "ModelKey": null,
+  "TipologiaForzada": null,
   "PromptSystemPath": "prompts/system.md",
   "PromptUserPath": "prompts/user.md",
   "PollingIntervalSeconds": 30,

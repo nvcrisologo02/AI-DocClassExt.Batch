@@ -1,4 +1,4 @@
-using DocumentIA.Batch.IvaCedente.Models;
+﻿using DocumentIA.Batch.IvaCedente.Models;
 using DocumentIA.Batch.IvaCedente.Services;
 using Xunit;
 namespace DocumentIA.Batch.IvaCedente.Tests;
@@ -16,6 +16,7 @@ public class IvaConfigLoaderTests
         Assert.Equal(new[] { "TASA-11", "SCXX-00" }, config.CodigosExcluidos);
         Assert.Equal(new[] { "SCXX-00" }, config.CodigosPreclasificar);
         Assert.True(config.ForzarSinLimitePaginas);
+        Assert.Null(config.TipologiaForzada);
     }
 
     [Fact]

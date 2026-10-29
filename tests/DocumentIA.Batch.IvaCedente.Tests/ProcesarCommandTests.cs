@@ -1,4 +1,4 @@
-using Xunit;
+﻿using Xunit;
 using DocumentIA.Batch.IvaCedente.Commands;
 using DocumentIA.Batch.IvaCedente.Io;
 using DocumentIA.Batch.IvaCedente.Models;
@@ -187,5 +187,24 @@ public class ProcesarCommandTests : IDisposable
         Assert.Contains("salida.csv", ex.Message);
         // La pasada se cancela tras agotar el anexado: no se factura el segundo documento.
         Assert.Single(backend.Requests);
+    }
+    [Theory]
+    [InlineData(new[] { "--tipologia", "resumen.documental" }, "resumen.documental")]
+    [InlineData(new[] { "--tipologia", "  " }, null)]
+    [InlineData(new string[0], null)]
+    public void AplicarOpciones_Tipologia(string[] args, string? esperado)
+    {
+        var config = new IvaConfig();
+        ProcesarCommand.AplicarOpciones(CliArgs.Parse(args), config);
+        Assert.Equal(esperado, config.TipologiaForzada);
+    }
+
+    [Fact]
+    public void AplicarOpciones_TipologiaDeConfigSeMantieneSinOpcion()
+    {
+        var config = new IvaConfig { TipologiaForzada = "resumen.documental" };
+        ProcesarCommand.AplicarOpciones(CliArgs.Parse(new[] { "--colas", "2" }), config);
+        Assert.Equal("resumen.documental", config.TipologiaForzada);
+        Assert.Equal(2, config.Colas);
     }
 }
