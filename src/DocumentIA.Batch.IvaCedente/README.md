@@ -58,7 +58,7 @@ dotnet run --project src/DocumentIA.Batch.IvaCedente -- procesar --entrada activ
 dotnet run --project src/DocumentIA.Batch.IvaCedente -- procesar --entrada activos.csv --salida resultado.csv --tipologia resumen.documental
 ```
 
-Opciones: `--entrada` y `--salida` (obligatorias), `--config` (por defecto `config.json` junto al ejecutable), `--colas` (sustituye a `Colas`), `--tipologia <codigo>` (sustituye a `TipologiaForzada`; vacío equivale a no forzar) y `--reintentar-errores` (ver Reanudación). Con tipología forzada la cabecera de consola muestra `Tipología forzada: <codigo>` y la columna `Tipologia` del CSV recoge la que devuelve DocumentIA, que marca las filas procesadas así.
+Opciones: `--entrada` y `--salida` (obligatorias), `--config` (por defecto `config.json` junto al ejecutable), `--colas` (sustituye a `Colas`), `--tipologia <codigo>` (sustituye a `TipologiaForzada`; vacío equivale a no forzar) y `--reintentar-errores` (ver Reanudación). Con tipología forzada la cabecera de consola muestra `Tipología forzada: <codigo>`; la columna `Tipologia` del CSV conserva el TDN2 de entrada (DocumentIA no devuelve TDN2 para `resumen.documental`), así que las filas procesadas así se distinguen por su `Fecha`, no por la tipología. En PRO (2026-10-29) este camino tardó unos 12 s por documento frente a 30-40 s con clasificación.
 
 El CSV de entrada usa `;` y tiene las cabeceras `ID_SAREB`, `Object ID del Documento` y `TDN2`. Los códigos TDN2 se pasan a mayúsculas; las filas repetidas (mismo activo y mismo Object ID) se descartan; las filas completamente vacías se saltan. Un Object ID vacío, una fila con menos columnas de las necesarias o una comilla sin cerrar detienen la lectura indicando el número de fila.
 
