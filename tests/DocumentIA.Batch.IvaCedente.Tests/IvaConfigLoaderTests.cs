@@ -1,4 +1,4 @@
-﻿using DocumentIA.Batch.IvaCedente.Models;
+using DocumentIA.Batch.IvaCedente.Models;
 using DocumentIA.Batch.IvaCedente.Services;
 using Xunit;
 namespace DocumentIA.Batch.IvaCedente.Tests;

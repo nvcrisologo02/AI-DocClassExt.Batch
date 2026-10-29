@@ -1,4 +1,4 @@
-﻿using DocumentIA.Batch.IvaCedente.Models;
+using DocumentIA.Batch.IvaCedente.Models;
 using DocumentIA.Batch.Services;
 
 namespace DocumentIA.Batch.IvaCedente.Engine;

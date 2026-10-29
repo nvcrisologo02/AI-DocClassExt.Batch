@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using DocumentIA.Batch.IvaCedente.Models;
 
 namespace DocumentIA.Batch.IvaCedente.Io;

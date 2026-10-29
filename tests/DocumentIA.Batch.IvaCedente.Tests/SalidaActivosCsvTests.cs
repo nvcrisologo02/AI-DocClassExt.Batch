@@ -1,4 +1,4 @@
-﻿using DocumentIA.Batch.IvaCedente.Io;
+using DocumentIA.Batch.IvaCedente.Io;
 using DocumentIA.Batch.IvaCedente.Models;
 using Xunit;
 

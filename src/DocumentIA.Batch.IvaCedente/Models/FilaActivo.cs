@@ -1,4 +1,4 @@
-﻿namespace DocumentIA.Batch.IvaCedente.Models;
+namespace DocumentIA.Batch.IvaCedente.Models;
 
 /// <summary>Resultado consolidado de un activo: una fila del CSV por activo.</summary>
 public sealed class FilaActivo

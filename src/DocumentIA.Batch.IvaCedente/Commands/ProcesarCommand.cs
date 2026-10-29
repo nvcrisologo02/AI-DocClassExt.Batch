@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
 using DocumentIA.Batch.ClassificationLite.Engine;
 using DocumentIA.Batch.IvaCedente.Engine;

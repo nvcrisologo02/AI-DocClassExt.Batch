@@ -1,4 +1,4 @@
-﻿{
+{
   "Entorno": "PRO",
   "Environments": [
     { "Name": "DEV", "BackendUrl": "https://srbappdevdocai.azurewebsites.net", "FunctionKey": "" },

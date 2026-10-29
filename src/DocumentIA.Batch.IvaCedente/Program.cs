@@ -1,4 +1,4 @@
-﻿using DocumentIA.Batch.IvaCedente.Commands;
+using DocumentIA.Batch.IvaCedente.Commands;
 
 namespace DocumentIA.Batch.IvaCedente;
 
