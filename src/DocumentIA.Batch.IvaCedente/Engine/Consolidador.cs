@@ -1,4 +1,4 @@
-using DocumentIA.Batch.IvaCedente.Models;
+﻿using DocumentIA.Batch.IvaCedente.Models;
 
 namespace DocumentIA.Batch.IvaCedente.Engine;
 
@@ -6,6 +6,10 @@ namespace DocumentIA.Batch.IvaCedente.Engine;
 public static class Consolidador
 {
     public const string SinTitulo = "sin título";
+    public const string MotivoSinResolver = "filas sin resolver";
+    public const string MotivoIvaContradictorio = "IVA contradictorio";
+    public const string MotivoDeduccionContradictoria = "deducción contradictoria";
+    public const string MotivoCuotasDistintas = "cuotas de IVA distintas";
 
     public static List<FilaActivo> Consolidar(IEnumerable<FilaDocumento> filas)
     {
@@ -20,8 +24,15 @@ public static class Consolidador
             string hubo;
             string deduccion;
             var soporte = "";
+            FilaDocumento? tituloIva = null;
+            FilaDocumento? tituloDeduccion = null;
+            var motivos = new List<string>();
             // Un activo con alguna fila sin resolver (pendiente, error o timeout) puede tener un título sin leer.
-            var revisar = docs.Any(f => f.Procesado is EstadosProcesado.Pendiente or EstadosProcesado.Error or EstadosProcesado.Timeout);
+            var sinResolver = docs.Count(f => f.Procesado is EstadosProcesado.Pendiente or EstadosProcesado.Error or EstadosProcesado.Timeout);
+            if (sinResolver > 0)
+            {
+                motivos.Add($"{MotivoSinResolver} ({sinResolver})");
+            }
 
             if (conRespuesta.Count == 0)
             {
@@ -36,10 +47,32 @@ public static class Consolidador
 
                 if (hubo is ValoresIva.Si or ValoresIva.No)
                 {
-                    soporte = string.Join(",", conRespuesta.Where(f => f.HuboIVA == hubo).Select(f => f.ObjectId).Distinct());
+                    var candidatos = conRespuesta.Where(f => f.HuboIVA == hubo).ToList();
+                    soporte = string.Join(",", candidatos.Select(f => f.ObjectId).Distinct());
+                    tituloIva = ElegirTitulo(candidatos);
                 }
 
-                revisar |= Contradice(conRespuesta.Select(f => f.HuboIVA)) || Contradice(deducciones);
+                if (deduccion is ValoresIva.Si or ValoresIva.No)
+                {
+                    var candidatos = conRespuesta.Where(f => f.DeduccionIVA == deduccion).ToList();
+                    tituloDeduccion = tituloIva != null && candidatos.Contains(tituloIva) ? tituloIva : ElegirTitulo(candidatos);
+                }
+
+                if (Contradice(conRespuesta.Select(f => f.HuboIVA)))
+                {
+                    motivos.Add(MotivoIvaContradictorio);
+                }
+
+                if (Contradice(deducciones))
+                {
+                    motivos.Add(MotivoDeduccionContradictoria);
+                }
+
+                var cuotas = conRespuesta.Where(f => f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null).Select(f => f.CuotaIVA!.Value).Distinct().Count();
+                if (cuotas > 1)
+                {
+                    motivos.Add(MotivoCuotasDistintas);
+                }
             }
 
             resultado.Add(new FilaActivo
@@ -50,13 +83,28 @@ public static class Consolidador
                 ConRespuesta = conRespuesta.Count,
                 HuboIVA = hubo,
                 DeduccionIVA = deduccion,
+                DocIVA = tituloIva?.ObjectId ?? "",
+                TipoIVA = hubo == ValoresIva.Si ? tituloIva?.TipoIVA : null,
+                CuotaIVA = hubo == ValoresIva.Si ? tituloIva?.CuotaIVA : null,
+                Cedente = tituloIva?.Cedente ?? "",
+                FechaAdquisicion = tituloIva?.FechaAdquisicion ?? "",
+                DocDeduccion = tituloDeduccion?.ObjectId ?? "",
                 ObjectIdsSoporte = soporte,
-                Revisar = revisar ? ValoresIva.Si : ValoresIva.No,
+                Revisar = motivos.Count > 0 ? ValoresIva.Si : ValoresIva.No,
+                MotivoRevisar = string.Join("; ", motivos),
             });
         }
 
         return resultado;
     }
+
+    /// <summary>Título de sustento: el que tenga cuota, luego el que tenga tipo, luego mayor confianza, luego el primero.</summary>
+    public static FilaDocumento? ElegirTitulo(IEnumerable<FilaDocumento> candidatos)
+        => candidatos
+            .OrderByDescending(f => f.CuotaIVA is not null)
+            .ThenByDescending(f => f.TipoIVA is not null)
+            .ThenByDescending(f => f.Confianza ?? -1)
+            .FirstOrDefault();
 
     /// <summary>"sí" si alguno es "sí"; si no, "no" si alguno es "no"; si no, "no consta".</summary>
     public static string Resolver(IEnumerable<string> valores)
