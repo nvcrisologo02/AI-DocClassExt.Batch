@@ -75,7 +75,7 @@ public static class Consolidador
                 }
             }
 
-            resultado.Add(new FilaActivo
+            var fila = new FilaActivo
             {
                 IdSareb = grupo.Key,
                 Documentos = docs.Count,
@@ -92,7 +92,9 @@ public static class Consolidador
                 ObjectIdsSoporte = soporte,
                 Revisar = motivos.Count > 0 ? ValoresIva.Si : ValoresIva.No,
                 MotivoRevisar = string.Join("; ", motivos),
-            });
+            };
+            fila.Sustento = FraseSustento.Componer(fila);
+            resultado.Add(fila);
         }
 
         return resultado;
