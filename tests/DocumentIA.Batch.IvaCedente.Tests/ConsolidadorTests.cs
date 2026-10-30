@@ -265,4 +265,18 @@ public class ConsolidadorTests
         Assert.Equal("sí", a.Revisar);
         Assert.Equal("filas sin resolver (2); IVA contradictorio; deducción contradictoria", a.MotivoRevisar);
     }
+
+    [Fact]
+    public void Consolidar_ObjectIdRepetido_ConservaLaPrimeraDiscrepancia()
+    {
+        var a = Uno(Titulo("1", "A", "sí", cuota: 100), Titulo("1", "B", "sí", cuota: 200), Titulo("1", "B", "sí", cuota: 300));
+        Assert.Equal(new[] { new Discrepancia("B", "sí", null, 200, null) }, a.Discrepancias);
+    }
+
+    [Fact]
+    public void Consolidar_ObjectIdRepetido_LaSegundaEntraSiLaPrimeraNoDiscrepa()
+    {
+        var a = Uno(Titulo("1", "A", "sí", cuota: 100), Titulo("1", "B", "sí", cuota: 100), Titulo("1", "B", "sí", cuota: 300));
+        Assert.Equal(new[] { new Discrepancia("B", "sí", null, 300, null) }, a.Discrepancias);
+    }
 }

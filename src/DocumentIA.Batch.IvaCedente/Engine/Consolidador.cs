@@ -134,12 +134,13 @@ public static class Consolidador
 
             var conIva = enIva || enCuota;
             var conTipoYCuota = conIva && f.HuboIVA == ValoresIva.Si;
-            porDoc[f.ObjectId] = new Discrepancia(
+            // La primera aparición de un Object ID gana; una fila repetida del mismo documento no la pisa.
+            porDoc.TryAdd(f.ObjectId, new Discrepancia(
                 f.ObjectId,
                 conIva ? f.HuboIVA : null,
                 conTipoYCuota ? f.TipoIVA : null,
                 conTipoYCuota ? f.CuotaIVA : null,
-                enDeduccion ? f.DeduccionIVA : null);
+                enDeduccion ? f.DeduccionIVA : null));
         }
 
         return porDoc.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Value).ToList();
