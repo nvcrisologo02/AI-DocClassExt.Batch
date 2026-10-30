@@ -75,6 +75,8 @@ public static class Consolidador
                 }
             }
 
+            // Un activo con IVA resuelto (sí o no) no va a revisión solo por tener filas sin resolver; el motivo queda informado.
+            var revisar = motivos.Count > 0 && !(motivos.Count == 1 && sinResolver > 0 && hubo is ValoresIva.Si or ValoresIva.No);
             var fila = new FilaActivo
             {
                 IdSareb = grupo.Key,
@@ -90,7 +92,7 @@ public static class Consolidador
                 FechaAdquisicion = tituloIva?.FechaAdquisicion ?? "",
                 DocDeduccion = tituloDeduccion?.ObjectId ?? "",
                 ObjectIdsSoporte = soporte,
-                Revisar = motivos.Count > 0 ? ValoresIva.Si : ValoresIva.No,
+                Revisar = revisar ? ValoresIva.Si : ValoresIva.No,
                 MotivoRevisar = string.Join("; ", motivos),
             };
             fila.Sustento = FraseSustento.Componer(fila);

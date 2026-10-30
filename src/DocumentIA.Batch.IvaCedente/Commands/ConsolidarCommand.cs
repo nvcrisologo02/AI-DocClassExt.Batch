@@ -24,7 +24,7 @@ public static class ConsolidarCommand
         Console.WriteLine($"Activos consolidados: {activos.Count}. Para revisar (Revisar = sí): {activos.Count(a => a.Revisar == "sí")}.");
         if (incompletas > 0)
         {
-            Console.WriteLine($"Aviso: {incompletas} filas siguen en pendiente, error o timeout; sus activos llevan Revisar = sí. Relanza procesar (con --reintentar-errores si procede) antes de dar el resultado por bueno.");
+            Console.WriteLine($"Aviso: {incompletas} filas siguen en pendiente, error o timeout; el motivo queda en MotivoRevisar y solo los activos sin IVA resuelto llevan Revisar = sí. Relanza procesar (con --reintentar-errores si procede) antes de dar el resultado por bueno.");
         }
 
         return 0;

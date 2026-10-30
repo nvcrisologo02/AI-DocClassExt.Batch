@@ -109,20 +109,29 @@ public class ConsolidadorTests
     [InlineData(EstadosProcesado.Error)]
     [InlineData(EstadosProcesado.Timeout)]
     [InlineData(EstadosProcesado.Pendiente)]
-    public void Consolidar_ActivoConFilaIncompleta_MarcaRevisarSinCambiarLosValores(string estado)
+    public void Consolidar_FilaIncompletaConIvaResuelto_DejaElMotivoPeroNoRevisa(string estado)
     {
-        var filas = new[]
-        {
-            Titulo("1", "A", "sí", "sí"),
-            new FilaDocumento { IdSareb = "1", ObjectId = "B", Procesado = estado },
-        };
-        var a = Assert.Single(Consolidador.Consolidar(filas));
-        Assert.Equal("sí", a.Revisar);
+        var a = Uno(Titulo("1", "A", "sí", "sí"), new FilaDocumento { IdSareb = "1", ObjectId = "B", Procesado = estado });
+        Assert.Equal("no", a.Revisar);
+        Assert.Equal("filas sin resolver (1)", a.MotivoRevisar);
         Assert.Equal("sí", a.HuboIVA);
 
-        var sinTitulo = Assert.Single(Consolidador.Consolidar(new[] { new FilaDocumento { IdSareb = "2", ObjectId = "C", Procesado = estado } }));
+        var conNo = Uno(Titulo("2", "C", "no"), new FilaDocumento { IdSareb = "2", ObjectId = "D", Procesado = estado });
+        Assert.Equal("no", conNo.Revisar);
+    }
+
+    [Theory]
+    [InlineData(EstadosProcesado.Error)]
+    [InlineData(EstadosProcesado.Pendiente)]
+    public void Consolidar_FilaIncompletaSinIvaResuelto_SigueRevisando(string estado)
+    {
+        var sinTitulo = Uno(new FilaDocumento { IdSareb = "1", ObjectId = "A", Procesado = estado });
         Assert.Equal(Consolidador.SinTitulo, sinTitulo.HuboIVA);
         Assert.Equal("sí", sinTitulo.Revisar);
+
+        var noConsta = Uno(Titulo("2", "B", "no consta"), new FilaDocumento { IdSareb = "2", ObjectId = "C", Procesado = estado });
+        Assert.Equal("sí", noConsta.Revisar);
+        Assert.Equal("filas sin resolver (1)", noConsta.MotivoRevisar);
     }
 
     [Fact]
@@ -131,6 +140,7 @@ public class ConsolidadorTests
         var a = Assert.Single(Consolidador.Consolidar(new[] { Titulo("1", "A", "sí") }));
         Assert.Equal("no", a.Revisar);
     }
+
     [Fact]
     public void Consolidar_DocIVA_PrefiereElTituloConCuota()
     {
