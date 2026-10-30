@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace DocumentIA.Batch.IvaCedente.Io;
@@ -60,6 +61,10 @@ public static class CsvUtil
         fields.Add(current.ToString());
         return fields.ToArray();
     }
+
+    /// <summary>Número para los CSV: punto decimal y la cadena más corta que hace ida y vuelta; vacío si es nulo.</summary>
+    public static string Numero(double? valor)
+        => valor?.ToString(CultureInfo.InvariantCulture) ?? "";
 
     public static string EscapeField(string? value)
     {

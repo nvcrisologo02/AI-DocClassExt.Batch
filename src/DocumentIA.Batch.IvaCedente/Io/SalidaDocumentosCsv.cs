@@ -82,9 +82,6 @@ public static class SalidaDocumentosCsv
     private static double? Numero(string texto)
         => double.TryParse(texto, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : null;
 
-    private static string Numero(double? valor)
-        => valor?.ToString("R", CultureInfo.InvariantCulture) ?? "";
-
     private static string?[] ALista(FilaDocumento f)
     {
         var evidencia = f.Evidencia ?? "";
@@ -97,8 +94,8 @@ public static class SalidaDocumentosCsv
         {
             AntiFormula.Neutralizar(f.IdSareb), AntiFormula.Neutralizar(f.ObjectId), AntiFormula.Neutralizar(f.Tdn2), AntiFormula.Neutralizar(f.Procesado),
             AntiFormula.Neutralizar(f.EsTituloPrevio), AntiFormula.Neutralizar(f.HuboIVA), AntiFormula.Neutralizar(f.DeduccionIVA),
-            AntiFormula.Neutralizar(f.Cedente), AntiFormula.Neutralizar(f.FechaAdquisicion), Numero(f.TipoIVA), Numero(f.CuotaIVA), AntiFormula.Neutralizar(evidencia),
-            Numero(f.Confianza),
+            AntiFormula.Neutralizar(f.Cedente), AntiFormula.Neutralizar(f.FechaAdquisicion), CsvUtil.Numero(f.TipoIVA), CsvUtil.Numero(f.CuotaIVA), AntiFormula.Neutralizar(evidencia),
+            CsvUtil.Numero(f.Confianza),
             AntiFormula.Neutralizar(f.Tipologia), AntiFormula.Neutralizar(f.InstanceId), AntiFormula.Neutralizar(f.CorrelationId), AntiFormula.Neutralizar(f.Error),
             f.Fecha?.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) ?? "",
         };

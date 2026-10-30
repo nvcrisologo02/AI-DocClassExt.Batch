@@ -42,4 +42,13 @@ public class CsvUtilTests
             File.Delete(path + ".tmp");
         }
     }
+
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData(21.0, "21")]
+    [InlineData(1200.5, "1200.5")]
+    [InlineData(0.95, "0.95")]
+    [InlineData(0.30000000000000004, "0.30000000000000004")]
+    public void Numero_EmiteConPuntoYLaCadenaMasCorta(double? valor, string esperado)
+        => Assert.Equal(esperado, CsvUtil.Numero(valor));
 }

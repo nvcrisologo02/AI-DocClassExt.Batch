@@ -23,8 +23,8 @@ public static class SalidaActivosCsv
             AntiFormula.Neutralizar(f.HuboIVA),
             AntiFormula.Neutralizar(f.DeduccionIVA),
             AntiFormula.Neutralizar(f.DocIVA),
-            Numero(f.TipoIVA),
-            Numero(f.CuotaIVA),
+            CsvUtil.Numero(f.TipoIVA),
+            CsvUtil.Numero(f.CuotaIVA),
             AntiFormula.Neutralizar(f.Cedente),
             AntiFormula.Neutralizar(f.FechaAdquisicion),
             AntiFormula.Neutralizar(f.DocDeduccion),
@@ -33,6 +33,4 @@ public static class SalidaActivosCsv
             AntiFormula.Neutralizar(f.ObjectIdsSoporte),
             AntiFormula.Neutralizar(f.Revisar),
         }));
-
-    private static string Numero(double? valor) => valor?.ToString(CultureInfo.InvariantCulture) ?? "";
 }
