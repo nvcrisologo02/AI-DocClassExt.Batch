@@ -41,6 +41,7 @@ Tramo de discrepancias, añadido al final de la frase actual con `; discrepan: `
 - `HuboIVA` en `no consta` o `sin título` con filas sin resolver: sigue `Revisar = sí`, porque el fichero sin leer podría ser el título que falta.
 - Con cualquier otro motivo además: `Revisar = sí`, como hoy.
 - El aviso de `ConsolidarCommand` sobre filas incompletas pasa a decir que el motivo queda informado y que solo marcan `Revisar = sí` los activos sin IVA resuelto.
+- Nota de implementación (2026-10-30, revisión final): la exención se limita a `HuboIVA = sí`. Con `no` y filas sin resolver sigue `Revisar = sí`, porque por la precedencia sí > no un título sin leer podría convertir el `no` en `sí` (2 activos en el lote del 2026-10-29). Con `sí` un título nuevo no cambia el valor consolidado.
 
 ## Impacto
 

@@ -109,21 +109,18 @@ public class ConsolidadorTests
     [InlineData(EstadosProcesado.Error)]
     [InlineData(EstadosProcesado.Timeout)]
     [InlineData(EstadosProcesado.Pendiente)]
-    public void Consolidar_FilaIncompletaConIvaResuelto_DejaElMotivoPeroNoRevisa(string estado)
+    public void Consolidar_FilaIncompletaConIvaSi_DejaElMotivoPeroNoRevisa(string estado)
     {
         var a = Uno(Titulo("1", "A", "sí", "sí"), new FilaDocumento { IdSareb = "1", ObjectId = "B", Procesado = estado });
         Assert.Equal("no", a.Revisar);
         Assert.Equal("filas sin resolver (1)", a.MotivoRevisar);
         Assert.Equal("sí", a.HuboIVA);
-
-        var conNo = Uno(Titulo("2", "C", "no"), new FilaDocumento { IdSareb = "2", ObjectId = "D", Procesado = estado });
-        Assert.Equal("no", conNo.Revisar);
     }
 
     [Theory]
     [InlineData(EstadosProcesado.Error)]
     [InlineData(EstadosProcesado.Pendiente)]
-    public void Consolidar_FilaIncompletaSinIvaResuelto_SigueRevisando(string estado)
+    public void Consolidar_FilaIncompletaSinIvaSi_SigueRevisando(string estado)
     {
         var sinTitulo = Uno(new FilaDocumento { IdSareb = "1", ObjectId = "A", Procesado = estado });
         Assert.Equal(Consolidador.SinTitulo, sinTitulo.HuboIVA);
@@ -132,6 +129,11 @@ public class ConsolidadorTests
         var noConsta = Uno(Titulo("2", "B", "no consta"), new FilaDocumento { IdSareb = "2", ObjectId = "C", Procesado = estado });
         Assert.Equal("sí", noConsta.Revisar);
         Assert.Equal("filas sin resolver (1)", noConsta.MotivoRevisar);
+
+        // Un título sin leer podría decir sí y, por la precedencia sí > no, cambiar el resultado.
+        var conNo = Uno(Titulo("3", "D", "no"), new FilaDocumento { IdSareb = "3", ObjectId = "E", Procesado = estado });
+        Assert.Equal("sí", conNo.Revisar);
+        Assert.Equal("filas sin resolver (1)", conNo.MotivoRevisar);
     }
 
     [Fact]

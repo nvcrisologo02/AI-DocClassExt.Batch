@@ -80,8 +80,9 @@ public static class Consolidador
                 discrepancias = RecogerDiscrepancias(conRespuesta, hubo, deduccion, tituloIva, ivaContradictorio, deduccionContradictoria, cuotasDistintas);
             }
 
-            // Un activo con IVA resuelto (sí o no) no va a revisión solo por tener filas sin resolver; el motivo queda informado.
-            var revisar = motivos.Count > 0 && !(motivos.Count == 1 && sinResolver > 0 && hubo is ValoresIva.Si or ValoresIva.No);
+            // Un activo con IVA sí no va a revisión solo por tener filas sin resolver; el motivo queda informado.
+            // Con no, no consta o sin título sigue en revisión: un título sin leer podría decir sí y cambiar el resultado.
+            var revisar = motivos.Count > 0 && !(motivos.Count == 1 && sinResolver > 0 && hubo == ValoresIva.Si);
             var fila = new FilaActivo
             {
                 IdSareb = grupo.Key,
