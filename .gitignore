@@ -39,3 +39,6 @@ eval/pendientes_baseline_v3.txt
 eval/catalog_backup_PRO_*.json
 eval/clasificador-embeddings/.venv/
 src/DocumentIA.Batch.IvaCedente/config.json
+
+# Temporales de sesion (traspasos, CSV de lotes, logs de diagnostico): no se versionan
+docs/auxiliares/temps/
