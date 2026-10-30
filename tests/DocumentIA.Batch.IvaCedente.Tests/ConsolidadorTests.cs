@@ -304,4 +304,18 @@ public class ConsolidadorTests
         Assert.Equal("no", a.Revisar);
         Assert.Empty(a.Discrepancias);
     }
+
+    [Fact]
+    public void Consolidar_Sustento_FraseCompletaSinDiscrepancias()
+    {
+        var a = Uno(Titulo("1", "12345", "sí", "sí", tipo: 21, cuota: 64050, cedente: "BANCO X", fecha: "2008-03-12"), Titulo("1", "99", "no consta"));
+        Assert.Equal("IVA sí 21% 64.050,00 € (doc 12345, cedente BANCO X, 2008-03-12); deducción sí (doc 12345)", a.Sustento);
+    }
+
+    [Fact]
+    public void Consolidar_Sustento_FraseCompletaConTramoDeDiscrepancias()
+    {
+        var a = Uno(Titulo("1", "A", "sí", "no", tipo: 21, cuota: 1200), Titulo("1", "B", "sí", "no", tipo: 21, cuota: 1300), Titulo("1", "C", "no", "no"));
+        Assert.Equal("IVA sí 21% 1.200,00 € (doc A); deducción no (doc A); discrepan: doc B IVA sí 21% 1.300,00 €; doc C IVA no", a.Sustento);
+    }
 }
