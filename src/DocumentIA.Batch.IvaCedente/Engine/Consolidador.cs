@@ -1,3 +1,4 @@
+using System.Globalization;
 using DocumentIA.Batch.IvaCedente.Models;
 
 namespace DocumentIA.Batch.IvaCedente.Engine;
@@ -146,9 +147,12 @@ public static class Consolidador
         return porDoc.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Value).ToList();
     }
 
-    /// <summary>Cuota redondeada a céntimo para compararla; las diferencias por debajo no son discrepancia.</summary>
+    /// <summary>
+    /// Cuota redondeada a céntimo para compararla, con el mismo redondeo con el que la presenta FraseSustento ("N2"):
+    /// dos cuotas que se muestran iguales no son discrepancia.
+    /// </summary>
     private static double? ACentimo(double? cuota)
-        => cuota is { } c ? Math.Round(c, 2, MidpointRounding.AwayFromZero) : null;
+        => cuota is { } c ? double.Parse(c.ToString("F2", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture) : null;
 
     /// <summary>"sí" si alguno es "sí"; si no, "no" si alguno es "no"; si no, "no consta".</summary>
     public static string Resolver(IEnumerable<string> valores)
