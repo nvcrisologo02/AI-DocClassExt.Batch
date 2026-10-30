@@ -25,8 +25,11 @@ public sealed class FilaActivo
     /// <summary>Frase legible con el sustento del IVA y la deducción.</summary>
     public string Sustento { get; set; } = "";
 
-    /// <summary>Motivos de Revisar separados por "; "; vacío cuando Revisar es no.</summary>
+    /// <summary>Motivos de Revisar separados por "; "; puede llevar solo "filas sin resolver (n)" con Revisar en no.</summary>
     public string MotivoRevisar { get; set; } = "";
+
+    /// <summary>Títulos que discrepan del elegido; alimentan la frase de Sustento y no se escriben en el CSV.</summary>
+    public List<Discrepancia> Discrepancias { get; set; } = new();
     public string ObjectIdsSoporte { get; set; } = "";
     public string Revisar { get; set; } = "no";
 }

@@ -215,6 +215,45 @@ public class ConsolidadorTests
     }
 
     [Fact]
+    public void Consolidar_IvaContradictorio_RecogeLosTitulosQueDiscrepan()
+    {
+        var a = Uno(Titulo("1", "B", "no"), Titulo("1", "A", "sí", tipo: 21, cuota: 1200), Titulo("1", "C", "no consta"));
+        var d = Assert.Single(a.Discrepancias);
+        Assert.Equal(new Discrepancia("B", "no", null, null, null), d);
+    }
+
+    [Fact]
+    public void Consolidar_CuotasDistintas_RecogeLosTitulosConOtraCuota()
+    {
+        var a = Uno(Titulo("1", "A", "sí", tipo: 21, cuota: 100, confianza: 0.9), Titulo("1", "B", "sí", tipo: 21, cuota: 200), Titulo("1", "C", "sí"));
+        Assert.Equal("A", a.DocIVA);
+        var d = Assert.Single(a.Discrepancias);
+        Assert.Equal(new Discrepancia("B", "sí", 21, 200, null), d);
+    }
+
+    [Fact]
+    public void Consolidar_DeduccionContradictoria_RecogeLosTitulosQueDiscrepan()
+    {
+        var a = Uno(Titulo("1", "A", "sí", "sí"), Titulo("1", "B", "sí", "no"), Titulo("1", "C", "sí", "no aplica"));
+        var d = Assert.Single(a.Discrepancias);
+        Assert.Equal(new Discrepancia("B", null, null, null, "no"), d);
+    }
+
+    [Fact]
+    public void Consolidar_TituloQueDiscrepaEnAmbas_UnaSolaEntradaOrdenadaPorObjectId()
+    {
+        var a = Uno(Titulo("1", "Z", "no", "no"), Titulo("1", "A", "sí", "sí", cuota: 100), Titulo("1", "M", "sí", "no", cuota: 300));
+        Assert.Equal(new[] { new Discrepancia("M", "sí", null, 300, "no"), new Discrepancia("Z", "no", null, null, "no") }, a.Discrepancias);
+    }
+
+    [Fact]
+    public void Consolidar_SinMotivosDeDiscrepancia_ListaVacia()
+    {
+        Assert.Empty(Uno(Titulo("1", "A", "sí", cuota: 100), Titulo("1", "B", "sí", cuota: 100)).Discrepancias);
+        Assert.Empty(Uno(Titulo("1", "A", "sí"), new FilaDocumento { IdSareb = "1", ObjectId = "B", Procesado = EstadosProcesado.Error }).Discrepancias);
+    }
+
+    [Fact]
     public void Consolidar_MotivoRevisar_AcumulaEnOrden()
     {
         var a = Uno(

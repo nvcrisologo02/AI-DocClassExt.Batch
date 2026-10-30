@@ -24,6 +24,7 @@ public static class Consolidador
             string hubo;
             string deduccion;
             var soporte = "";
+            var discrepancias = new List<Discrepancia>();
             FilaDocumento? tituloIva = null;
             FilaDocumento? tituloDeduccion = null;
             var motivos = new List<string>();
@@ -58,21 +59,25 @@ public static class Consolidador
                     tituloDeduccion = tituloIva != null && candidatos.Contains(tituloIva) ? tituloIva : ElegirTitulo(candidatos);
                 }
 
-                if (Contradice(conRespuesta.Select(f => f.HuboIVA)))
+                var ivaContradictorio = Contradice(conRespuesta.Select(f => f.HuboIVA));
+                if (ivaContradictorio)
                 {
                     motivos.Add(MotivoIvaContradictorio);
                 }
 
-                if (Contradice(deducciones))
+                var deduccionContradictoria = Contradice(deducciones);
+                if (deduccionContradictoria)
                 {
                     motivos.Add(MotivoDeduccionContradictoria);
                 }
 
-                var cuotas = conRespuesta.Where(f => f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null).Select(f => f.CuotaIVA!.Value).Distinct().Count();
-                if (cuotas > 1)
+                var cuotasDistintas = conRespuesta.Where(f => f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null).Select(f => f.CuotaIVA!.Value).Distinct().Count() > 1;
+                if (cuotasDistintas)
                 {
                     motivos.Add(MotivoCuotasDistintas);
                 }
+
+                discrepancias = RecogerDiscrepancias(conRespuesta, hubo, deduccion, tituloIva, ivaContradictorio, deduccionContradictoria, cuotasDistintas);
             }
 
             // Un activo con IVA resuelto (sí o no) no va a revisión solo por tener filas sin resolver; el motivo queda informado.
@@ -94,6 +99,7 @@ public static class Consolidador
                 ObjectIdsSoporte = soporte,
                 Revisar = revisar ? ValoresIva.Si : ValoresIva.No,
                 MotivoRevisar = string.Join("; ", motivos),
+                Discrepancias = discrepancias,
             };
             fila.Sustento = FraseSustento.Componer(fila);
             resultado.Add(fila);
@@ -109,6 +115,34 @@ public static class Consolidador
             .ThenByDescending(f => f.TipoIVA is not null)
             .ThenByDescending(f => f.Confianza ?? -1)
             .FirstOrDefault();
+
+    /// <summary>Títulos cuyo valor sí/no de IVA o deducción, o cuya cuota, difiere del título elegido: uno por Object ID, ordenados por él.</summary>
+    private static List<Discrepancia> RecogerDiscrepancias(List<FilaDocumento> conRespuesta, string hubo, string deduccion, FilaDocumento? tituloIva,
+        bool ivaContradictorio, bool deduccionContradictoria, bool cuotasDistintas)
+    {
+        var porDoc = new Dictionary<string, Discrepancia>(StringComparer.Ordinal);
+        foreach (var f in conRespuesta)
+        {
+            var enIva = ivaContradictorio && (f.HuboIVA is ValoresIva.Si or ValoresIva.No) && f.HuboIVA != hubo;
+            var enCuota = cuotasDistintas && f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null && f.CuotaIVA != tituloIva?.CuotaIVA;
+            var enDeduccion = deduccionContradictoria && (f.DeduccionIVA is ValoresIva.Si or ValoresIva.No) && f.DeduccionIVA != deduccion;
+            if (!enIva && !enCuota && !enDeduccion)
+            {
+                continue;
+            }
+
+            var conIva = enIva || enCuota;
+            var conTipoYCuota = conIva && f.HuboIVA == ValoresIva.Si;
+            porDoc[f.ObjectId] = new Discrepancia(
+                f.ObjectId,
+                conIva ? f.HuboIVA : null,
+                conTipoYCuota ? f.TipoIVA : null,
+                conTipoYCuota ? f.CuotaIVA : null,
+                enDeduccion ? f.DeduccionIVA : null);
+        }
+
+        return porDoc.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Value).ToList();
+    }
 
     /// <summary>"sí" si alguno es "sí"; si no, "no" si alguno es "no"; si no, "no consta".</summary>
     public static string Resolver(IEnumerable<string> valores)
