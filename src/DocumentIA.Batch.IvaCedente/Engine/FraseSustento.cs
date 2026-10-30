@@ -15,23 +15,47 @@ public static class FraseSustento
             return "sin título previo";
         }
 
-        var iva = new List<string> { $"IVA {a.HuboIVA}" };
-        if (a.HuboIVA == ValoresIva.Si)
+        var frase = Iva(a.HuboIVA, a.TipoIVA, a.CuotaIVA) + Parentesis(a.DocIVA, a.Cedente, a.FechaAdquisicion);
+        var deduccion = $"deducción {a.DeduccionIVA}" + Parentesis(a.DocDeduccion, "", "");
+        var discrepan = a.Discrepancias.Count == 0 ? "" : "; discrepan: " + string.Join("; ", a.Discrepancias.Select(Entrada));
+        return $"{frase}; {deduccion}{discrepan}";
+    }
+
+    /// <summary>"IVA sí 21% 1.200,00 €": tipo y cuota solo cuando el valor es sí y se conocen.</summary>
+    private static string Iva(string hubo, double? tipo, double? cuota)
+    {
+        var partes = new List<string> { $"IVA {hubo}" };
+        if (hubo == ValoresIva.Si)
         {
-            if (a.TipoIVA is { } tipo)
+            if (tipo is { } t)
             {
-                iva.Add(tipo.ToString("0.##", Es) + "%");
+                partes.Add(t.ToString("0.##", Es) + "%");
             }
 
-            if (a.CuotaIVA is { } cuota)
+            if (cuota is { } c)
             {
-                iva.Add(cuota.ToString("N2", Es) + " €");
+                partes.Add(c.ToString("N2", Es) + " €");
             }
         }
 
-        var frase = string.Join(" ", iva) + Parentesis(a.DocIVA, a.Cedente, a.FechaAdquisicion);
-        var deduccion = $"deducción {a.DeduccionIVA}" + Parentesis(a.DocDeduccion, "", "");
-        return $"{frase}; {deduccion}";
+        return string.Join(" ", partes);
+    }
+
+    /// <summary>"doc 456 IVA sí 21% 1.200,00 €, deducción no": solo las partes en las que el título discrepa.</summary>
+    private static string Entrada(Discrepancia d)
+    {
+        var partes = new List<string>();
+        if (d.HuboIVA is { } hubo)
+        {
+            partes.Add(Iva(hubo, d.TipoIVA, d.CuotaIVA));
+        }
+
+        if (d.DeduccionIVA is { } deduccion)
+        {
+            partes.Add($"deducción {deduccion}");
+        }
+
+        return $"doc {d.ObjectId} " + string.Join(", ", partes);
     }
 
     private static string Parentesis(string doc, string cedente, string fecha)

@@ -46,6 +46,30 @@ public class FraseSustentoTests
         => Assert.Equal("sin título previo", FraseSustento.Componer(new FilaActivo { HuboIVA = "sin título", DeduccionIVA = "sin título" }));
 
     [Fact]
+    public void Componer_ConDiscrepanciaDeIva_AnadeElTramo()
+    {
+        var a = new FilaActivo { HuboIVA = "sí", TipoIVA = 21, CuotaIVA = 1200, DocIVA = "A", DeduccionIVA = "no consta" };
+        a.Discrepancias.Add(new Discrepancia("B", "no", null, null, null));
+        Assert.Equal("IVA sí 21% 1.200,00 € (doc A); deducción no consta; discrepan: doc B IVA no", FraseSustento.Componer(a));
+    }
+
+    [Fact]
+    public void Componer_VariasDiscrepancias_UnaEntradaPorTituloConSusPartes()
+    {
+        var a = new FilaActivo { HuboIVA = "sí", CuotaIVA = 100, DocIVA = "A", DeduccionIVA = "sí", DocDeduccion = "A" };
+        a.Discrepancias.Add(new Discrepancia("M", "sí", 21, 300, "no"));
+        a.Discrepancias.Add(new Discrepancia("Z", null, null, null, "no"));
+        Assert.EndsWith("; discrepan: doc M IVA sí 21% 300,00 €, deducción no; doc Z deducción no", FraseSustento.Componer(a));
+    }
+
+    [Fact]
+    public void Componer_SinDiscrepancias_NoAnadeNada()
+    {
+        var a = new FilaActivo { HuboIVA = "no", DocIVA = "9", DeduccionIVA = "no aplica" };
+        Assert.Equal("IVA no (doc 9); deducción no aplica", FraseSustento.Componer(a));
+    }
+
+    [Fact]
     public void Componer_DeduccionNoConOtroDoc()
     {
         var a = new FilaActivo { HuboIVA = "sí", DocIVA = "A", DeduccionIVA = "no", DocDeduccion = "B" };
