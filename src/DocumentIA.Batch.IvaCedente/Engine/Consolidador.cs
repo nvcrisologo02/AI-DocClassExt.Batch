@@ -71,7 +71,7 @@ public static class Consolidador
                     motivos.Add(MotivoDeduccionContradictoria);
                 }
 
-                var cuotasDistintas = conRespuesta.Where(f => f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null).Select(f => f.CuotaIVA!.Value).Distinct().Count() > 1;
+                var cuotasDistintas = conRespuesta.Where(f => f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null).Select(f => ACentimo(f.CuotaIVA)).Distinct().Count() > 1;
                 if (cuotasDistintas)
                 {
                     motivos.Add(MotivoCuotasDistintas);
@@ -125,7 +125,7 @@ public static class Consolidador
         foreach (var f in conRespuesta)
         {
             var enIva = ivaContradictorio && (f.HuboIVA is ValoresIva.Si or ValoresIva.No) && f.HuboIVA != hubo;
-            var enCuota = cuotasDistintas && f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null && f.CuotaIVA != tituloIva?.CuotaIVA;
+            var enCuota = cuotasDistintas && f.HuboIVA == ValoresIva.Si && f.CuotaIVA is not null && ACentimo(f.CuotaIVA) != ACentimo(tituloIva?.CuotaIVA);
             var enDeduccion = deduccionContradictoria && (f.DeduccionIVA is ValoresIva.Si or ValoresIva.No) && f.DeduccionIVA != deduccion;
             if (!enIva && !enCuota && !enDeduccion)
             {
@@ -145,6 +145,10 @@ public static class Consolidador
 
         return porDoc.OrderBy(kv => kv.Key, StringComparer.Ordinal).Select(kv => kv.Value).ToList();
     }
+
+    /// <summary>Cuota redondeada a céntimo para compararla; las diferencias por debajo no son discrepancia.</summary>
+    private static double? ACentimo(double? cuota)
+        => cuota is { } c ? Math.Round(c, 2, MidpointRounding.AwayFromZero) : null;
 
     /// <summary>"sí" si alguno es "sí"; si no, "no" si alguno es "no"; si no, "no consta".</summary>
     public static string Resolver(IEnumerable<string> valores)

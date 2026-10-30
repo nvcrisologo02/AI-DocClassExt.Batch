@@ -279,4 +279,29 @@ public class ConsolidadorTests
         var a = Uno(Titulo("1", "A", "sí", cuota: 100), Titulo("1", "B", "sí", cuota: 100), Titulo("1", "B", "sí", cuota: 300));
         Assert.Equal(new[] { new Discrepancia("B", "sí", null, 300, null) }, a.Discrepancias);
     }
+
+    [Fact]
+    public void Consolidar_CuotasQueDifierenPorDebajoDelCentimo_NoMarcaRevisar()
+    {
+        var a = Uno(Titulo("1", "A", "sí", cuota: 1200.001), Titulo("1", "B", "sí", cuota: 1200.004));
+        Assert.Equal("no", a.Revisar);
+        Assert.Empty(a.Discrepancias);
+    }
+
+    [Fact]
+    public void Consolidar_CuotasQueDifierenEnUnCentimo_MarcaRevisarYRecogeLaDiscrepancia()
+    {
+        var a = Uno(Titulo("1", "A", "sí", cuota: 1200.00), Titulo("1", "B", "sí", cuota: 1200.01));
+        Assert.Equal("sí", a.Revisar);
+        Assert.Equal(Consolidador.MotivoCuotasDistintas, a.MotivoRevisar);
+        Assert.Equal(new[] { new Discrepancia("B", "sí", null, 1200.01, null) }, a.Discrepancias);
+    }
+
+    [Fact]
+    public void Consolidar_CuotaNulaJuntoACuotaInformada_NoCuentaComoDistinta()
+    {
+        var a = Uno(Titulo("1", "A", "sí", cuota: 100), Titulo("1", "B", "sí"));
+        Assert.Equal("no", a.Revisar);
+        Assert.Empty(a.Discrepancias);
+    }
 }
