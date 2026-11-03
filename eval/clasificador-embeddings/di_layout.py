@@ -208,11 +208,12 @@ def main() -> None:
     ap.add_argument("--corpus", default=str(CORPUS))
     ap.add_argument("--max-paginas", type=int, default=5)
     ap.add_argument("--solo-golden", action="store_true")
+    ap.add_argument("--inventario", default=str(CACHE / "inventario.csv"), help="Solo lo usa --solo-golden")
     args = ap.parse_args()
 
     pend = list(csv.DictReader((CACHE / "pendientes_di.csv").open(encoding="utf-8-sig"), delimiter=";"))
     if args.solo_golden:
-        inv = {r["sha256"]: r["particion"] for r in csv.DictReader((CACHE / "inventario.csv").open(encoding="utf-8-sig"), delimiter=";")}
+        inv = {r["sha256"]: r["particion"] for r in csv.DictReader(Path(args.inventario).open(encoding="utf-8-sig"), delimiter=";")}
         pend = [p for p in pend if inv.get(p["sha256"]) == "golden"]
     total = sum(paginas_facturables(int(p["paginas"]), args.max_paginas) for p in pend)
     print(f"documentos: {len(pend)} | páginas facturables (recorte {args.max_paginas}): {total}")

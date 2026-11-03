@@ -92,17 +92,24 @@ def manifiesto(version: str, particion: str, n_docs: int, dims: int, tipologias:
     }
 
 
-def entrenar_train():
-    from comun import CACHE
-    from embeddings import cargar
+def leer_inventario(ruta: Path) -> dict[str, dict]:
+    return {r["sha256"]: r for r in csv.DictReader(ruta.open(encoding="utf-8-sig"), delimiter=";")}
 
-    inv = {r["sha256"]: r for r in csv.DictReader((CACHE / "inventario.csv").open(encoding="utf-8-sig"), delimiter=";")}
-    shas, X = cargar()
+
+def seleccionar_train(inv: dict[str, dict], shas: list[str], X):
+    """Entrena A con los documentos de la partición train que tienen vector."""
     pos = {h: i for i, h in enumerate(shas)}
     tr = [h for h, r in inv.items() if r["particion"] == "train" and h in pos]
     X_tr = X[[pos[h] for h in tr]]
     A = ClasificadorLR().fit(X_tr, [inv[h]["tdn1"] for h in tr], [inv[h]["tdn2"] for h in tr])
     return A, X_tr, tr
+
+
+def entrenar_train(inventario: Path):
+    from embeddings import cargar
+
+    shas, X = cargar()
+    return seleccionar_train(leer_inventario(inventario), shas, X)
 
 
 def escribir(ruta: Path, doc: dict) -> None:
@@ -145,6 +152,7 @@ def main() -> None:
     ap.add_argument("--tipologias", help="JSON [{codigo,tdn1,tdn2}] exportado de la BD de DEV")
     ap.add_argument("--salida", default="out")
     ap.add_argument("--version", default="v1")
+    ap.add_argument("--inventario", default=None, help="CSV del inventario (por defecto CACHE/inventario.csv)")
     ap.add_argument("--fixture-tests", help="Carpeta donde escribir el modelo sintetico para los tests del backend")
     args = ap.parse_args()
 
@@ -156,7 +164,8 @@ def main() -> None:
     if not args.tipologias:
         ap.error("--tipologias es obligatorio para exportar el modelo real")
     tipologias = json.loads(Path(args.tipologias).read_text(encoding="utf-8-sig"))
-    A, X_tr, tr = entrenar_train()
+    from comun import CACHE
+    A, X_tr, tr = entrenar_train(Path(args.inventario) if args.inventario else CACHE / "inventario.csv")
     man = manifiesto(args.version, "train", len(tr), X_tr.shape[1], tipologias_cubiertas(A, tipologias))
     salida = Path(args.salida)
     escribir(salida / f"clasificador-embeddings-{args.version}.json", exportar_modelo(A, man))

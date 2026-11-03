@@ -11,12 +11,14 @@ difiere en mayúsculas o espacios.
 Uso: python texto.py"""
 from __future__ import annotations
 
+import argparse
 import base64
 import csv
 import gzip
 import struct
 import zlib
 from collections import Counter
+from pathlib import Path
 
 import pyodbc
 
@@ -73,13 +75,30 @@ def conectar(servidor: str):
     )
 
 
+def pendientes_y_origen(inv: list[dict], origen: dict[str, str]) -> tuple[list[dict], list[list]]:
+    """Pendientes de DI (sin texto en caché) y filas de texto_origen.csv, en el orden del inventario."""
+    pend, filas = [], []
+    for r in inv:
+        o = origen.get(r["sha256"], "sin_texto")
+        md = leer_md(r["sha256"]) if o != "sin_texto" else ""
+        filas.append([r["sha256"], o, len(md or "")])
+        if o == "sin_texto":
+            pend.append({"sha256": r["sha256"], "rel_path": r["rel_path"], "paginas": r["paginas"]})
+    return pend, filas
+
+
 def main() -> None:
-    inv = list(csv.DictReader((CACHE / "inventario.csv").open(encoding="utf-8-sig"), delimiter=";"))
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--inventario", default=str(CACHE / "inventario.csv"))
+    ap.add_argument("--sin-bd", action="store_true", help="No consulta ninguna BD: lo que no tenga .md.gz en caché va a pendientes_di.csv")
+    args = ap.parse_args()
+
+    inv = list(csv.DictReader(Path(args.inventario).open(encoding="utf-8-sig"), delimiter=";"))
     origen = {}
     prev = CACHE / "texto_origen.csv"
     if prev.exists():
         origen = {r["sha256"]: r["origen_texto"] for r in csv.DictReader(prev.open(encoding="utf-8-sig"), delimiter=";")}
-    for etiqueta, servidor in SERVIDORES:
+    for etiqueta, servidor in ([] if args.sin_bd else SERVIDORES):
         faltan = [r["sha256"] for r in inv if origen.get(r["sha256"], "sin_texto") == "sin_texto"]
         if not faltan:
             break
@@ -102,21 +121,19 @@ def main() -> None:
                     origen[sha] = etiqueta
         print(f"{etiqueta}: acumulado con texto {sum(v != 'sin_texto' for v in origen.values())} de {len(inv)}")
 
+    pend, filas = pendientes_y_origen(inv, origen)
     with prev.open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(["sha256", "origen_texto", "caracteres"])
-        for r in inv:
-            o = origen.get(r["sha256"], "sin_texto")
-            md = leer_md(r["sha256"]) if o != "sin_texto" else ""
-            w.writerow([r["sha256"], o, len(md or "")])
-    pend = [r for r in inv if origen.get(r["sha256"], "sin_texto") == "sin_texto"]
+        w.writerows(filas)
     with (CACHE / "pendientes_di.csv").open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=";")
         w.writerow(["sha256", "rel_path", "paginas"])
         for r in pend:
             w.writerow([r["sha256"], r["rel_path"], r["paginas"]])
+    shas_pend = {p["sha256"] for p in pend}
     print("origen:", dict(Counter(origen.get(r["sha256"], "sin_texto") for r in inv)))
-    print("pendientes DI:", len(pend), "| por partición:", dict(Counter(r["particion"] for r in pend)))
+    print("pendientes DI:", len(pend), "| por partición:", dict(Counter(r["particion"] for r in inv if r["sha256"] in shas_pend)))
 
 
 if __name__ == "__main__":
