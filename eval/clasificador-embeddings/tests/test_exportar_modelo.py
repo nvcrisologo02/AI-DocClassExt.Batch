@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from exportar_modelo import (  # noqa: E402
     construir_fixture_sintetico,
     exportar_modelo,
+    seleccionar_train,
     paridad,
     tipologias_cubiertas,
 )
@@ -90,3 +91,23 @@ def test_fixture_sintetico_es_json_valido(tmp_path):
     assert any("coef" in v and len(v["coef"]) >= 3 for v in modelo["tdn2"].values())  # una multiclase
     assert len(par["casos"]) == 7
     assert par["casos"][-1]["tdn1"] == "DDDD" and par["casos"][-1]["tdn2"] == ""
+
+
+def test_seleccionar_train_usa_solo_particion_train_con_vector():
+    X, t1, t2 = datos()
+    shas = [f"s{i}" for i in range(len(X))]
+    inv = {s: {"particion": "train" if i % 5 else "hold2", "tdn1": t1[i], "tdn2": t2[i]} for i, s in enumerate(shas)}
+    inv["sin_vector"] = {"particion": "train", "tdn1": "AAAA", "tdn2": "AAAA-01"}
+    A, X_tr, tr = seleccionar_train(inv, shas, X)
+    assert len(tr) == sum(1 for i in range(len(X)) if i % 5) and "sin_vector" not in tr
+    assert X_tr.shape == (len(tr), 4)
+
+
+def test_manifiesto_v2_lleva_cortes_y_fuente_y_v1_no():
+    from exportar_modelo import cortes_desde_inventario, manifiesto
+    inv = {"a": {"origen": "corpus-v1"}, "b": {"origen": "share-2026-11-03"}, "c": {"origen": "corpus-v1"}}
+    cortes = cortes_desde_inventario(inv, ["a", "b", "c"])
+    assert cortes == [{"origen": "corpus-v1", "nDocumentos": 2}, {"origen": "share-2026-11-03", "nDocumentos": 1}]
+    m = manifiesto("v2", "train", 3, 8, [], cortes, "etiquetado manual")
+    assert m["cortes"] == cortes and m["fuenteEtiquetas"] == "etiquetado manual"
+    assert "cortes" not in manifiesto("v1", "train", 3, 8, [])
