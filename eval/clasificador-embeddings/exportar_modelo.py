@@ -77,8 +77,9 @@ def paridad(A: ClasificadorLR, X: np.ndarray, shas: list[str], n: int = 10) -> d
     return {"casos": casos}
 
 
-def manifiesto(version: str, particion: str, n_docs: int, dims: int, tipologias: list[dict]) -> dict:
-    return {
+def manifiesto(version: str, particion: str, n_docs: int, dims: int, tipologias: list[dict],
+               cortes: list[dict] | None = None, fuente_etiquetas: str | None = None) -> dict:
+    man = {
         "version": version,
         "entrenadoEn": dt.date.today().isoformat(),
         "particion": particion,
@@ -90,6 +91,20 @@ def manifiesto(version: str, particion: str, n_docs: int, dims: int, tipologias:
         "umbralRecomendado": 0.6,
         "tipologias": tipologias,
     }
+    if cortes is not None:
+        man["cortes"] = cortes
+    if fuente_etiquetas is not None:
+        man["fuenteEtiquetas"] = fuente_etiquetas
+    return man
+
+
+def cortes_desde_inventario(inv: dict[str, dict], tr: list[str]) -> list[dict]:
+    """Documentos de entrenamiento por origen (sin columna origen = corpus-v1), ordenado por origen."""
+    cuenta: dict[str, int] = {}
+    for h in tr:
+        o = inv[h].get("origen") or "corpus-v1"
+        cuenta[o] = cuenta.get(o, 0) + 1
+    return [{"origen": o, "nDocumentos": cuenta[o]} for o in sorted(cuenta)]
 
 
 def leer_inventario(ruta: Path) -> dict[str, dict]:
@@ -153,6 +168,7 @@ def main() -> None:
     ap.add_argument("--salida", default="out")
     ap.add_argument("--version", default="v1")
     ap.add_argument("--inventario", default=None, help="CSV del inventario (por defecto CACHE/inventario.csv)")
+    ap.add_argument("--fuente-etiquetas", help="Origen de las etiquetas del entrenamiento (obligatorio si --version no es v1)")
     ap.add_argument("--fixture-tests", help="Carpeta donde escribir el modelo sintetico para los tests del backend")
     args = ap.parse_args()
 
@@ -163,10 +179,15 @@ def main() -> None:
 
     if not args.tipologias:
         ap.error("--tipologias es obligatorio para exportar el modelo real")
+    if args.version != "v1" and not args.fuente_etiquetas:
+        ap.error("--fuente-etiquetas es obligatorio cuando --version no es v1")
     tipologias = json.loads(Path(args.tipologias).read_text(encoding="utf-8-sig"))
     from comun import CACHE
-    A, X_tr, tr = entrenar_train(Path(args.inventario) if args.inventario else CACHE / "inventario.csv")
-    man = manifiesto(args.version, "train", len(tr), X_tr.shape[1], tipologias_cubiertas(A, tipologias))
+    ruta_inv = Path(args.inventario) if args.inventario else CACHE / "inventario.csv"
+    A, X_tr, tr = entrenar_train(ruta_inv)
+    inv = leer_inventario(ruta_inv)
+    man = manifiesto(args.version, "train", len(tr), X_tr.shape[1], tipologias_cubiertas(A, tipologias),
+                     cortes_desde_inventario(inv, tr), args.fuente_etiquetas)
     salida = Path(args.salida)
     escribir(salida / f"clasificador-embeddings-{args.version}.json", exportar_modelo(A, man))
     escribir(salida / f"paridad-{args.version}.json", paridad(A, X_tr, tr, n=10))

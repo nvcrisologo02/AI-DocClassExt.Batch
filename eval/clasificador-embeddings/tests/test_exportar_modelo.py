@@ -101,3 +101,13 @@ def test_seleccionar_train_usa_solo_particion_train_con_vector():
     A, X_tr, tr = seleccionar_train(inv, shas, X)
     assert len(tr) == sum(1 for i in range(len(X)) if i % 5) and "sin_vector" not in tr
     assert X_tr.shape == (len(tr), 4)
+
+
+def test_manifiesto_v2_lleva_cortes_y_fuente_y_v1_no():
+    from exportar_modelo import cortes_desde_inventario, manifiesto
+    inv = {"a": {"origen": "corpus-v1"}, "b": {"origen": "share-2026-11-03"}, "c": {"origen": "corpus-v1"}}
+    cortes = cortes_desde_inventario(inv, ["a", "b", "c"])
+    assert cortes == [{"origen": "corpus-v1", "nDocumentos": 2}, {"origen": "share-2026-11-03", "nDocumentos": 1}]
+    m = manifiesto("v2", "train", 3, 8, [], cortes, "etiquetado manual")
+    assert m["cortes"] == cortes and m["fuenteEtiquetas"] == "etiquetado manual"
+    assert "cortes" not in manifiesto("v1", "train", 3, 8, [])
