@@ -274,3 +274,36 @@ Lectura:
 - El valor del híbrido no es solo el coste: a umbral 0,6 gana en acierto a sus dos componentes, porque la confianza de A separa bien sus aciertos y el GPT solo aporta donde A duda.
 - Cifras sobre cal (distribución del corpus), con los límites de §10-§11 (misma fuente de etiquetas, confianza bruta sin calibrador). El umbral definitivo se decide con datos de la fase de sombra.
 - Continuación en ADO, bajo la Feature AB#99948: AB#100779 (híbrido en el orquestador, con ADR), AB#100780 (crecimiento y reentreno versionado), AB#100781 (promoción DEV → PRE → PRO por ai-artifacts; verificado el 2026-09-30 que los tres entornos tienen `text-embedding-3-large` v1 con los mismos nombres de deployment) y AB#100782 (regla de contraste TASA→CERJ del GPT, independiente de A).
+
+## 13. Reentreno v2 con el corpus del share DOCIA (2026-11-03, AB#100780)
+
+Primer crecimiento versionado del clasificador A. Diseño en el repo core (`docs/superpowers/specs/2026-11-03-reentreno-embeddings-v2-design.md`). Corpus: 638 ficheros en 29 carpetas por código TDN2 dejados por el equipo de GDC en `\srbsfsp01\VARIOS\DOCIA\para embeddings`; v1 no cubría 18 de esas 28 tipologías y en la sombra de DEV coincidía con el GPT el 83 % en las cubiertas y el 30 % en las no cubiertas.
+
+Saneado e inventario (`inventario_manifiesto.py`, manifiesto por carpeta, sin depender del nombre del fichero):
+
+- Fuera: ESIN-AI (2 docs, por debajo del mínimo de 5), el duplicado cruzado LIPR-06_3 = LIPR-13_31 (los dos ficheros) y una copia de cada duplicado MD5 dentro de carpeta. CERT-05-Etiqueta se funde en CERT-05. FIAV-06 se da de alta en DEV como `fiav.06` (solo clasificación) antes de exportar.
+- Quedan 617 documentos nuevos en 27 TDN2: 496 a `train` y 121 a `hold2` (20 % estratificado, semilla 42, solo en clases con 10 o más documentos; `cal` y `golden` no cambian).
+- Texto: 60 reutilizados de la BD (39 DEV, 21 PRO) y 557 por DI Layout en DEV (prebuilt-layout, tope 5 páginas, 1.608 páginas facturadas). Embeddings: 617 documentos, 1,32 M de tokens. 0 vacíos.
+
+Entrenamiento (`exportar_modelo.py --version v2`): train de v1 (6.313) más train nuevo (496) = 6.809 documentos; 39 familias y 102 tipologías cubiertas (v1: 37 y 85). Mismo entrenador y mismos hiperparámetros que v1. El manifiesto añade `cortes` (`corpus-v1` 6.313, `share-2026-11-03` 496) y `fuenteEtiquetas` ("Documentos seleccionados y certificados por el equipo de GDC (share DOCIA, 2026-11-03)"); `calibrado` sigue en `false`. El loader de core ignora los campos nuevos (test `Parse_IgnoraCamposDesconocidosDelManifiesto`).
+
+Puerta de calidad (`puerta_calidad.py`, condiciones: TDN1 de v2 en cal no inferior a v1 y TDN1 de v2 en hold2 no inferior a 0,80):
+
+| Partición | Modelo | n | TDN1 | TDN2 | ECE | Cobertura ≥ 0,6 | Acierto ≥ 0,6 |
+|---|---|---|---|---|---|---|---|
+| cal | v1 | 1.576 | 87,2 % | 61,5 % | 0,029 | 86,1 % | 94,3 % |
+| cal | v2 | 1.576 | **87,4 %** | 61,5 % | 0,033 | 86,5 % | 94,1 % |
+| hold2 | v1 | 121 | 67,8 % | 28,1 % | 0,052 | 62,0 % | 85,3 % |
+| hold2 | v2 | 121 | **90,9 %** | **82,6 %** | 0,117 | 85,1 % | 97,1 % |
+
+Resultado: `PUERTA: PASA`. Por TDN2 en hold2 (v2): 100 % en 15 de las 24 clases con holdout (entre ellas CERA-53 n=9, NOTS-01 n=11, FIAV-06 n=4); por debajo de 80 %: CERT-19 50 % (n=2), COMU-84 66,7 % (n=3), DOCN-01 66,7 % (n=6), INRG-08 60 % (n=5), COMU-82 y LIPR-13 75 % (n=4 y 8). Detalle en `out/puerta-calidad-v2.json` (copia en core, `docs/auxiliares/temps/2026-11-03/`).
+
+Lectura:
+
+- En cal v2 no pierde nada frente a v1 (+0,2 pp TDN1, mismo TDN2): las clases nuevas no desplazan a las antiguas. La ganancia está donde se buscaba, en las tipologías que v1 no cubría (+23 pp TDN1 y +54 pp TDN2 en hold2).
+- La ECE sube en hold2 (0,117): v2 está más seguro de lo que acierta en las clases nuevas, con pocos ejemplos por clase. Es el argumento de mantener `calibrado = false` y el modo `sombra`; el umbral se revisa con datos de sombra, no con hold2.
+- hold2 tiene la misma fuente de etiquetas que train (GDC) y texto de DI en el 90 % de los casos frente al markdown de la pipeline; es una medida de cobertura, no de paridad con producción.
+
+Publicación en DEV (2026-11-03, con autorización): `modelos/clasificador-embeddings/v2/clasificador-embeddings-v2.json` (13.263.817 B, MD5 `JNnBdj/5cjO17motLTO3Dw==`) y `paridad-v2.json` en `srbstgdevdocai/documentai`; fila 1026 de `ModeloConfigs` apuntada a v2 con el script `scripts/migrations/clasificador-embeddings/03-modeloconfig-embeddings-v2.sql` de core (backup `ModeloConfigs__bak_20261103_124828`), `Modo` y `Restringido.Modo` siguen en `sombra`. v1 se conserva en el blob. PRE y PRO por el cauce de AB#100781.
+
+Reproducir: `inventario_manifiesto.py --corpus C:/temp/MVP/corpus-embeddings-v2 --origen share-2026-11-03` → `texto.py --inventario CACHE/inventario_v2.csv` → `di_layout.py --inventario ... --lanzar` → `embeddings.py` → `exportar_modelo.py --inventario ... --version v2 --fuente-etiquetas "..."` → `puerta_calidad.py --v1 out/clasificador-embeddings-v1.json --v2 out/clasificador-embeddings-v2.json --inventario ...`. Pendiente: los 15 HTTP 400 del endpoint de embeddings vistos en la sombra de v1 (Bug por abrir, hipótesis: tope de 8.192 tokens frente al recorte por caracteres).
