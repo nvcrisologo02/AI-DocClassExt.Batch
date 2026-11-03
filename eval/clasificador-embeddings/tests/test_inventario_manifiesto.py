@@ -44,3 +44,11 @@ def test_combinar_no_toca_v1():
     assert out[0] == {**v1[0], "origen": "corpus-v1"}
     assert out[1]["origen"] == "share-2026-11-03"
     assert list(out[0].keys()) == ["sha256", "rel_path", "tdn1", "tdn2", "particion", "paginas", "origen"]
+
+
+def test_combinar_conserva_origen_de_la_base():
+    base = [{"sha256": "h1", "rel_path": "a", "tdn1": "NOTS", "tdn2": "NOTS-01", "particion": "train", "paginas": "1", "origen": "corpus-v1"},
+            {"sha256": "h2", "rel_path": "b", "tdn1": "NOTS", "tdn2": "NOTS-01", "particion": "train", "paginas": "1", "origen": "share-2026-11-03"}]
+    nuevas = [{"sha256": "h3", "rel_path": "c", "tdn1": "NOTS", "tdn2": "NOTS-01", "particion": "train", "paginas": 2}]
+    out = combinar(base, nuevas, "share-2027-01-01")
+    assert [f["origen"] for f in out] == ["corpus-v1", "share-2026-11-03", "share-2027-01-01"]

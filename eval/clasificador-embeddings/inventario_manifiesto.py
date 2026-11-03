@@ -2,8 +2,9 @@
 
 Uso: python inventario_manifiesto.py [--corpus C:/temp/MVP/corpus-embeddings-v2]
          [--origen share-2026-11-03] [--hilos 8]
-Lee CACHE/inventario.csv (v1, sin tocarlo) y escribe CACHE/inventario_v2.csv y
-CACHE/inventario_v2_excluidos.csv."""
+Opciones: --base (inventario base, por defecto CACHE/inventario.csv, sin tocarlo) y
+--salida (CSV resultante, por defecto CACHE/inventario_v2.csv; los excluidos van al mismo
+nombre con sufijo _excluidos)."""
 from __future__ import annotations
 
 import argparse
@@ -103,8 +104,8 @@ def particionar_v2(filas: list[dict], semilla: int = 42) -> tuple[list[dict], li
 
 
 def combinar(v1: list[dict], nuevas: list[dict], origen: str) -> list[dict]:
-    """Filas de v1 intactas (origen corpus-v1) seguidas de las nuevas ya filtradas."""
-    return ([{**f, "origen": "corpus-v1"} for f in v1]
+    """Filas base intactas (conservan su origen; corpus-v1 si no lo traen) seguidas de las nuevas ya filtradas."""
+    return ([{**f, "origen": f.get("origen") or "corpus-v1"} for f in v1]
             + [{**f, "origen": origen} for f in nuevas])
 
 
@@ -113,9 +114,11 @@ def main() -> None:
     ap.add_argument("--corpus", default="C:/temp/MVP/corpus-embeddings-v2")
     ap.add_argument("--origen", default="share-2026-11-03")
     ap.add_argument("--hilos", type=int, default=8)
+    ap.add_argument("--base", default=str(CACHE / "inventario.csv"))
+    ap.add_argument("--salida", default=str(CACHE / "inventario_v2.csv"))
     args = ap.parse_args()
 
-    with (CACHE / "inventario.csv").open(encoding="utf-8-sig", newline="") as f:
+    with Path(args.base).open(encoding="utf-8-sig", newline="") as f:
         v1 = list(csv.DictReader(f, delimiter=";"))
     hashes_v1 = {r["sha256"] for r in v1}
 
@@ -128,12 +131,14 @@ def main() -> None:
     excluidos += exc
 
     salida = combinar(v1, nuevas, args.origen)
-    CACHE.mkdir(parents=True, exist_ok=True)
-    with (CACHE / "inventario_v2.csv").open("w", newline="", encoding="utf-8-sig") as f:
+    ruta_salida = Path(args.salida)
+    ruta_excl = ruta_salida.with_name(f"{ruta_salida.stem}_excluidos{ruta_salida.suffix}")
+    ruta_salida.parent.mkdir(parents=True, exist_ok=True)
+    with ruta_salida.open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, CAMPOS_V2, delimiter=";", extrasaction="ignore")
         w.writeheader()
         w.writerows(salida)
-    with (CACHE / "inventario_v2_excluidos.csv").open("w", newline="", encoding="utf-8-sig") as f:
+    with ruta_excl.open("w", newline="", encoding="utf-8-sig") as f:
         w = csv.DictWriter(f, ["rel_path", "motivo"], delimiter=";")
         w.writeheader()
         w.writerows(excluidos)
