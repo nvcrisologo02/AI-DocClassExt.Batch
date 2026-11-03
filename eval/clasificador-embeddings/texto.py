@@ -80,7 +80,11 @@ def pendientes_y_origen(inv: list[dict], origen: dict[str, str]) -> tuple[list[d
     pend, filas = [], []
     for r in inv:
         o = origen.get(r["sha256"], "sin_texto")
-        md = leer_md(r["sha256"]) if o != "sin_texto" else ""
+        md = leer_md(r["sha256"])
+        if o == "sin_texto" and md and md.strip():
+            o = "cache"  # texto ya cacheado sin origen registrado: no hace falta DI
+        if o == "sin_texto":
+            md = ""
         filas.append([r["sha256"], o, len(md or "")])
         if o == "sin_texto":
             pend.append({"sha256": r["sha256"], "rel_path": r["rel_path"], "paginas": r["paginas"]})
@@ -90,7 +94,7 @@ def pendientes_y_origen(inv: list[dict], origen: dict[str, str]) -> tuple[list[d
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--inventario", default=str(CACHE / "inventario.csv"))
-    ap.add_argument("--sin-bd", action="store_true", help="No consulta ninguna BD: lo que no tenga .md.gz en caché va a pendientes_di.csv")
+    ap.add_argument("--sin-bd", action="store_true", help="No consulta ninguna BD: usa el markdown ya cacheado (.md.gz) y lo que no esté en la caché va a pendientes_di.csv")
     args = ap.parse_args()
 
     inv = list(csv.DictReader(Path(args.inventario).open(encoding="utf-8-sig"), delimiter=";"))

@@ -40,3 +40,11 @@ def test_pendientes_son_los_que_no_tienen_texto(monkeypatch):
     pend, filas = pendientes_y_origen(inv, {"h1": "bd_dev"})
     assert [p["sha256"] for p in pend] == ["h2"]
     assert filas == [["h1", "bd_dev", 4], ["h2", "sin_texto", 0]]
+
+
+def test_md_en_cache_sin_origen_no_es_pendiente(monkeypatch):
+    monkeypatch.setattr("texto.leer_md", lambda sha: "hola mundo" if sha == "h1" else None)
+    inv = [{"sha256": "h1", "rel_path": "a", "paginas": "2"}, {"sha256": "h2", "rel_path": "b", "paginas": "1"}]
+    pend, filas = pendientes_y_origen(inv, {})
+    assert [p["sha256"] for p in pend] == ["h2"]
+    assert filas == [["h1", "cache", 10], ["h2", "sin_texto", 0]]
