@@ -4,7 +4,8 @@ Uso:
   .venv/Scripts/python puerta_calidad.py --v1 out/clasificador-embeddings-v1.json \
       --v2 out/clasificador-embeddings-v2.json --inventario <ruta>
 
-Pasa si el acierto TDN1 de v2 en cal no baja el de v1 y en hold2 llega al mínimo. Código de salida 0 si pasa, 1 si falla.
+Pasa si el acierto TDN1 del nuevo en cal no baja más de --tolerancia-cal (0,5 pp) frente al anterior y en el
+holdout llega al mínimo (0,80). Código de salida 0 si pasa, 1 si falla.
 """
 import argparse
 import json
@@ -57,10 +58,14 @@ def evaluar(doc: dict, X: np.ndarray, t1: list[str], t2: list[str]) -> dict:
 
 
 def veredicto(cal_anterior: float, cal_nuevo: float, hold_nuevo: float, minimo_hold: float = 0.80,
-              n_hold: int | None = None, holdout: str = "hold2") -> tuple[bool, list[str]]:
+              n_hold: int | None = None, holdout: str = "hold2",
+              tolerancia_cal: float = 0.005) -> tuple[bool, list[str]]:
+    """cal no puede bajar más de tolerancia_cal (0,5 pp por defecto, decisión del 2026-11-05 en v3) y el
+    holdout nuevo debe llegar a minimo_hold."""
     motivos = []
-    if cal_nuevo < cal_anterior:
-        motivos.append(f"cal: nuevo {cal_nuevo:.1%} por debajo del anterior {cal_anterior:.1%}")
+    if cal_nuevo < cal_anterior - tolerancia_cal:
+        motivos.append(f"cal: nuevo {cal_nuevo:.1%} por debajo del anterior {cal_anterior:.1%} "
+                       f"en más de {tolerancia_cal:.1%}")
     if n_hold == 0:
         motivos.append(f"{holdout}: sin documentos en el inventario")
     elif hold_nuevo < minimo_hold:
@@ -82,6 +87,8 @@ def main() -> None:
     ap.add_argument("--nuevo", "--v2", dest="nuevo", required=True, help="Artefacto JSON de la versión candidata")
     ap.add_argument("--inventario", default=None, help="CSV del inventario (por defecto CACHE/inventario.csv)")
     ap.add_argument("--holdout", default="hold2", help="Partición del holdout del corte nuevo (v2: hold2, v3: hold3)")
+    ap.add_argument("--tolerancia-cal", type=float, default=0.005,
+                    help="Caída máxima admitida del TDN1 en cal frente al anterior (fracción; 0.005 = 0,5 pp)")
     ap.add_argument("--salida", default=None, help="JSON de resultados (por defecto out/puerta-calidad-<version nueva>.json)")
     args = ap.parse_args()
 
@@ -128,7 +135,8 @@ def main() -> None:
 
     ok, motivos = veredicto(res["cal"]["anterior"]["tdn1"], res["cal"]["nuevo"]["tdn1"],
                             res[args.holdout]["nuevo"]["tdn1"], n_hold=res[args.holdout]["nuevo"]["n"],
-                            holdout=args.holdout)
+                            holdout=args.holdout, tolerancia_cal=args.tolerancia_cal)
+    res["tolerancia_cal"] = args.tolerancia_cal
     res["pasa"], res["motivos"] = ok, motivos
     salida = Path(args.salida) if args.salida else Path("out") / f"puerta-calidad-{version_nueva}.json"
     salida.parent.mkdir(parents=True, exist_ok=True)
