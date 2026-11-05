@@ -52,3 +52,12 @@ def test_combinar_conserva_origen_de_la_base():
     nuevas = [{"sha256": "h3", "rel_path": "c", "tdn1": "NOTS", "tdn2": "NOTS-01", "particion": "train", "paginas": 2}]
     out = combinar(base, nuevas, "share-2027-01-01")
     assert [f["origen"] for f in out] == ["corpus-v1", "share-2026-11-03", "share-2027-01-01"]
+
+
+def test_particion_holdout_con_nombre_propio():
+    filas = [{"sha256": f"a{i}", "tdn1": "AAAA", "tdn2": "AAAA-01"} for i in range(20)]
+    out, exc = particionar_v2(filas, semilla=42, holdout="hold3")
+    assert sum(f["particion"] == "hold3" for f in out) == 4
+    assert not any(f["particion"] == "hold2" for f in out) and exc == []
+    assert particionar_v2(filas, semilla=42) != (out, exc)  # el nombre cambia, el reparto no
+    assert [f["sha256"] for f in out] == [f["sha256"] for f in particionar_v2(filas, semilla=42)[0]]

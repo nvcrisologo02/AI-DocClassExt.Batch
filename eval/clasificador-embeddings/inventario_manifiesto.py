@@ -1,10 +1,11 @@
 """Inventario del corpus nuevo etiquetado por carpeta (CODIGO/CODIGO_n.ext).
 
 Uso: python inventario_manifiesto.py [--corpus C:/temp/MVP/corpus-embeddings-v2]
-         [--origen share-2026-11-03] [--hilos 8]
-Opciones: --base (inventario base, por defecto CACHE/inventario.csv, sin tocarlo) y
+         [--origen share-2026-11-03] [--hilos 8] [--holdout hold2]
+Opciones: --base (inventario base, por defecto CACHE/inventario.csv, sin tocarlo),
 --salida (CSV resultante, por defecto CACHE/inventario_v2.csv; los excluidos van al mismo
-nombre con sufijo _excluidos)."""
+nombre con sufijo _excluidos) y --holdout (nombre de la partición del holdout nuevo; cada
+corte usa la suya: v2 hold2, v3 hold3)."""
 from __future__ import annotations
 
 import argparse
@@ -84,8 +85,8 @@ def dedup_por_hash(filas: list[dict]) -> tuple[list[dict], list[dict]]:
     return out, excluidos
 
 
-def particionar_v2(filas: list[dict], semilla: int = 42) -> tuple[list[dict], list[dict]]:
-    """Por tdn2: n < MIN_DOCS fuera; n >= MIN_HOLDOUT aparta round(n*FRAC_HOLDOUT) a hold2; resto train."""
+def particionar_v2(filas: list[dict], semilla: int = 42, holdout: str = "hold2") -> tuple[list[dict], list[dict]]:
+    """Por tdn2: n < MIN_DOCS fuera; n >= MIN_HOLDOUT aparta round(n*FRAC_HOLDOUT) a `holdout`; resto train."""
     por_clase: dict[str, list[dict]] = defaultdict(list)
     for f in filas:
         por_clase[f["tdn2"]].append(f)
@@ -99,7 +100,7 @@ def particionar_v2(filas: list[dict], semilla: int = 42) -> tuple[list[dict], li
         rnd.shuffle(grupo)
         n_hold = round(len(grupo) * FRAC_HOLDOUT) if len(grupo) >= MIN_HOLDOUT else 0
         for k, g in enumerate(grupo):
-            out.append({**g, "particion": "hold2" if k < n_hold else "train"})
+            out.append({**g, "particion": holdout if k < n_hold else "train"})
     return out, excluidos
 
 
@@ -116,6 +117,7 @@ def main() -> None:
     ap.add_argument("--hilos", type=int, default=8)
     ap.add_argument("--base", default=str(CACHE / "inventario.csv"))
     ap.add_argument("--salida", default=str(CACHE / "inventario_v2.csv"))
+    ap.add_argument("--holdout", default="hold2", help="Nombre de la partición del holdout nuevo (v3: hold3)")
     args = ap.parse_args()
 
     with Path(args.base).open(encoding="utf-8-sig", newline="") as f:
@@ -127,7 +129,7 @@ def main() -> None:
     excluidos += exc
     nuevas = [f for f in filas if f["sha256"] not in hashes_v1]
     excluidos += [{"rel_path": f["rel_path"], "motivo": "ya_en_v1"} for f in filas if f["sha256"] in hashes_v1]
-    nuevas, exc = particionar_v2(nuevas)
+    nuevas, exc = particionar_v2(nuevas, holdout=args.holdout)
     excluidos += exc
 
     salida = combinar(v1, nuevas, args.origen)

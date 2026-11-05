@@ -23,7 +23,7 @@ def test_predecir_artefacto_coincide_con_sklearn():
 
 def test_veredicto():
     assert veredicto(0.872, 0.872, 0.80) == (True, [])
-    ok, motivos = veredicto(0.872, 0.871, 0.95)
+    ok, motivos = veredicto(0.872, 0.866, 0.95)
     assert not ok and "cal" in motivos[0]
     ok, motivos = veredicto(0.872, 0.90, 0.79)
     assert not ok and "hold2" in motivos[0]
@@ -36,3 +36,20 @@ def test_evaluar_sobre_datos_de_entrenamiento():
     r = evaluar(doc, X, t1, t2)
     assert r["n"] == len(X) and 0.9 <= r["tdn1"] <= 1.0 and 0.0 <= r["tdn2"] <= 1.0
     assert set(r) == {"tdn1", "tdn2", "ece", "cobertura_06", "acierto_06", "n"}
+
+
+def test_veredicto_con_holdout_propio_y_sin_filas():
+    assert veredicto(0.874, 0.874, 0.80, holdout="hold3") == (True, [])
+    ok, motivos = veredicto(0.874, 0.90, 0.79, holdout="hold3")
+    assert not ok and motivos[0].startswith("hold3")
+    ok, motivos = veredicto(0.874, 0.90, 0.0, n_hold=0, holdout="hold3")
+    assert not ok and "sin documentos" in motivos[0]
+
+
+def test_veredicto_tolera_caida_de_cal_dentro_del_margen():
+    # 2026-11-05: v3 87,1 % frente a v2 87,4 %; el margen por defecto es 0,5 pp
+    assert veredicto(0.874, 0.871, 0.95) == (True, [])
+    ok, motivos = veredicto(0.874, 0.868, 0.95)
+    assert not ok and motivos[0].startswith("cal") and "0.5%" in motivos[0]
+    ok, motivos = veredicto(0.874, 0.871, 0.95, tolerancia_cal=0.0)
+    assert not ok and motivos[0].startswith("cal")

@@ -1,10 +1,14 @@
-"""Puerta de calidad del clasificador por embeddings: v1 frente a v2 sobre cal y hold2 (AB#100780).
+"""Puerta de calidad del clasificador por embeddings: versión anterior frente a candidata sobre cal, hold2 y el
+holdout del corte nuevo (AB#100780 v2, AB#101313 v3).
 
 Uso:
-  .venv/Scripts/python puerta_calidad.py --v1 out/clasificador-embeddings-v1.json \
-      --v2 out/clasificador-embeddings-v2.json --inventario <ruta>
+  .venv/Scripts/python puerta_calidad.py --anterior out/clasificador-embeddings-v2.json \
+      --nuevo out/clasificador-embeddings-v3.json --inventario <ruta> --holdout hold3 \
+      --salida out/puerta-calidad-v3.json [--tolerancia-cal 0.005]
+(--v1/--v2 siguen admitidos como alias de --anterior/--nuevo.)
 
-Pasa si el acierto TDN1 de v2 en cal no baja el de v1 y en hold2 llega al mínimo. Código de salida 0 si pasa, 1 si falla.
+Pasa si el acierto TDN1 del nuevo en cal no baja más de --tolerancia-cal (0,5 pp) frente al anterior y en el
+holdout llega al mínimo (0,80). Código de salida 0 si pasa, 1 si falla.
 """
 import argparse
 import json
@@ -56,12 +60,19 @@ def evaluar(doc: dict, X: np.ndarray, t1: list[str], t2: list[str]) -> dict:
     }
 
 
-def veredicto(cal_v1: float, cal_v2: float, hold2_v2: float, minimo_hold2: float = 0.80) -> tuple[bool, list[str]]:
+def veredicto(cal_anterior: float, cal_nuevo: float, hold_nuevo: float, minimo_hold: float = 0.80,
+              n_hold: int | None = None, holdout: str = "hold2",
+              tolerancia_cal: float = 0.005) -> tuple[bool, list[str]]:
+    """cal no puede bajar más de tolerancia_cal (0,5 pp por defecto, decisión del 2026-11-05 en v3) y el
+    holdout nuevo debe llegar a minimo_hold."""
     motivos = []
-    if cal_v2 < cal_v1:
-        motivos.append(f"cal: v2 {cal_v2:.1%} por debajo de v1 {cal_v1:.1%}")
-    if hold2_v2 < minimo_hold2:
-        motivos.append(f"hold2: v2 {hold2_v2:.1%} por debajo del mínimo {minimo_hold2:.1%}")
+    if cal_nuevo < cal_anterior - tolerancia_cal:
+        motivos.append(f"cal: nuevo {cal_nuevo:.1%} por debajo del anterior {cal_anterior:.1%} "
+                       f"en más de {tolerancia_cal:.1%}")
+    if n_hold == 0:
+        motivos.append(f"{holdout}: sin documentos en el inventario")
+    elif hold_nuevo < minimo_hold:
+        motivos.append(f"{holdout}: nuevo {hold_nuevo:.1%} por debajo del mínimo {minimo_hold:.1%}")
     return not motivos, motivos
 
 
@@ -75,52 +86,62 @@ def _particion(inv: dict, shas: list[str], X: np.ndarray, nombre: str):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--v1", required=True)
-    ap.add_argument("--v2", required=True)
+    ap.add_argument("--anterior", "--v1", dest="anterior", required=True, help="Artefacto JSON de la versión vigente")
+    ap.add_argument("--nuevo", "--v2", dest="nuevo", required=True, help="Artefacto JSON de la versión candidata")
     ap.add_argument("--inventario", default=None, help="CSV del inventario (por defecto CACHE/inventario.csv)")
-    ap.add_argument("--salida", default="out/puerta-calidad-v2.json")
+    ap.add_argument("--holdout", default="hold2", help="Partición del holdout del corte nuevo (v2: hold2, v3: hold3)")
+    ap.add_argument("--tolerancia-cal", type=float, default=0.005,
+                    help="Caída máxima admitida del TDN1 en cal frente al anterior (fracción; 0.005 = 0,5 pp)")
+    ap.add_argument("--salida", default=None, help="JSON de resultados (por defecto out/puerta-calidad-<version nueva>.json)")
     args = ap.parse_args()
 
     from comun import CACHE
     from embeddings import cargar
     from exportar_modelo import leer_inventario
 
-    v1 = json.loads(Path(args.v1).read_text(encoding="utf-8"))
-    v2 = json.loads(Path(args.v2).read_text(encoding="utf-8"))
+    anterior = json.loads(Path(args.anterior).read_text(encoding="utf-8"))
+    nuevo = json.loads(Path(args.nuevo).read_text(encoding="utf-8"))
+    version_nueva = nuevo.get("manifiesto", {}).get("version", "nuevo")
     shas, X = cargar()
     inv = leer_inventario(Path(args.inventario) if args.inventario else CACHE / "inventario.csv")
 
-    res: dict = {"sin_vector": {}}
+    partes = list(dict.fromkeys(["cal", "hold2", args.holdout]))
+    res: dict = {"anterior": anterior.get("manifiesto", {}).get("version"), "nuevo": version_nueva,
+                 "holdout": args.holdout, "sin_vector": {}}
     datos = {}
-    for part in ("cal", "hold2"):
+    for part in partes:
         Xp, a, b, falta = _particion(inv, shas, X, part)
         datos[part] = (Xp, a, b)
         res["sin_vector"][part] = falta
-        res[part] = {"v1": evaluar(v1, Xp, a, b), "v2": evaluar(v2, Xp, a, b)}
+        res[part] = {"anterior": evaluar(anterior, Xp, a, b), "nuevo": evaluar(nuevo, Xp, a, b)}
 
-    print(f"{'partición':<10}{'modelo':<6}{'n':>6}{'TDN1':>8}{'TDN2':>8}{'ECE':>8}{'cob@0,6':>9}{'aci@0,6':>9}")
-    for part in ("cal", "hold2"):
-        for v in ("v1", "v2"):
+    print(f"{'partición':<10}{'modelo':<10}{'n':>6}{'TDN1':>8}{'TDN2':>8}{'ECE':>8}{'cob@0,6':>9}{'aci@0,6':>9}")
+    for part in partes:
+        for v in ("anterior", "nuevo"):
             r = res[part][v]
-            print(f"{part:<10}{v:<6}{r['n']:>6}{r['tdn1']:>8.1%}{r['tdn2']:>8.1%}{r['ece']:>8.3f}"
+            print(f"{part:<10}{v:<10}{r['n']:>6}{r['tdn1']:>8.1%}{r['tdn2']:>8.1%}{r['ece']:>8.3f}"
                   f"{r['cobertura_06']:>9.1%}{r['acierto_06']:>9.1%}")
 
-    Xh, a, b = datos["hold2"]
-    p1, _, _ = predecir_artefacto(v2, Xh)
+    Xh, a, b = datos[args.holdout]
+    p1, _, _ = predecir_artefacto(nuevo, Xh)
     por_tdn2: dict[str, dict] = {}
     for t2_, e, p in zip(b, a, p1):
         d = por_tdn2.setdefault(t2_ or "(vacío)", {"n": 0, "ok": 0})
         d["n"] += 1
         d["ok"] += e == p
-    res["hold2_v2_por_tdn2"] = {k: {"n": d["n"], "tdn1": d["ok"] / d["n"]} for k, d in sorted(por_tdn2.items())}
-    print("\nv2 en hold2 por tdn2")
+    clave = f"{args.holdout}_nuevo_por_tdn2"
+    res[clave] = {k: {"n": d["n"], "tdn1": d["ok"] / d["n"]} for k, d in sorted(por_tdn2.items())}
+    print(f"\nnuevo en {args.holdout} por tdn2")
     print(f"{'tdn2':<24}{'n':>6}{'TDN1':>8}")
-    for k, d in res["hold2_v2_por_tdn2"].items():
+    for k, d in res[clave].items():
         print(f"{k:<24}{d['n']:>6}{d['tdn1']:>8.1%}")
 
-    ok, motivos = veredicto(res["cal"]["v1"]["tdn1"], res["cal"]["v2"]["tdn1"], res["hold2"]["v2"]["tdn1"])
+    ok, motivos = veredicto(res["cal"]["anterior"]["tdn1"], res["cal"]["nuevo"]["tdn1"],
+                            res[args.holdout]["nuevo"]["tdn1"], n_hold=res[args.holdout]["nuevo"]["n"],
+                            holdout=args.holdout, tolerancia_cal=args.tolerancia_cal)
+    res["tolerancia_cal"] = args.tolerancia_cal
     res["pasa"], res["motivos"] = ok, motivos
-    salida = Path(args.salida)
+    salida = Path(args.salida) if args.salida else Path("out") / f"puerta-calidad-{version_nueva}.json"
     salida.parent.mkdir(parents=True, exist_ok=True)
     salida.write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
     print("PUERTA: PASA" if ok else f"PUERTA: FALLA ({'; '.join(motivos)})")
