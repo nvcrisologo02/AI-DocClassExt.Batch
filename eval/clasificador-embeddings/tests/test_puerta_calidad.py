@@ -36,3 +36,11 @@ def test_evaluar_sobre_datos_de_entrenamiento():
     r = evaluar(doc, X, t1, t2)
     assert r["n"] == len(X) and 0.9 <= r["tdn1"] <= 1.0 and 0.0 <= r["tdn2"] <= 1.0
     assert set(r) == {"tdn1", "tdn2", "ece", "cobertura_06", "acierto_06", "n"}
+
+
+def test_veredicto_con_holdout_propio_y_sin_filas():
+    assert veredicto(0.874, 0.874, 0.80, holdout="hold3") == (True, [])
+    ok, motivos = veredicto(0.874, 0.90, 0.79, holdout="hold3")
+    assert not ok and motivos[0].startswith("hold3")
+    ok, motivos = veredicto(0.874, 0.90, 0.0, n_hold=0, holdout="hold3")
+    assert not ok and "sin documentos" in motivos[0]
