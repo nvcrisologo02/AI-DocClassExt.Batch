@@ -1,8 +1,11 @@
-"""Puerta de calidad del clasificador por embeddings: v1 frente a v2 sobre cal y hold2 (AB#100780).
+"""Puerta de calidad del clasificador por embeddings: versión anterior frente a candidata sobre cal, hold2 y el
+holdout del corte nuevo (AB#100780 v2, AB#101313 v3).
 
 Uso:
-  .venv/Scripts/python puerta_calidad.py --v1 out/clasificador-embeddings-v1.json \
-      --v2 out/clasificador-embeddings-v2.json --inventario <ruta>
+  .venv/Scripts/python puerta_calidad.py --anterior out/clasificador-embeddings-v2.json \
+      --nuevo out/clasificador-embeddings-v3.json --inventario <ruta> --holdout hold3 \
+      --salida out/puerta-calidad-v3.json [--tolerancia-cal 0.005]
+(--v1/--v2 siguen admitidos como alias de --anterior/--nuevo.)
 
 Pasa si el acierto TDN1 del nuevo en cal no baja más de --tolerancia-cal (0,5 pp) frente al anterior y en el
 holdout llega al mínimo (0,80). Código de salida 0 si pasa, 1 si falla.
