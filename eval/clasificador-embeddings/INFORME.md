@@ -307,3 +307,36 @@ Lectura:
 Publicación en DEV (2026-11-03, con autorización): `modelos/clasificador-embeddings/v2/clasificador-embeddings-v2.json` (13.263.817 B, MD5 `JNnBdj/5cjO17motLTO3Dw==`) y `paridad-v2.json` en `srbstgdevdocai/documentai`; fila 1026 de `ModeloConfigs` apuntada a v2 con el script `scripts/migrations/clasificador-embeddings/03-modeloconfig-embeddings-v2.sql` de core (backup `ModeloConfigs__bak_20261103_124828`), `Modo` y `Restringido.Modo` siguen en `sombra`. v1 se conserva en el blob. PRE y PRO por el cauce de AB#100781.
 
 Reproducir: `inventario_manifiesto.py --corpus C:/temp/MVP/corpus-embeddings-v2 --origen share-2026-11-03` → `texto.py --inventario CACHE/inventario_v2.csv` → `di_layout.py --inventario ... --lanzar` → `embeddings.py` → `exportar_modelo.py --inventario ... --version v2 --fuente-etiquetas "..."` → `puerta_calidad.py --v1 out/clasificador-embeddings-v1.json --v2 out/clasificador-embeddings-v2.json --inventario ...`. Pendiente: los 15 HTTP 400 del endpoint de embeddings vistos en la sombra de v1 (Bug AB#101245, hipótesis sin verificar: tope de 8.192 tokens frente al recorte por caracteres). Dos ficheros de los que depende v2 no están en git: `C:/temp/MVP/spike-embeddings-cache/inventario_v2.csv` (SHA256 `45ea2131bac2cb9e6038ce982b326b03100e75cf22c6af4debc6edb5dc77969c`) y `eval/clasificador-embeddings/out/tipologias-dev.json` (SHA256 `6889dded9069c21eb9ab94de05a64009c93d7d25a028be47a1a296fb7453f992`). Nota: `texto_origen.csv` y `pendientes_di.csv` de la caché reflejan siempre el último inventario con el que se ejecutó `texto.py`; para volver al flujo v1 basta con relanzar `texto.py` sin `--inventario`. Para el siguiente corte, `inventario_manifiesto.py` admite `--base` y `--salida` y conserva el `origen` de las filas base.
+
+## 14. Reentreno v3 con el Lote2 del share DOCIA (2026-11-05, AB#101313)
+
+Segundo corte incremental sobre v2 (§13). Diseño en el repo core (`docs/superpowers/specs/2026-11-05-reentreno-embeddings-v3-design.md`). Corpus: 692 PDF (745 MB) en 20 carpetas por código TDN2 dejados por el equipo de GDC el 2026-11-04 en `\srbsfsp01\VARIOS\DOCIA\para embdeddings\Lote2`. De esos 20 códigos, 10 no tenían ningún documento en el train de v2 y 6 tenían entre 1 y 5.
+
+Inventario (`inventario_manifiesto.py --base inventario_v2.csv --origen share-2026-11-04-lote2 --holdout hold3`; las filas de v2 conservan partición y origen):
+
+- Fuera: 7 duplicados MD5 dentro de carpeta y 8 ficheros ya presentes en v1 o en el lote 1. Ninguna clase por debajo del mínimo de 5.
+- Quedan 677 documentos nuevos en 20 TDN2: 543 a `train` y 134 a `hold3` (20 % estratificado, semilla 42; `cal`, `golden` y `hold2` no cambian). El holdout va en partición propia para medir solo documentos que v2 no vio; `hold2` queda como control de regresión.
+- Texto: ninguno estaba en la BD de DEV ni de PRO; 675 por DI Layout en DEV (prebuilt-layout, tope 5 páginas, 1.813 páginas facturables estimadas, ~19 USD). Un PDF falló con HTTP 400: `ESCR-06/ESCR-06_39.pdf` (16,5 MB) está truncado en el propio share (mismo MD5 que la copia local; pypdf: "Stream has ended unexpectedly"); se excluye y ESCR-06 queda con 39 documentos. Embeddings: 676 documentos, 1,14 M de tokens, 0 vacíos.
+
+Entrenamiento (`exportar_modelo.py --version v3`): train de v2 (6.809) más train nuevo (542) = 7.351 documentos; 41 familias y 117 tipologías cubiertas (v2: 39 y 102). Mismo entrenador e hiperparámetros. Manifiesto con tres cortes (`corpus-v1` 6.313, `share-2026-11-03` 496, `share-2026-11-04-lote2` 542) y `fuenteEtiquetas` "Documentos seleccionados y certificados por el equipo de GDC (share DOCIA, lotes 2026-11-03 y 2026-11-04)"; `calibrado` sigue en `false`.
+
+Puerta de calidad (`puerta_calidad.py --anterior v2 --nuevo v3 --holdout hold3`):
+
+| Partición | Modelo | n | TDN1 | TDN2 | ECE | Cobertura ≥ 0,6 | Acierto ≥ 0,6 |
+|---|---|---|---|---|---|---|---|
+| cal | v2 | 1.576 | 87,4 % | 61,5 % | 0,033 | 86,5 % | 94,1 % |
+| cal | v3 | 1.576 | 87,1 % | 61,5 % | 0,026 | 86,2 % | 94,0 % |
+| hold2 | v2 | 121 | 90,9 % | 82,6 % | 0,117 | 85,1 % | 97,1 % |
+| hold2 | v3 | 121 | **91,7 %** | 81,8 % | 0,129 | 84,3 % | 97,1 % |
+| hold3 | v2 | 134 | 53,0 % | 6,7 % | 0,122 | 50,7 % | 72,1 % |
+| hold3 | v3 | 134 | **95,5 %** | **93,3 %** | 0,124 | 88,1 % | 97,5 % |
+
+La primera ejecución dio `PUERTA: FALLA` por el criterio de cal tal como estaba (v3 no podía bajar nada frente a v2). Análisis documento a documento (copia en core, `docs/auxiliares/temps/2026-11-05/analisis-cal-perdidos-v3.txt`): 23 documentos cambian de resultado, 14 a favor de v2 y 9 a favor de v3 (McNemar exacto p = 0,40); los 14 perdidos eran casos de frontera (confianza de v2 entre 0,19 y 0,61; 9 siguen por debajo de 0,6 en v3) y solo 5 caen hacia clases del lote 2 (CERJ-63, DOCI-07, CERA-14 dos veces, LIPR-05); el resto es vaivén entre familias ya confundidas (DOCJ/SERE, SERE/PBLO, TASA/CERJ) y los 9 ganados son el espejo de esos pares. Decisión del usuario (2026-11-05): el criterio de cal pasa a "no bajar más de 0,5 pp frente al anterior" (por debajo de la desviación muestral de cal, ±0,85 pp), parámetro `--tolerancia-cal` de la puerta (0,005 por defecto). Con ese criterio, `PUERTA: PASA`. Riesgo asumido: acumulación entre versiones; serie de cal TDN1 hasta ahora: v1 87,2 %, v2 87,4 %, v3 87,1 %.
+
+Por TDN2 en hold3 (v3): 100 % en 15 de las 20 clases; por debajo: DOCJ-19 66,7 % (n=6), DOSS-02 y ESIN-42 80 % (n=5), FICH-02 y FICH-11 85,7 % (n=7). Detalle en `out/puerta-calidad-v3.json` (copia en core, `docs/auxiliares/temps/2026-11-05/`).
+
+Lectura: la ganancia está donde se buscaba (+42 pp TDN1 y +87 pp TDN2 en las 20 tipologías del lote 2) sin mover hold2 ni, en la práctica, cal. La ECE de hold3 (0,124) repite el patrón de v2: pocos ejemplos por clase nueva, modelo más seguro de lo que acierta; se mantiene `calibrado = false` y el modo `sombra`.
+
+Publicación en DEV (2026-11-05, con autorización): `modelos/clasificador-embeddings/v3/clasificador-embeddings-v3.json` (14.443.115 B, MD5 `r4LpXZLmM6S6EEXYt/hfkA==`) y `paridad-v3.json` (703.140 B) en `srbstgdevdocai/documentai`; fila 1026 de `ModeloConfigs` apuntada a v3 con `scripts/migrations/clasificador-embeddings/04-modeloconfig-embeddings-v3.sql` de core (backup `ModeloConfigs__bak_20261105_094110`); `Modo` y `Restringido.Modo` siguen en `sombra`. v1 y v2 se conservan en el blob (rollback: ejecutar el 03). PRE y PRO por el cauce de AB#100781.
+
+Reproducir: `inventario_manifiesto.py --corpus C:/temp/MVP/corpus-embeddings-v3 --base CACHE/inventario_v2.csv --salida CACHE/inventario_v3.csv --origen share-2026-11-04-lote2 --holdout hold3` → `texto.py --inventario CACHE/inventario_v3.csv` → `di_layout.py --inventario ... --lanzar --max-paginas 5` → `embeddings.py --inventario ...` → `exportar_modelo.py --inventario ... --tipologias out/tipologias-dev.json --version v3 --fuente-etiquetas "..."` → `puerta_calidad.py --anterior out/clasificador-embeddings-v2.json --nuevo out/clasificador-embeddings-v3.json --inventario ... --holdout hold3 --salida out/puerta-calidad-v3.json`. Fuera de git: `C:/temp/MVP/spike-embeddings-cache/inventario_v3.csv` y el mismo `out/tipologias-dev.json` de v2 (los 20 códigos ya existían en DEV).
