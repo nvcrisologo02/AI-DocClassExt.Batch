@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from exportar_modelo import exportar_modelo  # noqa: E402
 from modelos import ClasificadorLR  # noqa: E402
-from puerta_calidad import evaluar, predecir_artefacto, veredicto  # noqa: E402
+from puerta_calidad import evaluar, particiones_cal_ampliada, predecir_artefacto, veredicto  # noqa: E402
 from test_exportar_modelo import datos  # noqa: E402
 
 
@@ -53,3 +53,11 @@ def test_veredicto_tolera_caida_de_cal_dentro_del_margen():
     assert not ok and motivos[0].startswith("cal") and "0.5%" in motivos[0]
     ok, motivos = veredicto(0.874, 0.871, 0.95, tolerancia_cal=0.0)
     assert not ok and motivos[0].startswith("cal")
+
+
+def test_particiones_cal_ampliada_excluye_holdout_actual_y_tolera_inventarios_sin_holds():
+    inv = {f"h{i}": {"sha256": f"h{i}", "particion": p} for i, p in enumerate(
+        ["cal", "hold2", "hold3", "hold4", "train", "golden", "hold4"])}
+    assert particiones_cal_ampliada(inv, "hold4") == ["cal", "hold2", "hold3"]
+    assert particiones_cal_ampliada(inv, "hold2") == ["cal", "hold3", "hold4"]
+    assert particiones_cal_ampliada({"a": {"sha256": "a", "particion": "cal"}}, "hold2") == ["cal"]
