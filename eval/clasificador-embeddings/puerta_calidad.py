@@ -1,17 +1,22 @@
 """Puerta de calidad del clasificador por embeddings: versión anterior frente a candidata sobre cal, hold2 y el
-holdout del corte nuevo (AB#100780 v2, AB#101313 v3).
+holdout del corte nuevo (AB#100780 v2, AB#101313 v3, AB#101418 cal ampliada).
 
 Uso:
-  .venv/Scripts/python puerta_calidad.py --anterior out/clasificador-embeddings-v2.json \
-      --nuevo out/clasificador-embeddings-v3.json --inventario <ruta> --holdout hold3 \
-      --salida out/puerta-calidad-v3.json [--tolerancia-cal 0.005]
+  .venv/Scripts/python puerta_calidad.py --anterior out/clasificador-embeddings-v3.json \
+      --nuevo out/clasificador-embeddings-v4.json --inventario <ruta> --holdout hold4 \
+      --cal-ampliada --salida out/puerta-calidad-v4.json [--tolerancia-cal 0.005]
 (--v1/--v2 siguen admitidos como alias de --anterior/--nuevo.)
 
 Pasa si el acierto TDN1 del nuevo en cal no baja más de --tolerancia-cal (0,5 pp) frente al anterior y en el
-holdout llega al mínimo (0,80). Código de salida 0 si pasa, 1 si falla.
+holdout llega al mínimo (0,80). Con --cal-ampliada (decisión del usuario, 2026-11-18, AB#101418) la condición de
+cal se mide sobre cal más los holdouts de los cortes ANTERIORES (hold2, hold3, ...), nunca el holdout evaluado:
+el modelo anterior no vio esas clases y meterlo haría pasar cualquier versión. cal original se imprime siempre
+como serie histórica. Sin el flag la salida es la de siempre (§13 y §14 del INFORME siguen reproducibles).
+Código de salida 0 si pasa, 1 si falla.
 """
 import argparse
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -62,12 +67,12 @@ def evaluar(doc: dict, X: np.ndarray, t1: list[str], t2: list[str]) -> dict:
 
 def veredicto(cal_anterior: float, cal_nuevo: float, hold_nuevo: float, minimo_hold: float = 0.80,
               n_hold: int | None = None, holdout: str = "hold2",
-              tolerancia_cal: float = 0.005) -> tuple[bool, list[str]]:
+              tolerancia_cal: float = 0.005, etiqueta_cal: str = "cal") -> tuple[bool, list[str]]:
     """cal no puede bajar más de tolerancia_cal (0,5 pp por defecto, decisión del 2026-11-05 en v3) y el
     holdout nuevo debe llegar a minimo_hold."""
     motivos = []
     if cal_nuevo < cal_anterior - tolerancia_cal:
-        motivos.append(f"cal: nuevo {cal_nuevo:.1%} por debajo del anterior {cal_anterior:.1%} "
+        motivos.append(f"{etiqueta_cal}: nuevo {cal_nuevo:.1%} por debajo del anterior {cal_anterior:.1%} "
                        f"en más de {tolerancia_cal:.1%}")
     if n_hold == 0:
         motivos.append(f"{holdout}: sin documentos en el inventario")
@@ -84,6 +89,29 @@ def _particion(inv: dict, shas: list[str], X: np.ndarray, nombre: str):
     return Xp, [r["tdn1"] for r in con], [r["tdn2"] for r in con], len(filas) - len(con)
 
 
+def _numero_holdout(nombre: str) -> int | None:
+    m = re.fullmatch(r"hold(\d+)", nombre)
+    return int(m.group(1)) if m else None
+
+
+def particiones_cal_ampliada(inv: dict, holdout: str) -> list[str]:
+    """cal más los holdouts de cortes ANTERIORES al evaluado (hold<k> con k < n), ordenados por número.
+    El holdout evaluado y los posteriores quedan fuera: el modelo anterior no vio esas clases y meterlos
+    haría pasar cualquier versión."""
+    n_eval = _numero_holdout(holdout)
+    if n_eval is None:
+        raise ValueError(f"--holdout debe tener el formato hold<n> para usar --cal-ampliada: {holdout!r}")
+    numeros = {k for k in (_numero_holdout(r["particion"]) for r in inv.values()) if k is not None and k < n_eval}
+    return ["cal"] + [f"hold{k}" for k in sorted(numeros)]
+
+
+def holdouts_posteriores(inv: dict, holdout: str) -> list[str]:
+    """Holdouts del inventario con número mayor que el evaluado: señal de que --holdout no es el del último corte."""
+    n_eval = _numero_holdout(holdout)
+    numeros = {k for k in (_numero_holdout(r["particion"]) for r in inv.values()) if k is not None and k > (n_eval or 0)}
+    return [f"hold{k}" for k in sorted(numeros)]
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--anterior", "--v1", dest="anterior", required=True, help="Artefacto JSON de la versión vigente")
@@ -92,6 +120,8 @@ def main() -> None:
     ap.add_argument("--holdout", default="hold2", help="Partición del holdout del corte nuevo (v2: hold2, v3: hold3)")
     ap.add_argument("--tolerancia-cal", type=float, default=0.005,
                     help="Caída máxima admitida del TDN1 en cal frente al anterior (fracción; 0.005 = 0,5 pp)")
+    ap.add_argument("--cal-ampliada", action="store_true",
+                    help="La condición de cal se mide sobre cal + holdouts de cortes anteriores (excluye --holdout)")
     ap.add_argument("--salida", default=None, help="JSON de resultados (por defecto out/puerta-calidad-<version nueva>.json)")
     args = ap.parse_args()
 
@@ -105,21 +135,36 @@ def main() -> None:
     shas, X = cargar()
     inv = leer_inventario(Path(args.inventario) if args.inventario else CACHE / "inventario.csv")
 
-    partes = list(dict.fromkeys(["cal", "hold2", args.holdout]))
+    ampliada = particiones_cal_ampliada(inv, args.holdout) if args.cal_ampliada else ["cal"]
+    posteriores = holdouts_posteriores(inv, args.holdout) if args.cal_ampliada else []
+    if posteriores:
+        print(f"AVISO: el inventario tiene holdouts posteriores a --holdout {args.holdout}: {posteriores}. "
+              "Quedan fuera de la cal ampliada; comprueba que --holdout es el del corte evaluado.")
+    partes = list(dict.fromkeys(ampliada + ["hold2", args.holdout]))
     res: dict = {"anterior": anterior.get("manifiesto", {}).get("version"), "nuevo": version_nueva,
-                 "holdout": args.holdout, "sin_vector": {}}
+                 "holdout": args.holdout, "condicion_cal": "cal_ampliada" if args.cal_ampliada else "cal",
+                 "sin_vector": {}}
     datos = {}
     for part in partes:
         Xp, a, b, falta = _particion(inv, shas, X, part)
         datos[part] = (Xp, a, b)
         res["sin_vector"][part] = falta
         res[part] = {"anterior": evaluar(anterior, Xp, a, b), "nuevo": evaluar(nuevo, Xp, a, b)}
+    filas = list(partes)
+    if args.cal_ampliada:
+        Xa = np.vstack([datos[p][0] for p in ampliada])
+        a = [t for p in ampliada for t in datos[p][1]]
+        b = [t for p in ampliada for t in datos[p][2]]
+        res["cal_ampliada"] = {"particiones": ampliada, "anterior": evaluar(anterior, Xa, a, b),
+                               "nuevo": evaluar(nuevo, Xa, a, b)}
+        filas.insert(1, "cal_ampliada")
+    cal_cond = "cal_ampliada" if args.cal_ampliada else "cal"
 
     print(f"{'partición':<10}{'modelo':<10}{'n':>6}{'TDN1':>8}{'TDN2':>8}{'ECE':>8}{'cob@0,6':>9}{'aci@0,6':>9}")
-    for part in partes:
+    for part in filas:
         for v in ("anterior", "nuevo"):
             r = res[part][v]
-            print(f"{part:<10}{v:<10}{r['n']:>6}{r['tdn1']:>8.1%}{r['tdn2']:>8.1%}{r['ece']:>8.3f}"
+            print(f"{('cal_ampl.' if part == 'cal_ampliada' else part):<10}{v:<10}{r['n']:>6}{r['tdn1']:>8.1%}{r['tdn2']:>8.1%}{r['ece']:>8.3f}"
                   f"{r['cobertura_06']:>9.1%}{r['acierto_06']:>9.1%}")
 
     Xh, a, b = datos[args.holdout]
@@ -136,9 +181,9 @@ def main() -> None:
     for k, d in res[clave].items():
         print(f"{k:<24}{d['n']:>6}{d['tdn1']:>8.1%}")
 
-    ok, motivos = veredicto(res["cal"]["anterior"]["tdn1"], res["cal"]["nuevo"]["tdn1"],
+    ok, motivos = veredicto(res[cal_cond]["anterior"]["tdn1"], res[cal_cond]["nuevo"]["tdn1"],
                             res[args.holdout]["nuevo"]["tdn1"], n_hold=res[args.holdout]["nuevo"]["n"],
-                            holdout=args.holdout, tolerancia_cal=args.tolerancia_cal)
+                            holdout=args.holdout, tolerancia_cal=args.tolerancia_cal, etiqueta_cal=cal_cond)
     res["tolerancia_cal"] = args.tolerancia_cal
     res["pasa"], res["motivos"] = ok, motivos
     salida = Path(args.salida) if args.salida else Path("out") / f"puerta-calidad-{version_nueva}.json"

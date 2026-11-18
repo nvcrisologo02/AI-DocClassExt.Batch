@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from exportar_modelo import exportar_modelo  # noqa: E402
 from modelos import ClasificadorLR  # noqa: E402
-from puerta_calidad import evaluar, predecir_artefacto, veredicto  # noqa: E402
+from puerta_calidad import evaluar, particiones_cal_ampliada, predecir_artefacto, veredicto  # noqa: E402
 from test_exportar_modelo import datos  # noqa: E402
 
 
@@ -53,3 +53,28 @@ def test_veredicto_tolera_caida_de_cal_dentro_del_margen():
     assert not ok and motivos[0].startswith("cal") and "0.5%" in motivos[0]
     ok, motivos = veredicto(0.874, 0.871, 0.95, tolerancia_cal=0.0)
     assert not ok and motivos[0].startswith("cal")
+
+
+def test_particiones_cal_ampliada_solo_holdouts_anteriores_al_evaluado():
+    # Solo entran los holdouts de cortes ANTERIORES (hold<k> con k < n): el evaluado y los posteriores quedan
+    # fuera, porque el modelo anterior no vio esas clases y meterlos haría pasar cualquier versión.
+    inv = {f"h{i}": {"sha256": f"h{i}", "particion": p} for i, p in enumerate(
+        ["cal", "hold2", "hold3", "hold4", "train", "golden", "hold4", "hold10"])}
+    assert particiones_cal_ampliada(inv, "hold4") == ["cal", "hold2", "hold3"]
+    assert particiones_cal_ampliada(inv, "hold3") == ["cal", "hold2"]
+    assert particiones_cal_ampliada(inv, "hold2") == ["cal"]
+    assert particiones_cal_ampliada(inv, "hold10") == ["cal", "hold2", "hold3", "hold4"]
+    assert particiones_cal_ampliada({"a": {"sha256": "a", "particion": "cal"}}, "hold2") == ["cal"]
+
+
+def test_particiones_cal_ampliada_rechaza_holdout_sin_numero():
+    import pytest
+    with pytest.raises(ValueError, match="hold<n>"):
+        particiones_cal_ampliada({"a": {"sha256": "a", "particion": "cal"}}, "holdout")
+
+
+def test_veredicto_nombra_la_condicion_de_cal():
+    ok, motivos = veredicto(0.880, 0.870, 0.90, holdout="hold4", etiqueta_cal="cal_ampliada")
+    assert not ok and motivos[0].startswith("cal_ampliada:")
+    ok, motivos = veredicto(0.880, 0.870, 0.90, holdout="hold4")
+    assert not ok and motivos[0].startswith("cal:")
