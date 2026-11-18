@@ -19,7 +19,8 @@ from pathlib import Path
 from comun import CACHE
 from inventario import huella
 
-EXCLUIR_CARPETAS: frozenset[str] = frozenset({"ESIN-AI"})
+# FOTO-05 (lote 3, 2026-11-18): fotografias; DI Layout saca texto util en 1 de 28 y el resto son restos de rotulos.
+EXCLUIR_CARPETAS: frozenset[str] = frozenset({"ESIN-AI", "FOTO-05"})
 EXCLUIR_FICHEROS: frozenset[str] = frozenset({"LIPR-06/LIPR-06_3.PDF", "LIPR-13/LIPR-13_31.pdf"})
 MIN_DOCS = 5
 MIN_HOLDOUT = 10

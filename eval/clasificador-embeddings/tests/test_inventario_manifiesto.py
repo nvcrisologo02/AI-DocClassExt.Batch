@@ -61,3 +61,18 @@ def test_particion_holdout_con_nombre_propio():
     assert not any(f["particion"] == "hold2" for f in out) and exc == []
     assert particionar_v2(filas, semilla=42) != (out, exc)  # el nombre cambia, el reparto no
     assert [f["sha256"] for f in out] == [f["sha256"] for f in particionar_v2(filas, semilla=42)[0]]
+
+
+def test_recorrer_excluye_foto05_sin_texto_util(tmp_path):
+    # Lote 3 (2026-11-18): DI Layout no saca texto util de las fotografias (1 de 28 con >= 200 caracteres);
+    # la carpeta FOTO-05 queda fuera del inventario para que el entrenador no la vea.
+    for rel in ["FOTO-05/FOTO-05_ (1).jpg", "FOTO-05/FOTO-05_ (2).pdf", "NOTS-01/NOTS-01_1.pdf"]:
+        p = tmp_path / rel
+        p.parent.mkdir(exist_ok=True)
+        p.write_bytes(b"%PDF-1.4 x")
+    filas, exc = recorrer(tmp_path, hilos=1)
+    assert [f["rel_path"] for f in filas] == ["NOTS-01/NOTS-01_1.pdf"]
+    assert [(e["rel_path"], e["motivo"]) for e in exc] == [
+        ("FOTO-05/FOTO-05_ (1).jpg", "carpeta_excluida"),
+        ("FOTO-05/FOTO-05_ (2).pdf", "carpeta_excluida"),
+    ]
