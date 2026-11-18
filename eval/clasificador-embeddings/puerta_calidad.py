@@ -16,6 +16,7 @@ Código de salida 0 si pasa, 1 si falla.
 """
 import argparse
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -66,12 +67,12 @@ def evaluar(doc: dict, X: np.ndarray, t1: list[str], t2: list[str]) -> dict:
 
 def veredicto(cal_anterior: float, cal_nuevo: float, hold_nuevo: float, minimo_hold: float = 0.80,
               n_hold: int | None = None, holdout: str = "hold2",
-              tolerancia_cal: float = 0.005) -> tuple[bool, list[str]]:
+              tolerancia_cal: float = 0.005, etiqueta_cal: str = "cal") -> tuple[bool, list[str]]:
     """cal no puede bajar más de tolerancia_cal (0,5 pp por defecto, decisión del 2026-11-05 en v3) y el
     holdout nuevo debe llegar a minimo_hold."""
     motivos = []
     if cal_nuevo < cal_anterior - tolerancia_cal:
-        motivos.append(f"cal: nuevo {cal_nuevo:.1%} por debajo del anterior {cal_anterior:.1%} "
+        motivos.append(f"{etiqueta_cal}: nuevo {cal_nuevo:.1%} por debajo del anterior {cal_anterior:.1%} "
                        f"en más de {tolerancia_cal:.1%}")
     if n_hold == 0:
         motivos.append(f"{holdout}: sin documentos en el inventario")
@@ -88,11 +89,27 @@ def _particion(inv: dict, shas: list[str], X: np.ndarray, nombre: str):
     return Xp, [r["tdn1"] for r in con], [r["tdn2"] for r in con], len(filas) - len(con)
 
 
+def _numero_holdout(nombre: str) -> int | None:
+    m = re.fullmatch(r"hold(\d+)", nombre)
+    return int(m.group(1)) if m else None
+
+
 def particiones_cal_ampliada(inv: dict, holdout: str) -> list[str]:
-    """cal más las particiones hold* del inventario, ordenadas, excepto el holdout del corte evaluado."""
-    holds = sorted({r["particion"] for r in inv.values()
-                    if r["particion"].startswith("hold") and r["particion"] != holdout})
-    return ["cal"] + holds
+    """cal más los holdouts de cortes ANTERIORES al evaluado (hold<k> con k < n), ordenados por número.
+    El holdout evaluado y los posteriores quedan fuera: el modelo anterior no vio esas clases y meterlos
+    haría pasar cualquier versión."""
+    n_eval = _numero_holdout(holdout)
+    if n_eval is None:
+        raise ValueError(f"--holdout debe tener el formato hold<n> para usar --cal-ampliada: {holdout!r}")
+    numeros = {k for k in (_numero_holdout(r["particion"]) for r in inv.values()) if k is not None and k < n_eval}
+    return ["cal"] + [f"hold{k}" for k in sorted(numeros)]
+
+
+def holdouts_posteriores(inv: dict, holdout: str) -> list[str]:
+    """Holdouts del inventario con número mayor que el evaluado: señal de que --holdout no es el del último corte."""
+    n_eval = _numero_holdout(holdout)
+    numeros = {k for k in (_numero_holdout(r["particion"]) for r in inv.values()) if k is not None and k > (n_eval or 0)}
+    return [f"hold{k}" for k in sorted(numeros)]
 
 
 def main() -> None:
@@ -119,6 +136,10 @@ def main() -> None:
     inv = leer_inventario(Path(args.inventario) if args.inventario else CACHE / "inventario.csv")
 
     ampliada = particiones_cal_ampliada(inv, args.holdout) if args.cal_ampliada else ["cal"]
+    posteriores = holdouts_posteriores(inv, args.holdout) if args.cal_ampliada else []
+    if posteriores:
+        print(f"AVISO: el inventario tiene holdouts posteriores a --holdout {args.holdout}: {posteriores}. "
+              "Quedan fuera de la cal ampliada; comprueba que --holdout es el del corte evaluado.")
     partes = list(dict.fromkeys(ampliada + ["hold2", args.holdout]))
     res: dict = {"anterior": anterior.get("manifiesto", {}).get("version"), "nuevo": version_nueva,
                  "holdout": args.holdout, "condicion_cal": "cal_ampliada" if args.cal_ampliada else "cal",
@@ -162,7 +183,7 @@ def main() -> None:
 
     ok, motivos = veredicto(res[cal_cond]["anterior"]["tdn1"], res[cal_cond]["nuevo"]["tdn1"],
                             res[args.holdout]["nuevo"]["tdn1"], n_hold=res[args.holdout]["nuevo"]["n"],
-                            holdout=args.holdout, tolerancia_cal=args.tolerancia_cal)
+                            holdout=args.holdout, tolerancia_cal=args.tolerancia_cal, etiqueta_cal=cal_cond)
     res["tolerancia_cal"] = args.tolerancia_cal
     res["pasa"], res["motivos"] = ok, motivos
     salida = Path(args.salida) if args.salida else Path("out") / f"puerta-calidad-{version_nueva}.json"
