@@ -12,10 +12,12 @@ def test_etiqueta_con_sufijo_y_sin_el():
 
 def test_recorrer_aplica_exclusiones_y_extensiones(tmp_path):
     for rel in ["NOTS-01/NOTS-01_1.PDF", "CERT-05-Etiqueta/x.pdf", "ESIN-AI/a.pdf",
-                "LIPR-06/LIPR-06_3.PDF", "DOCA-39/d.png", "COMU-66/c.docx", "otra/z.pdf"]:
+                "LIPR-06/LIPR-06_3.PDF", "DOCA-39/d.png", "COMU-66/c.docx", "otra/z.pdf",
+                "ESIN-80/p.pptx", "INLI-03/h.xlsx", "INLI-03/h.xls"]:
         p = tmp_path / rel; p.parent.mkdir(exist_ok=True); p.write_bytes(rel.encode())
     filas, exc = recorrer(tmp_path)
-    assert {f["rel_path"] for f in filas} == {"NOTS-01/NOTS-01_1.PDF", "CERT-05-Etiqueta/x.pdf", "DOCA-39/d.png"}
+    assert {f["rel_path"] for f in filas} == {"NOTS-01/NOTS-01_1.PDF", "CERT-05-Etiqueta/x.pdf", "DOCA-39/d.png",
+                                            "ESIN-80/p.pptx", "INLI-03/h.xlsx"}  # xls y docx fuera por extension
     assert next(f for f in filas if f["rel_path"].startswith("CERT"))["tdn2"] == "CERT-05"
     assert all(f["paginas"] == -1 for f in filas)  # bytes que no son PDF: entran igual
     assert {e["motivo"] for e in exc} == {"carpeta_excluida", "fichero_excluido", "extension", "carpeta_invalida"}

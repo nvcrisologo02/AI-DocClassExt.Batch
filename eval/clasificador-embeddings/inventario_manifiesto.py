@@ -25,7 +25,8 @@ EXCLUIR_FICHEROS: frozenset[str] = frozenset({"LIPR-06/LIPR-06_3.PDF", "LIPR-13/
 MIN_DOCS = 5
 MIN_HOLDOUT = 10
 FRAC_HOLDOUT = 0.2
-EXTENSIONES = {".pdf", ".jpg", ".jpeg", ".png"}
+# Lote 4 (AB#101564): PPTX y XLSX entran (DI Layout los analiza); XLS binario no (se convierte a PDF fuera).
+EXTENSIONES = {".pdf", ".jpg", ".jpeg", ".png", ".pptx", ".xlsx"}
 CAMPOS_V2 = ["sha256", "rel_path", "tdn1", "tdn2", "particion", "paginas", "origen"]
 
 RE_CARPETA = re.compile(r"^([A-Z]{4})-([0-9A-Z]{2})(?:-.*)?$")
